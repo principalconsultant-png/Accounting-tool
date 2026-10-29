@@ -1,6 +1,8 @@
 # ऋजु · Riju Books
 
-**Version 0.2.0:** patient/customer medicine purchases and pharmacy receipts now map to Pharmacy Sales, including plural “medicines”. Cash, bank, UPI and card descriptions are supported; supplier purchases still require review.
+**Version 0.3.0:** all 15 hospital collection categories, compound split-payment receipts, and direct daily-sales XLSX import into the review queue. Existing vaults receive additional ledgers without overwriting custom accounts or posted journals.
+
+The source report's `Treatment` column is included independently of its subtotal formula. `Trtmt Pymt RECD` is earned treatment revenue, as confirmed; `Other source` posts to Other receipts clearing. No GST allocation is invented where the report supplies none.
 
 An offline-first, single-user Windows bookkeeping application for one entity with three operating units: JP Nagar, Kammanahalli and Vaikom medical resort. Ivory, sage and pastel saffron interface. No cloud database, telemetry, external fonts, online AI calls or GPU dependency.
 
@@ -11,10 +13,11 @@ An offline-first, single-user Windows bookkeeping application for one entity wit
 Install Python 3.12 or newer (including Tcl/Tk), then from this folder:
 
 ```powershell
+py -3 -m pip install -r requirements.txt
 py -3 run_riju.py
 ```
 
-No pip installation is needed to run from source. Data defaults to `%LOCALAPPDATA%\RijuBooks\books.riju`. The application has no password and protects the vault using Windows DPAPI under the current Windows account. It does not implement the original BRD's portable AES-GCM vault. Do not use real client data before Windows encryption, restoration and accounting acceptance testing.
+Running from source requires openpyxl for XLSX imports; packaged Windows builds include it. Data defaults to `%LOCALAPPDATA%\RijuBooks\books.riju`. The application has no password and protects the vault using Windows DPAPI under the current Windows account. It does not implement the original BRD's portable AES-GCM vault. Do not use real client data before Windows encryption, restoration and accounting acceptance testing.
 
 Build an unsigned, standalone Windows executable on Windows:
 
@@ -22,18 +25,19 @@ Build an unsigned, standalone Windows executable on Windows:
 powershell -ExecutionPolicy Bypass -File .\build-windows.ps1
 ```
 
-Output: `dist\RijuBooks.exe`; end users do not need Python. The build script installs pinned PyInstaller into a project virtual environment. `.github/workflows/windows.yml` also builds and uploads an executable on Windows when run in GitHub Actions. Neither a Windows build nor that workflow has been executed from this Linux development session. Code signing and an installer are not included.
+Output: `dist\RijuBooks.exe`; end users do not need Python. The build script installs pinned PyInstaller into a project virtual environment. `.github/workflows/windows.yml` also builds and uploads an executable on Windows when run in GitHub Actions. The workflow runs Windows DPAPI tests, desktop tests, and a packaged-executable self-test (XLSX import, posting, encrypted save/load, backup restore). It publishes a versioned GitHub release only after these checks pass. This Linux development session cannot independently assert those Windows checks passed. Code signing and an installer are not included.
 
 ## Offline accounting workflow
 
 1. Review the starter chart of accounts and legal entity name. All registration details remain unverified; this is one entity with branch reports, not separate-company consolidation.
 2. Enter opening balances on 1 April with the **Opening balances** checkbox, using balanced asset/liability/equity lines. Earlier financial years are supported.
 3. In Journal studio select the actual date and unit, then describe a supported payment or receipt, such as `Paid ₹5,000 rent by bank` or `Received ₹12,000 OPD consultation sales by UPI`.
-4. Prepare a draft, review ledger selection, and approve posting. The local rules assistant supports a limited, visible set of templates; it is not a general-purpose language model. It refuses ambiguous categories, missing payment methods, tax/deduction descriptions and unsupported treatments. Enter those through manual journal lines. No model download is required.
+4. Prepare a draft, review ledger selection, and approve posting. The local rules assistant supports a limited, visible set of templates; it is not a general-purpose language model. All 15 source report categories have receipt templates. It refuses ambiguous categories, missing payment methods, tax/deduction descriptions and unsupported treatments. Enter those through manual journal lines. No model download is required.
 5. Every branch must balance independently. Use inter-branch clearing for cross-unit transactions. Posted vouchers are corrected through dated reversals; period locks block backdated posting.
 6. Reports provide trial balance, working P&L and balance sheet, branch matrix and general ledger, with CSV export. Values use integer paise and avoid floating point for posting. Reports are accounting working statements, not certified Schedule III statements.
-7. Import journal CSVs into the review queue, review rows and approve the whole file. Posting is atomic. Exact-file duplicate imports are blocked. A renamed or modified duplicate file still needs manual review.
-8. Import incoming bank deposits separately. Review suggestions grouping UPI/card sales into net bank settlements with a fee difference. Posting a match debits Bank and the reviewed fee and credits the clearing account. Do not approve fees with separately claimable GST through this simplified path.
+7. For mixed-service or split-payment receipts, use **Sales receipt**, enter the service and payment amounts, and prepare a compound draft. Alternatively choose **Import queue → Upload daily sales XLSX**, select the branch, review source rows and journal lines, and approve the whole report. There is no auto-posting on upload. The importer accepts the supplied H:V service headings, recomputes totals, validates payment splits and rejects duplicate receipts, inconsistent totals and formulas in source amount cells. Unknown nonempty sheets are rejected explicitly.
+8. Import journal CSVs into the review queue, review rows and approve the whole file. Posting is atomic. Exact-file duplicate imports are blocked. A renamed or modified duplicate file still needs manual review.
+9. Import incoming bank deposits separately. Review suggestions grouping UPI/card sales into net bank settlements with a fee difference. Posting a match debits Bank and the reviewed fee and credits the clearing account. Do not approve fees with separately claimable GST through this simplified path.
 
 ### Import formats
 
@@ -72,7 +76,7 @@ Linux development can use `python run_riju.py --demo --data /tmp/riju-demo.json`
 
 ## Remaining before production
 
-- Windows executable build, actual Windows GUI validation, DPAPI and backup/restore testing on the target laptop; portable recovery and single-instance locking.
+- Confirm the GitHub Windows build and packaged self-test, then validate DPAPI and backup/restore on the target laptop; portable recovery and single-instance locking.
 - Accountant-approved examples covering hospital/resort revenue recognition, taxes, opening balances, account mapping, and year-end behavior. Local language-model interpretation is not implemented; the offline assistant is rule-based.
 - Full Schedule III statements/disclosures, direct/indirect cash flow, trial-balance movement columns, comparative statements, printable/PDF reports and MIS.
 - GST/TDS calculations with applicability, thresholds, editable effective-dated rates, registration configuration and tax summaries. Present tax settings are reference values only, not an automated tax engine.

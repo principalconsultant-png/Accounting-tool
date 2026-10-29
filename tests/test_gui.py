@@ -36,4 +36,34 @@ class DesktopSmokeTests(unittest.TestCase):
                     with patch('riju.app.messagebox.askyesno',return_value=True),patch('riju.app.messagebox.showinfo'):
                         app.post_draft()
                 self.assertEqual(len(app.state['vouchers']),3)
+                from test_sales import workbook
+                from riju import core
+                import tkinter as tk
+                def widgets(parent):
+                    for w in parent.winfo_children():
+                        yield w
+                        yield from widgets(w)
+                def invoke(label):
+                    next(w for w in widgets(app.content) if w.winfo_class()=='TButton' and w.cget('text')==label).invoke()
+                app.show('Sales receipt');app.update()
+                entries=[w for w in widgets(app.content) if w.winfo_class()=='TEntry']
+                self.assertEqual(len(entries),21)
+                for field in (entries[2],entries[-4]):field.delete(0,'end');field.insert(0,'100')
+                invoke('Prepare compound journal for review')
+                self.assertEqual(app.current,'Journal studio')
+                self.assertEqual([l['account'] for l in app.draft],['1000','4010'])
+                source=Path(d)/'synthetic.xlsx';source.write_bytes(workbook())
+                app.show('Import queue');app.update()
+                with patch('riju.app.filedialog.askopenfilename',return_value=str(source)),patch('riju.app.messagebox.showinfo'):
+                    invoke('Upload daily sales XLSX')
+                self.assertEqual(len(app.state['queue']),1)
+                tree=next(w for w in widgets(app.content) if w.winfo_class()=='Treeview')
+                tree.selection_set(tree.get_children()[0])
+                invoke('Review rows');app.update()
+                for child in app.winfo_children():
+                    if isinstance(child,tk.Toplevel):child.destroy()
+                with patch('riju.app.messagebox.askyesno',return_value=True):invoke('Approve & post entire file')
+                self.assertEqual(app.state['queue'][0]['status'],'PROCESSED')
+                self.assertEqual(len(app.state['vouchers']),4)
+                core.verify_audit(app.state)
             finally: app.destroy()

@@ -52,7 +52,8 @@ class Vault:
         state=json.loads(raw)
         if state.get('version')!=1: raise ValueError('Unsupported vault version.')
         verify_audit(state)
-        return state
+        from .revenue import ensure_accounts
+        return ensure_accounts(state, audit=True)
     def save(self,state):
         if self.path.exists():
             digest=hashlib.sha256(self.path.read_bytes()).hexdigest()

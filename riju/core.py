@@ -51,7 +51,7 @@ def fy_bounds(year):
     return f'{year}-04-01', f'{year+1}-03-31'
 
 def empty_state():
-    return {'version':1, 'accounts':[dict(code=c,name=n,kind=k) for c,n,k in ACCOUNTS],
+    state = {'version':1, 'accounts':[dict(code=c,name=n,kind=k) for c,n,k in ACCOUNTS],
             'vouchers':[], 'audit':[], 'locked_through':'', 'holidays':[], 'bank_lines':[],
             'matches':[], 'queue':[], 'assets':[], 'budgets':{},
             'settings':{'entity':'ASMAKAM — legal name pending', 'backup_dir':'',
@@ -60,6 +60,8 @@ def empty_state():
                                      {'section':'194C','rate':'2','effective':'2026-04-01'},
                                      {'section':'194I','rate':'10','effective':'2026-04-01'}],
                         'gst_rates':'0,5,12,18,28', 'tax_reviewed':False}}
+    from .revenue import ensure_accounts
+    return ensure_accounts(state)
 
 def add_audit(state, action, payload):
     previous = state['audit'][-1]['hash'] if state['audit'] else '0'*64
@@ -140,11 +142,13 @@ def parse_transaction(text, branch, day, state):
     payment=methods[0]
     if re.search(r'\b(on credit|credit sale|returned|returns|exchange|exchanged|outstanding)\b',lower):
         raise ValueError('Credit, returns and exchanges require manual review. No cash receipt was assumed.')
+    from .revenue import match_modes
+    service_modes=match_modes(lower)
     pharmacy=bool(re.search(r'\b(pharmacy|medicines?)\b',lower))
     # A patient's purchase is the hospital's sale. Direction must be resolved
     # from the actor, not just the word "purchased" or "paid".
     customer=r'(?:patient|customer)'
-    customer_purchase=pharmacy and any(re.search(pattern,lower) for pattern in (
+    customer_purchase=bool(service_modes) and any(re.search(pattern,lower) for pattern in (
         rf'\b{customer}\b[^.;!?]*?\b(?:purchased|purchases|bought|buys|paid|pays)\b',
         rf'\b(?:purchased|bought|paid)\b[^.;!?]*?\bby\s+(?:(?:a|the)\s+)?{customer}\b',
         rf'\bpayment\s+from\s+(?:(?:a|the)\s+)?{customer}\b',
@@ -154,6 +158,8 @@ def parse_transaction(text, branch, day, state):
     hospital_purchase=bool(re.search(r'\b(?:we|hospital|our pharmacy)\s+(?:paid|purchased|bought)\b',lower))
     received=bool(re.search(r'\b(received|collected|receipt|sales|sale|sold)\b',lower))
     paid=bool(re.search(r'\b(paid|purchased|bought|payment)\b',lower))
+    if received and not re.search(r'\b(paid|purchased|bought)\b',lower):
+        paid=False
     if pharmacy and re.search(r'\b(?:doctor|physician)\s+(?:fees?|payments?)\b',lower):
         raise ValueError('Medicine sales and doctor fees need separate account lines. Split the amounts before posting.')
     if customer_purchase:
@@ -164,13 +170,13 @@ def parse_transaction(text, branch, day, state):
         # Receiving medicine stock from a supplier is not receiving sale proceeds.
         raise ValueError('Medicine purchases from suppliers require manual inventory/purchase account selection.')
     if received==paid: raise ValueError('Specify whether money was paid or received, and whether the buyer is the patient or the hospital.')
-    rules=([('4000',r'\b(opd|consultation)\b'),('4010',r'\b(therapy|panchakarma)\b'),
-            ('4020',r'\b(ipd|room)\b'),('4030',r'\b(pharmacy|medicines?)\b'),('4040',r'\bresort\b')]
-           if received else [('4510',r'\b(doctor|physician)\b'),('4530',r'\brent\b'),
+    rules=([('4040',r'\bresort\b')] if received else [('4510',r'\b(doctor|physician)\b'),('4530',r'\brent\b'),
             ('4540',r'\b(electricity|utilities|water bill)\b'),('4550',r'\b(repair|repairs)\b'),
             ('4520',r'\b(salary|salaries|wages)\b'),('4560',r'\b(bank charges|processing fee)\b'),
             ('1030',r'\bmedical equipment\b'),('1040',r'\bfurniture\b')])
     choices=[code for code,pattern in rules if re.search(pattern,lower)]
+    if received:
+        choices += [state['revenue_mode_accounts'][key] for key in service_modes]
     if len(choices)!=1: raise ValueError('Account classification is ambiguous or unsupported. Select the accounts manually.')
     if not received and payment in ('1110','1120'): raise ValueError('UPI/card clearing templates apply to sales receipts only. Select a bank for expenses.')
     if choices[0]=='4040' and branch!='VK': raise ValueError('Resort revenue requires Vaikom. Confirm the operating unit.')

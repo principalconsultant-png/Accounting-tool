@@ -46,7 +46,7 @@ class App(tk.Tk):
         ttk.Label(self,textvariable=self.status,padding=(24,9),background=SAFFRON).pack(side='bottom',fill='x')
         body=ttk.Frame(self); body.pack(fill='both',expand=True)
         nav=ttk.Frame(body,padding=(16,20),width=210); nav.pack(side='left',fill='y'); nav.pack_propagate(False)
-        self.pages={'Overview':self.overview,'Journal studio':self.studio,'Vouchers':self.vouchers,
+        self.pages={'Overview':self.overview,'Journal studio':self.studio,'Sales receipt':self.sales_receipt,'Vouchers':self.vouchers,
                     'Chart of accounts':self.accounts,'Financial reports':self.reports,
                     'Import queue':self.imports,'Bank reconciliation':self.banking,
                     'Assets & depreciation':self.assets,'Settings & backup':self.settings,'Change history':self.history}
@@ -174,6 +174,32 @@ class App(tk.Tk):
         if not messagebox.askyesno('Approve journal',f'Post this reviewed journal dated {self.jdate.get()}?\n\n{text}\n\nPosted entries can only be corrected by reversal.',parent=self): return
         v=self.commit(lambda s:core.post(s,self.jdate.get(),text,self.draft,self.jopening.get()))
         messagebox.showinfo('Posted',v['id'],parent=self); self.show('Vouchers')
+    def sales_receipt(self):
+        from .revenue import MODES, receipt_lines
+        self.note('Split a receipt across any of the 15 hospital collection categories and cash, card, UPI or other. Treatment payments received are earned revenue; Other source remains in clearing. No GST split is inferred.')
+        top=self.bar(); day=self.field(top,'Date',date.today().isoformat(),width=13)
+        unit=self.field(top,'Operating unit',self.branch.get() if self.unit()!='ALL' else 'JP Nagar',list(core.BRANCHES.values()),width=22)
+        narration=self.field(top,'Receipt / narration','Daily sales receipt',width=36)
+        grid=ttk.Frame(self.content);grid.pack(fill='x',pady=10)
+        values={}
+        for i,(key,label,code,name,pattern) in enumerate(MODES):
+            box=ttk.Frame(grid,padding=(0,4,16,4));box.grid(row=i//3,column=i%3,sticky='ew')
+            grid.columnconfigure(i%3,weight=1)
+            ttk.Label(box,text=label.strip()).pack(anchor='w')
+            var=tk.StringVar(value='0');values[key]=var
+            ttk.Entry(box,textvariable=var,width=22).pack(fill='x',pady=4)
+        ttk.Label(self.content,text='Payment methods · amounts in rupees',font=('Segoe UI',13,'bold')).pack(anchor='w',pady=12)
+        bar=self.bar();payments={}
+        for key,label in [('cash','Cash'),('card','Card'),('upi','UPI'),('other','Other source')]:payments[key]=self.field(bar,label,'0',width=16)
+        def prepare():
+            branch=self.branch_names[unit.get()];date.fromisoformat(day.get())
+            lines=receipt_lines(self.state,branch,{k:core.money(v.get()) for k,v in values.items()},{k:core.money(v.get()) for k,v in payments.items()})
+            draft_date=day.get();draft_unit=unit.get();text=narration.get().strip()
+            if not text:raise ValueError('Enter a receipt narration.')
+            self.show('Journal studio');self.jdate.set(draft_date);self.jbranch.set(draft_unit)
+            self.narration.insert('1.0',text);self.draft=lines;self.refresh_draft()
+        self.button(self.bar(),'Prepare compound journal for review',prepare,True)
+
     def vouchers(self):
         self.note('Posted entries are retained. Select a voucher to view its lines or create a reversal.')
         start,end=self.dates()
@@ -255,7 +281,7 @@ class App(tk.Tk):
                 messagebox.showinfo('Exported','Report exported. This CSV is unencrypted; store it securely.',parent=self)
         self.button(bar,'Refresh',render,True); self.button(self.bar(),'Export report CSV',export); render()
     def imports(self):
-        self.note('CSV uploads enter a local review queue. Gmail OAuth and direct mailbox download are planned; no account connection is made in this version.')
+        self.note('Upload the hospital daily-sales XLSX or journal CSV into a local review queue. Select the operating unit before uploading. Every report is checked before posting; Gmail connection remains pending.')
         bar=self.bar()
         def upload():
             path=filedialog.askopenfilename(filetypes=[('CSV','*.csv')],parent=self)
@@ -270,7 +296,18 @@ class App(tk.Tk):
                 s['queue'].append({'id':digest[:12],'digest':digest,'filename':Path(path).name,'rows':rows,'status':'PENDING_REVIEW'})
                 core.add_audit(s,'IMPORT_STAGED',{'digest':digest,'rows':len(rows)})
             self.commit(action); self.show('Import queue')
-        self.button(bar,'Upload journal CSV',upload,True)
+        self.button(bar,'Upload journal CSV',upload)
+        salesbranch=self.field(bar,'Sales report operating unit',self.branch.get() if self.unit()!='ALL' else 'JP Nagar',list(core.BRANCHES.values()),width=21)
+        def upload_sales():
+            from .sales_import import stage_sales
+            path=filedialog.askopenfilename(filetypes=[('Daily sales Excel','*.xlsx')],parent=self)
+            if not path:return
+            raw=Path(path).read_bytes();branch=self.branch_names[salesbranch.get()]
+            q=self.commit(lambda state:stage_sales(state,raw,Path(path).name,branch))
+            total=sum(r['amount'] for r in q['rows'])
+            messagebox.showinfo('Report staged',f'{len(q["rows"])} receipts · {core.rupees(total)} · {core.BRANCHES[branch]}\nReview service and payment lines, then approve the file. Nothing has been posted yet.',parent=self)
+            self.show('Import queue')
+        self.button(bar,'Upload daily sales XLSX',upload_sales,True)
         def template():
             path=filedialog.asksaveasfilename(initialfile='riju-journal-template.csv',defaultextension='.csv',parent=self)
             if path: Path(path).write_text('date,narration,branch,debit_account,credit_account,amount\n2026-04-01,Opening capital,JP,1010,3000,100000\n',encoding='utf-8')
@@ -278,15 +315,30 @@ class App(tk.Tk):
         t=self.table(('ID','Filename','Rows','Status'),[(q['id'],q['filename'],len(q['rows']),q['status']) for q in self.state['queue']])
         def selected():
             if not t.selection(): raise ValueError('Select an import file.')
-            return next(q for q in self.state['queue'] if q['id']==t.item(t.selection()[0])['values'][0])
+            return self.state['queue'][t.index(t.selection()[0])]
         def review():
             q=selected(); dialog=tk.Toplevel(self); dialog.title('Review '+q['filename']); dialog.geometry('1050x600')
-            self.table(('Date','Narration','Branch','Debit account','Credit account','Amount'),[(r['date'],r['narration'],r['branch'],r['debit_account'],r['credit_account'],core.rupees(r['amount'])) for r in q['rows']],parent=dialog)
+            if q.get('kind')=='daily_sales':
+                from .revenue import MODES, receipt_lines
+                totals={key:sum(r['revenues'].get(key,0) for r in q['rows']) for key,*_ in MODES}
+                summary='  |  '.join(label.strip()+': '+core.rupees(totals[key]) for key,label,*_ in MODES if totals[key])
+                ttk.Label(dialog,text=summary,wraplength=1000,padding=10).pack(fill='x')
+                if q.get('warnings'):ttk.Label(dialog,text='\n'.join(q['warnings'][:3]),wraplength=1000,padding=10).pack(fill='x')
+                rows=[]
+                for r in q['rows']:
+                    for l in receipt_lines(self.state,r['branch'],r['revenues'],r['payments'],q['treatment_policy'],q['other_policy']):
+                        rows.append((r['date'],r['source_row'],r['receipt'],core.BRANCHES[r['branch']],l['account']+' '+self.account_name(l['account']),core.rupees(l['debit']),core.rupees(l['credit'])))
+                self.table(('Date','Source row','Receipt','Unit','Ledger','Debit','Credit'),rows,parent=dialog)
+            else:
+                self.table(('Date','Narration','Branch','Debit account','Credit account','Amount'),[(r['date'],r['narration'],r['branch'],r['debit_account'],r['credit_account'],core.rupees(r['amount'])) for r in q['rows']],parent=dialog)
         def approve():
             q=selected()
             if q['status']!='PENDING_REVIEW': raise ValueError('Only pending files can be posted.')
             if not messagebox.askyesno('Approve import',f'Have you reviewed all {len(q["rows"])} rows? Post them together?',parent=self): return
             def action(s):
+                if q.get('kind')=='daily_sales':
+                    from .sales_import import approve_sales
+                    approve_sales(s,q['id']);return
                 item=next(x for x in s['queue'] if x['id']==q['id'])
                 for row in item['rows']: core.post(s,row['date'],row['narration'],self.import_lines(row))
                 item['status']='PROCESSED'
@@ -414,7 +466,11 @@ def main():
     parser=argparse.ArgumentParser(description='Riju Books offline Windows accounting')
     parser.add_argument('--demo',action='store_true',help='Unencrypted disposable development vault; never use real financial information.')
     parser.add_argument('--data',help='Optional vault path')
+    parser.add_argument('--self-test-output',help=argparse.SUPPRESS)
     args=parser.parse_args()
+    if args.self_test_output:
+        from .selftest import run
+        raise SystemExit(0 if run(args.self_test_output) else 1)
     try:
         vault=Vault(args.data,args.demo); app=App(vault); app.mainloop()
     except Exception as e:
