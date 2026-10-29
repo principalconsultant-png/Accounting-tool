@@ -1,0 +1,1 @@
+"""Riju Books — offline bookkeeping."""
