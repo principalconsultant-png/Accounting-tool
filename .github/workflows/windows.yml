@@ -44,7 +44,7 @@ jobs:
           if ($LASTEXITCODE -eq 0) {
             Write-Host "Release $tag already exists; leaving it unchanged. Updated build remains in Actions artifacts."
           } else {
-            gh release create $tag dist/RijuBooks.exe dist/SHA256SUMS.txt --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "Riju Books $version" --notes-file RELEASE_NOTES.md
+            gh release create $tag dist/RijuBooks.exe dist/SHA256SUMS.txt packaged-selftest.json TESTING_B01_B05.md --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "Riju Books $version" --notes-file RELEASE_NOTES.md
             if ($LASTEXITCODE -ne 0) { throw 'Release creation failed. Download the verified executable from Actions artifacts.' }
           }
           exit 0

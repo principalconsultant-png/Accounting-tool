@@ -39,7 +39,7 @@ class AccountingTests(unittest.TestCase):
         self.assertTrue(all(n==0 for n in core.balances(self.s,'2026-04-30').values()))
         with self.assertRaises(ValueError):core.reverse(self.s,v['id'],'2026-04-03')
     def test_opening(self):
-        core.post(self.s,'2026-04-01','Opening',self.lines(),opening=True)
+        core.post(self.s,'2026-04-01','Opening',[dict(account='1010',branch='JP',debit=10000,credit=0),dict(account='3000',branch='JP',debit=0,credit=10000)],opening=True)
         self.assertEqual(core.balances(self.s,'2026-04-30','JP','2026-04-01')['4530'],0)
     def test_prior_year(self):
         core.post(self.s,'2024-06-01','Earlier rent',self.lines())

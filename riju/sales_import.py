@@ -29,9 +29,9 @@ def row_key(row):
     else:reference += [row['revenues'],row['payments']]
     return hashlib.sha256(json.dumps(reference,sort_keys=True).encode()).hexdigest()
 
-def read_sales_xlsx(raw,branch):
+def read_sales_xlsx(raw,branch,valid_branches=None):
     from openpyxl import load_workbook
-    if branch not in core.BRANCHES:raise ValueError('Select the operating unit for this report.')
+    if branch not in (valid_branches if valid_branches is not None else core.BRANCHES):raise ValueError('Select the operating unit for this report.')
     if len(raw)>25*1024*1024:raise ValueError('Sales report exceeds 25 MB.')
     from zipfile import ZipFile
     with ZipFile(io.BytesIO(raw)) as archive:
@@ -91,7 +91,8 @@ def read_sales_xlsx(raw,branch):
 def stage_sales(state,raw,filename,branch,treatment_policy='earned',other_policy='clearing'):
     digest=hashlib.sha256(raw).hexdigest()
     if any(q['digest']==digest and q.get('branch',branch)==branch for q in state['queue']):raise ValueError('This report is already in the queue for that branch.')
-    rows,warnings=read_sales_xlsx(raw,branch)
+    from .foundation import branches
+    rows,warnings=read_sales_xlsx(raw,branch,branches(state,active_only=True))
     prior={r['key'] for q in state['queue'] if q.get('kind')=='daily_sales' for r in q['rows']}
     if any(r['key'] in prior for r in rows):raise ValueError('A receipt in this report is already queued or posted for this branch. Review the earlier import.')
     if any(r['revenues']['treatment_receipt'] for r in rows) and treatment_policy=='review':

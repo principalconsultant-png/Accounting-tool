@@ -78,6 +78,7 @@ class RevenueTests(unittest.TestCase):
             self.assertIn(dict(code='4050',name='My custom ledger',kind='Equity'),migrated['accounts'])
             count=len(migrated['audit']);ensure_accounts(migrated,audit=True)
             self.assertEqual(len(migrated['audit']),count)
+            folder=Path(d)/'external';folder.mkdir();migrated['settings']['backup_dir']=str(folder)
             v.save(migrated);self.assertEqual(v.load(),migrated)
 
 class SalesImportTests(unittest.TestCase):

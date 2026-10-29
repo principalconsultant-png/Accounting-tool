@@ -69,8 +69,8 @@ def match_modes(text):
 
 def receipt_lines(state, branch, revenues, payments, treatment_policy='earned', other_policy='clearing'):
     """One compound draft: debit actual payment buckets, credit service buckets."""
-    from .core import BRANCHES
-    if branch not in BRANCHES:raise ValueError('Select a valid operating unit.')
+    from .foundation import branches
+    if branch not in branches(state,active_only=True):raise ValueError('Select a valid operating unit.')
     if treatment_policy not in ('review','earned','advance'):raise ValueError('Unknown treatment receipt policy.')
     if other_policy not in ('clearing','bank'):raise ValueError('Unknown other-source policy.')
     if set(revenues)-{m[0] for m in MODES}:raise ValueError('Unknown revenue mode.')

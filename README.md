@@ -1,8 +1,8 @@
 # ऋजु · Riju Books
 
-**Version 0.3.1:** soft Indian tricolor theme with pastel saffron, warm ivory, sage green and muted navy accents; all 15 hospital collection categories, compound split-payment receipts, and direct daily-sales XLSX import into the review queue. Existing vaults receive additional ledgers without overwriting custom accounts or posted journals.
+**Version 0.4.0:** B01–B05 bookkeeping foundations: optional registration details; configurable entity/branches; grouped ledger masters and shared Patient A/C; earlier years, reviewed initial openings and year-end closing; saved/editable journal drafts and safer upgrades. See [the test guide](TESTING_B01_B05.md) and [build tracker](BUILD_TRACKER.md).
 
-The source report's `Treatment` column is included independently of its subtotal formula. `Trtmt Pymt RECD` is earned treatment revenue, as confirmed; `Other source` posts to Other receipts clearing. No GST allocation is invented where the report supplies none.
+Existing books are migrated in memory first. Before the first upgraded save, select your external-drive backup folder: the original-format vault is backed up and byte-verified. Upgraded books use format version 2; keep the backup because older executables cannot open them. Cross-computer DPAPI recovery remains pending.
 
 An offline-first, single-user Windows bookkeeping application for one entity with three operating units: JP Nagar, Kammanahalli and Vaikom medical resort. Ivory, sage and pastel saffron interface. No cloud database, telemetry, external fonts, online AI calls or GPU dependency.
 
@@ -83,6 +83,6 @@ Linux development can use `python run_riju.py --demo --data /tmp/riju-demo.json`
 - Full Companies Act schedules and income-tax block depreciation with asset additions/disposals and 180-day rules. Current asset screen only registers assets and illustrates SLM/WDV amounts; it does not post depreciation.
 - General bank reconciliation including withdrawals, cash deposits, multiple bank accounts, adjustments, OFX/Excel and authoritative holiday calendars.
 - Gmail OAuth and attachment downloading into the queue; no Gmail access or sending occurs. OAuth consent and credentials will be needed for that later integration.
-- Editable branch metadata, budgets, resort opening/capacity settings, package advance recognition, full asset/CWIP schedules, inventory cost controls, and improved duplicate detection.
+- Departmental budgets, package advance recognition automation, full asset/CWIP schedules, inventory cost controls, customer-ready ledger delivery, and improved duplicate detection. Entity/branch metadata and capacity fields are now editable.
 
 No cloud environment publication, remote push or client data import is performed by these instructions. Use the existing checkout in the isolated cloud task; do not create a worktree unless requested.

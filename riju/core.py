@@ -61,7 +61,8 @@ def empty_state():
                                      {'section':'194I','rate':'10','effective':'2026-04-01'}],
                         'gst_rates':'0,5,12,18,28', 'tax_reviewed':False}}
     from .revenue import ensure_accounts
-    return ensure_accounts(state)
+    from .foundation import migrate
+    return migrate(ensure_accounts(state))
 
 def add_audit(state, action, payload):
     previous = state['audit'][-1]['hash'] if state['audit'] else '0'*64
@@ -82,30 +83,59 @@ def verify_audit(state):
     if posted != state['vouchers']:
         raise ValueError('Voucher records differ from the recorded change history.')
 
-def post(state, day, narration, lines, opening=False, reverses=None):
+def post(state, day, narration, lines, opening=False, reverses=None, metadata=None, closing=False):
+    from .foundation import branches,opening_lines,clean_metadata
     date.fromisoformat(day)
+    if date.fromisoformat(day).isoformat()!=day:raise ValueError('Use YYYY-MM-DD for the transaction date.')
+    metadata=clean_metadata(metadata)
+    if state.get('financial_years',{}).get(str(financial_year(day)),{}).get('closed'):
+        raise ValueError('This financial year is closed.')
     if state['locked_through'] and day <= state['locked_through']:
         raise ValueError('This date is in a locked period.')
     if not narration.strip(): raise ValueError('A narration is required.')
     if len(lines)<2: raise ValueError('At least two lines are required.')
     codes={a['code'] for a in state['accounts']}
+    kinds={a['code']:a['kind'] for a in state['accounts']}
     for line in lines:
         if line['account'] not in codes: raise ValueError('Unknown ledger account.')
-        if line['branch'] not in BRANCHES: raise ValueError('Every line requires a valid operating unit.')
+        if line['branch'] not in branches(state): raise ValueError('Every line requires a valid operating unit.')
+        if not reverses and not closing:
+            if line['branch'] not in branches(state,active_only=True):raise ValueError('This branch is inactive. Reactivate it before posting.')
+            if not state.get('account_details',{}).get(line['account'],{}).get('active',True):raise ValueError('This ledger is inactive. Reactivate it before posting.')
+        department=line.get('cost_center')
+        if department and (department not in state['settings'].get('departments',[]) or kinds[line['account']] not in ('Revenue','Expense')):
+            raise ValueError('Department tags apply only to revenue/expense lines and must match the configured list.')
         dr,cr=line['debit'],line['credit']
         if type(dr)!=int or type(cr)!=int or dr<0 or cr<0 or (dr>0)==(cr>0):
             raise ValueError('Each line needs one positive debit or credit, in paise.')
     if sum(l['debit']-l['credit'] for l in lines)!=0: raise ValueError('Debits and credits do not balance.')
-    for branch in BRANCHES:
+    for branch in branches(state):
         if sum(l['debit']-l['credit'] for l in lines if l['branch']==branch):
             raise ValueError('Each branch must balance. Use inter-branch clearing accounts.')
-    if opening and day[5:]!='04-01': raise ValueError('Opening balances must be dated 1 April.')
+    if opening:opening_lines(state,day,lines)
+    if not opening:
+        affected={l['branch'] for l in lines}
+        if any(v.get('opening') and day<v['date'] and affected.intersection(l['branch'] for l in v['lines']) for v in state['vouchers']):
+            raise ValueError('Transaction predates this branch\'s initial opening balances. Use the correct starting year.')
+    if opening and (reverses or closing):raise ValueError('An opening cannot also be a reversal or year-end close.')
+    if closing and day[5:]!='03-31':raise ValueError('Year-end closing entries must be dated 31 March.')
+    if metadata.get('bank_account'):
+        bank=metadata['bank_account']
+        if state.get('account_details',{}).get(bank,{}).get('group')!='Cash and bank':raise ValueError('Select a cash/bank ledger for the bank reference.')
+        if not any(l['account']==bank for l in lines):raise ValueError('Selected cash/bank ledger is absent from the journal lines.')
     if reverses:
-        if not any(v['id']==reverses for v in state['vouchers']): raise ValueError('Original voucher not found.')
+        original=next((v for v in state['vouchers'] if v['id']==reverses),None)
+        if original is None:raise ValueError('Original voucher not found.')
+        if original.get('closing'):raise ValueError('Year-end closing entries cannot be reversed individually.')
+        if day<original['date']:raise ValueError('A reversal cannot precede the original voucher.')
+        expected=[dict(l,debit=l['credit'],credit=l['debit']) for l in original['lines']]
+        if lines!=expected:raise ValueError('A reversal must exactly reverse the original journal lines.')
         if any(v.get('reverses')==reverses for v in state['vouchers']): raise ValueError('Voucher already reversed.')
     import copy
     v={'id':f'VCH-{financial_year(day)}-{len(state["vouchers"])+1:05}', 'date':day,
        'narration':narration.strip(), 'lines':copy.deepcopy(lines), 'opening':opening,'reverses':reverses}
+    if metadata:v['metadata']=metadata
+    if closing:v['closing']=True
     add_audit(state,'POST',v)
     state['vouchers'].append(v)
     return v
@@ -118,7 +148,7 @@ def reverse(state, voucher_id, day):
 def balances(state, end, branch='ALL', start=None):
     out={a['code']:0 for a in state['accounts']}
     for v in state['vouchers']:
-        if v['date']>end or (start and (v['date']<start or v.get('opening'))): continue
+        if v['date']>end or (start and (v['date']<start or v.get('opening') or v.get('closing'))): continue
         for l in v['lines']:
             if branch=='ALL' or branch==l['branch']: out[l['account']]+=l['debit']-l['credit']
     return out
