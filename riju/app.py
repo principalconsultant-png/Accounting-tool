@@ -9,7 +9,7 @@ from datetime import date, datetime
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
-from . import core
+from . import core, APP_VERSION
 from .storage import Vault
 
 BG='#F7F5EF'; WHITE='#FFFEFA'; INK='#243C46'; GREEN='#496B58'; SAGE='#E6EDDF'; SAFFRON='#F5E3CC'; MUTED='#6D7975'
@@ -19,7 +19,7 @@ class App(tk.Tk):
         super().__init__()
         self.vault=vault
         self.state=vault.load()
-        self.title('Riju Books · ऋजु · Offline accounting')
+        self.title(f'Riju Books {APP_VERSION} · ऋजु · Offline accounting')
         self.geometry('1280x820'); self.minsize(1000,680); self.configure(bg=BG)
         style=ttk.Style(self); style.theme_use('clam')
         style.configure('.',font=('Segoe UI',10),background=BG,foreground=INK)
@@ -134,7 +134,7 @@ class App(tk.Tk):
         self.jopening=tk.BooleanVar(); ttk.Checkbutton(top,text='Opening balances',variable=self.jopening).pack(side='left',padx=12,pady=20)
         self.narration=tk.Text(self.content,height=3,font=('Segoe UI',12),bg=WHITE,fg=INK,relief='solid',borderwidth=1,padx=12,pady=12)
         self.narration.pack(fill='x',pady=10)
-        ttk.Label(self.content,text='Example: Paid ₹5,000 rent by bank  •  Received ₹12,000 OPD consultation sales by UPI',style='Sub.TLabel').pack(anchor='w')
+        ttk.Label(self.content,text='Example: Patient purchased medicines in cash INR1291  •  Paid ₹5,000 rent by bank',style='Sub.TLabel').pack(anchor='w')
         self.draft=[]
         actions=self.bar(); self.button(actions,'Prepare offline draft',self.prepare,True); self.button(actions,'Add manual line',self.add_line)
         self.button(actions,'Remove selected line',self.remove_line)

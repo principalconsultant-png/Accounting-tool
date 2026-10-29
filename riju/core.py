@@ -138,11 +138,34 @@ def parse_transaction(text, branch, day, state):
         if re.search(r'\b'+word+r'\b',lower): methods.append(code)
     if len(set(methods))!=1: raise ValueError('Specify one payment method: cash, bank, UPI or card.')
     payment=methods[0]
-    received=bool(re.search(r'\b(received|collected|receipt|sales)\b',lower))
+    if re.search(r'\b(on credit|credit sale|returned|returns|exchange|exchanged|outstanding)\b',lower):
+        raise ValueError('Credit, returns and exchanges require manual review. No cash receipt was assumed.')
+    pharmacy=bool(re.search(r'\b(pharmacy|medicines?)\b',lower))
+    # A patient's purchase is the hospital's sale. Direction must be resolved
+    # from the actor, not just the word "purchased" or "paid".
+    customer=r'(?:patient|customer)'
+    customer_purchase=pharmacy and any(re.search(pattern,lower) for pattern in (
+        rf'\b{customer}\b[^.;!?]*?\b(?:purchased|purchases|bought|buys|paid|pays)\b',
+        rf'\b(?:purchased|bought|paid)\b[^.;!?]*?\bby\s+(?:(?:a|the)\s+)?{customer}\b',
+        rf'\bpayment\s+from\s+(?:(?:a|the)\s+)?{customer}\b',
+        rf'\bsold\b[^.;!?]*?\bto\s+(?:(?:a|the)\s+)?{customer}\b',
+    ))
+    supplier_context=bool(re.search(r'\b(supplier|vendor|wholesaler|distributor)\b',lower))
+    hospital_purchase=bool(re.search(r'\b(?:we|hospital|our pharmacy)\s+(?:paid|purchased|bought)\b',lower))
+    received=bool(re.search(r'\b(received|collected|receipt|sales|sale|sold)\b',lower))
     paid=bool(re.search(r'\b(paid|purchased|bought|payment)\b',lower))
-    if received==paid: raise ValueError('Specify whether money was paid or received.')
+    if pharmacy and re.search(r'\b(?:doctor|physician)\s+(?:fees?|payments?)\b',lower):
+        raise ValueError('Medicine sales and doctor fees need separate account lines. Split the amounts before posting.')
+    if customer_purchase:
+        if supplier_context or hospital_purchase:
+            raise ValueError('The description mixes customer receipts and hospital purchases. Enter these separately.')
+        received,paid=True,False
+    elif pharmacy and supplier_context:
+        # Receiving medicine stock from a supplier is not receiving sale proceeds.
+        raise ValueError('Medicine purchases from suppliers require manual inventory/purchase account selection.')
+    if received==paid: raise ValueError('Specify whether money was paid or received, and whether the buyer is the patient or the hospital.')
     rules=([('4000',r'\b(opd|consultation)\b'),('4010',r'\b(therapy|panchakarma)\b'),
-            ('4020',r'\b(ipd|room)\b'),('4030',r'\b(pharmacy|medicine)\b'),('4040',r'\bresort\b')]
+            ('4020',r'\b(ipd|room)\b'),('4030',r'\b(pharmacy|medicines?)\b'),('4040',r'\bresort\b')]
            if received else [('4510',r'\b(doctor|physician)\b'),('4530',r'\brent\b'),
             ('4540',r'\b(electricity|utilities|water bill)\b'),('4550',r'\b(repair|repairs)\b'),
             ('4520',r'\b(salary|salaries|wages)\b'),('4560',r'\b(bank charges|processing fee)\b'),

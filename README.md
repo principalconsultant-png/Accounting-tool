@@ -1,5 +1,7 @@
 # ऋजु · Riju Books
 
+**Version 0.2.0:** patient/customer medicine purchases and pharmacy receipts now map to Pharmacy Sales, including plural “medicines”. Cash, bank, UPI and card descriptions are supported; supplier purchases still require review.
+
 An offline-first, single-user Windows bookkeeping application for one entity with three operating units: JP Nagar, Kammanahalli and Vaikom medical resort. Ivory, sage and pastel saffron interface. No cloud database, telemetry, external fonts, online AI calls or GPU dependency.
 
 **Status: first development build, not production-ready accounting software.** This repository was empty. This implementation establishes an executable application and tested accounting core; it does not yet complete every requirement from the BRD.

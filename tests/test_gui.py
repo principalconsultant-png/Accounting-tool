@@ -26,4 +26,14 @@ class DesktopSmokeTests(unittest.TestCase):
                 app.show('Financial reports');app.update()
                 restored=Vault(Path(d)/'demo.json',demo=True).load()
                 self.assertEqual(restored['vouchers'][0]['lines'][0]['debit'],500000)
+                for description in ('Medicines purchased from our Pharmacy by Patient Hema R in Cash INR1291', 'Received cash INR1291 from Patient Hema R for Medicines.'):
+                    app.show('Journal studio');app.update()
+                    app.jdate.set('2026-10-29')
+                    app.narration.insert('1.0',description)
+                    app.prepare()
+                    self.assertEqual([l['account'] for l in app.draft],['1000','4030'])
+                    self.assertEqual(app.draft[0]['debit'],129100)
+                    with patch('riju.app.messagebox.askyesno',return_value=True),patch('riju.app.messagebox.showinfo'):
+                        app.post_draft()
+                self.assertEqual(len(app.state['vouchers']),3)
             finally: app.destroy()
