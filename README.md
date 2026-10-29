@@ -1,6 +1,6 @@
 # ऋजु · Riju Books
 
-**Version 0.3.0:** all 15 hospital collection categories, compound split-payment receipts, and direct daily-sales XLSX import into the review queue. Existing vaults receive additional ledgers without overwriting custom accounts or posted journals.
+**Version 0.3.1:** soft Indian tricolor theme with pastel saffron, warm ivory, sage green and muted navy accents; all 15 hospital collection categories, compound split-payment receipts, and direct daily-sales XLSX import into the review queue. Existing vaults receive additional ledgers without overwriting custom accounts or posted journals.
 
 The source report's `Treatment` column is included independently of its subtotal formula. `Trtmt Pymt RECD` is earned treatment revenue, as confirmed; `Other source` posts to Other receipts clearing. No GST allocation is invented where the report supplies none.
 

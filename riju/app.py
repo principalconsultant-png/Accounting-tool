@@ -12,7 +12,10 @@ from tkinter import ttk, filedialog, messagebox, simpledialog
 from . import core, APP_VERSION
 from .storage import Vault
 
-BG='#F7F5EF'; WHITE='#FFFEFA'; INK='#243C46'; GREEN='#496B58'; SAGE='#E6EDDF'; SAFFRON='#F5E3CC'; MUTED='#6D7975'
+# Soft Indian tricolor: saffron, ivory, sage, with restrained Chakra-blue accents.
+BG='#FBF9F5'; WHITE='#FFFEFC'; INK='#293B55'; GREEN='#355D49'
+SAGE='#E3EEDF'; SAFFRON='#F9E5D1'; MUTED='#596878'
+SAFFRON_HOVER='#F2D5B5'; SAGE_HOVER='#D1E2CB'; BLUE='#E7EDF7'; BORDER='#DCE2DC'
 
 class App(tk.Tk):
     def __init__(self,vault):
@@ -27,11 +30,24 @@ class App(tk.Tk):
         style.configure('TLabel',background=BG); style.configure('Title.TLabel',font=('Segoe UI',25,'bold'))
         style.configure('Sub.TLabel',foreground=MUTED)
         style.configure('TButton',padding=(13,9),background=SAGE,borderwidth=0)
-        style.map('TButton',background=[('active','#D4E1CA')])
-        style.configure('Accent.TButton',background=GREEN,foreground='white')
+        style.configure('TButton',background=WHITE,bordercolor=BORDER,foreground=INK)
+        style.map('TButton',background=[('pressed',SAFFRON_HOVER),('active',SAFFRON)],foreground=[('disabled',MUTED)])
+        style.configure('Accent.TButton',background=SAGE,foreground=GREEN)
+        style.map('Accent.TButton',background=[('pressed',SAGE_HOVER),('active',SAGE_HOVER)],foreground=[('active',GREEN)])
+        style.configure('Nav.TButton',background=BG,foreground=INK,anchor='w')
+        style.map('Nav.TButton',background=[('active',SAFFRON)])
+        style.configure('Selected.Nav.TButton',background=SAFFRON,foreground=INK)
+        style.map('Selected.Nav.TButton',background=[('active',SAFFRON_HOVER)])
+        style.configure('TEntry',fieldbackground=WHITE,bordercolor=BORDER,insertcolor=INK)
+        style.configure('TCombobox',fieldbackground=WHITE,background=SAGE,arrowcolor=INK,bordercolor=BORDER)
+        style.map('TCombobox',fieldbackground=[('readonly',WHITE)],selectbackground=[('readonly',BLUE)],selectforeground=[('readonly',INK)])
+        style.configure('TCheckbutton',background=BG)
+        style.map('TCheckbutton',background=[('active',BG)])
         style.configure('Treeview',background=WHITE,fieldbackground=WHITE,rowheight=31,borderwidth=0)
         style.configure('Treeview.Heading',background=SAGE,padding=8,font=('Segoe UI',10,'bold'))
-        style.map('Treeview',background=[('selected',GREEN)],foreground=[('selected','white')])
+        style.map('Treeview',background=[('selected',BLUE)],foreground=[('selected',INK)])
+        ribbon=tk.Frame(self,bg=BG);ribbon.pack(fill='x')
+        for color in (SAFFRON,WHITE,SAGE):tk.Frame(ribbon,bg=color,height=3).pack(fill='x')
         header=ttk.Frame(self,padding=(24,18)); header.pack(fill='x')
         ttk.Label(header,text='ऋजु  RIJU BOOKS',font=('Segoe UI',19,'bold')).pack(side='left')
         ttk.Label(header,text='  /  Clear books. Thoughtful decisions.',style='Sub.TLabel').pack(side='left',padx=15)
@@ -50,8 +66,10 @@ class App(tk.Tk):
                     'Chart of accounts':self.accounts,'Financial reports':self.reports,
                     'Import queue':self.imports,'Bank reconciliation':self.banking,
                     'Assets & depreciation':self.assets,'Settings & backup':self.settings,'Change history':self.history}
+        self.nav_buttons={}
         for name in self.pages:
-            ttk.Button(nav,text=name,command=lambda n=name:self.show(n)).pack(fill='x',pady=4)
+            b=ttk.Button(nav,text=name,style='Nav.TButton',command=lambda n=name:self.show(n))
+            b.pack(fill='x',pady=4);self.nav_buttons[name]=b
         ttk.Label(nav,text='ONE ENTITY · THREE UNITS\n\nJP Nagar · 8 beds\nKammanahalli · 8 beds\nVaikom · Construction\n\n● Offline rules assistant\nNo external AI calls',style='Sub.TLabel',wraplength=175).pack(side='bottom',pady=20)
         self.content=ttk.Frame(body,padding=(20,14,26,20)); self.content.pack(side='left',fill='both',expand=True)
         self.current='Overview'; self.show(self.current)
@@ -78,6 +96,7 @@ class App(tk.Tk):
         except Exception as e: messagebox.showerror('Please review',str(e),parent=self)
     def show(self,name):
         self.current=name
+        for page,button in self.nav_buttons.items():button.configure(style='Selected.Nav.TButton' if page==name else 'Nav.TButton')
         for w in self.content.winfo_children(): w.destroy()
         self.status.set(('DEVELOPMENT DEMO · unencrypted disposable data' if self.vault.demo else 'Windows-protected local vault · No application password')+'  |  '+str(len(self.state['vouchers']))+' posted vouchers')
         ttk.Label(self.content,text=name,style='Title.TLabel').pack(anchor='w',pady=(0,7))
@@ -112,10 +131,10 @@ class App(tk.Tk):
         revenue=-sum(b[a['code']] for a in self.state['accounts'] if a['kind']=='Revenue')
         expense=sum(b[a['code']] for a in self.state['accounts'] if a['kind']=='Expense')
         cards=ttk.Frame(self.content); cards.pack(fill='x',pady=14)
-        for title,val in [('Operating revenue',revenue),('Operating expenses',expense),('Surplus / (deficit)',revenue-expense),('Cash & bank',allb['1000']+allb['1010'])]:
-            f=tk.Frame(cards,bg=SAGE,padx=18,pady=22); f.pack(side='left',fill='both',expand=True,padx=(0,10))
-            tk.Label(f,text=title,bg=SAGE,fg=GREEN,font=('Segoe UI',10)).pack(anchor='w')
-            tk.Label(f,text=core.rupees(val),bg=SAGE,fg=INK,font=('Segoe UI',19,'bold')).pack(anchor='w',pady=(12,0))
+        for (title,val),color in zip([('Operating revenue',revenue),('Operating expenses',expense),('Surplus / (deficit)',revenue-expense),('Cash & bank',allb['1000']+allb['1010'])],(SAFFRON,WHITE,SAGE,BLUE)):
+            f=tk.Frame(cards,bg=color,padx=18,pady=22); f.pack(side='left',fill='both',expand=True,padx=(0,10))
+            tk.Label(f,text=title,bg=color,fg=INK,font=('Segoe UI',10)).pack(anchor='w')
+            tk.Label(f,text=core.rupees(val),bg=color,fg=INK,font=('Segoe UI',19,'bold')).pack(anchor='w',pady=(12,0))
         ttk.Label(self.content,text='Operating unit snapshot',font=('Segoe UI',15,'bold')).pack(anchor='w',pady=(20,8))
         rows=[]
         for code,name in core.BRANCHES.items():
