@@ -50,7 +50,7 @@ def ledger_pack(state,codes,start,end,branch='ALL'):
                 continue
             metadata=voucher.get('metadata',{})
             book['rows'].append(dict(date=voucher['date'],voucher=voucher['id'],reference=metadata.get('reference',''),
-              narration=voucher['narration'],branch=names[line['branch']],department=line.get('cost_center',''),
+              narration=core.display_narration(voucher,state),branch=names[line['branch']],department=line.get('cost_center',''),
               debit=line['debit'],credit=line['credit'],closing_entry=bool(voucher.get('closing')),opening_entry=bool(voucher.get('opening'))))
     for book in books.values():
         running=book['opening']

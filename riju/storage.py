@@ -83,8 +83,9 @@ class Vault:
             if not raw.startswith(MAGIC): raise ValueError('Unknown vault format.')
             raw=protect(raw[len(MAGIC):],True)
         state=json.loads(raw)
-        if state.get('version') not in (1,2): raise ValueError('Unsupported vault version.')
-        verify_audit(state)
+        if state.get('version') not in (1,2,3,4,5,6,7,8,9): raise ValueError('Unsupported vault version.')
+        from .history import verify_saved_state
+        verify_saved_state(state)
         before=json.dumps(state,sort_keys=True)
         from .revenue import ensure_accounts
         from .foundation import migrate
@@ -105,7 +106,10 @@ class Vault:
             folder=state['settings'].get('backup_dir')
             if not folder:raise ValueError('Upgrade pending: choose an external backup folder in Settings & backup before saving. Your original books are unchanged.')
             self.last_upgrade_backup=self.backup(folder)
-        raw=json.dumps(state,ensure_ascii=False,separators=(',',':')).encode()
+        import copy
+        from .history import checkpoint
+        candidate=copy.deepcopy(state);checkpoint(candidate)
+        raw=json.dumps(candidate,ensure_ascii=False,separators=(',',':')).encode()
         if not self.demo: raw=MAGIC+protect(raw)
         fd,name=tempfile.mkstemp(prefix='.riju-',dir=self.path.parent)
         try:
@@ -114,6 +118,7 @@ class Vault:
             os.replace(name,self.path)
             self.last_digest=hashlib.sha256(raw).hexdigest()
             self.migration_pending=False
+            state['audit']=candidate['audit']
         finally:
             if os.path.exists(name): os.unlink(name)
     def backup(self,directory):
@@ -130,15 +135,17 @@ class Vault:
         source=Vault(path,demo=self.demo)
         restored=source.load()
         # Use the live external-drive selection, not an obsolete backup path.
+        prior_backup_folder=restored['settings'].get('backup_dir','')
         restored['settings']['backup_dir']=str(backup_directory)
+        safety_copy=None
         with file_lock(str(self.path)+'.write.lock'):
             if self.path.exists():
                 if hashlib.sha256(self.path.read_bytes()).hexdigest()!=self.last_digest:
                     raise ValueError('Vault changed in another instance. Reopen before restoring.')
-                self.backup(backup_directory)
+                safety_copy=self.backup(backup_directory)
             else:
                 if not Path(backup_directory).is_dir():raise ValueError('External backup folder is unavailable.')
             from .core import add_audit
-            add_audit(restored,'BACKUP_RESTORED',{'filename':Path(path).name})
+            add_audit(restored,'BACKUP_RESTORED',{'filename':Path(path).name,'source_digest':source.last_digest,'previous_live_digest':self.last_digest,'safety_copy':safety_copy.name if safety_copy else None,'old_backup_folder':prior_backup_folder,'new_backup_folder':str(backup_directory)})
             self._save(restored)
         return restored

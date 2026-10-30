@@ -3,7 +3,7 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import ttk,filedialog,messagebox
 import webbrowser
-from . import ledgers
+from . import ledgers,core
 
 
 class LedgerUI:
@@ -102,7 +102,7 @@ class LedgerUI:
         voucher_id=self.ledger_row_vouchers.get(selected[0]) if selected else None
         if not voucher_id:raise ValueError('Select a transaction row to open its posted voucher.')
         v=next(v for v in self.state['vouchers'] if v['id']==voucher_id)
-        text=v['date']+' | '+v['narration']+'\nReference: '+v.get('metadata',{}).get('reference','')+'\n\n'
+        text=v['date']+' | '+core.display_narration(v,self.state)+'\nReference: '+v.get('metadata',{}).get('reference','')+'\n\n'
         text+='\n'.join(self.branches[l['branch']]+' | '+l['account']+' '+self.account_name(l['account'])+' | Dr '+ledgers.number(l['debit'],True)+' | Cr '+ledgers.number(l['credit'],True) for l in v['lines'])
         messagebox.showinfo(v['id'],text,parent=self)
 

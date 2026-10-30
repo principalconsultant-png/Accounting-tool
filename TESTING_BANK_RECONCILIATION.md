@@ -1,0 +1,27 @@
+# Bank reconciliation — unpublished 0.7.0-dev
+
+This draft extends the existing FX and workload-statistics build. No new executable has been published; the public Windows download remains 0.5.0. Test with invented books first. Windows packaging and client acceptance remain pending.
+
+## Upgrade safely
+
+Run `python run_riju.py` from this checkout with the dependencies in requirements.txt installed. The bank module introduces vault format/schema 4. Formats 1–3 load in memory; before the first upgraded save, select your external-drive backup folder so the original vault is copied and verified. Older executables cannot open format 4. Preserve that original backup.
+
+## Test sequence
+
+1. In Ledger A/c / account masters, check your INR bank ledger. Create separate bank ledgers for separate physical accounts. A shared account covers all operating units; select a single branch only for a genuinely dedicated account. Enter the initial book opening once using the existing opening-balance workflow.
+2. Open **Bank reconciliation**, select the bank and choose **Load bank**. Import CSV, XLSX or OFX. Set the statement period, scope, verified opening and closing balances, date format, row order, sheet/header row and column mapping as needed. Review the preview before approval. Debit is a withdrawal; credit is a deposit; signed amounts are positive for deposits. Negative balances mean an overdraft. CSV template is available on this screen.
+3. Confirm imported withdrawals and deposits, value dates, references and balances. A failed import must leave the books untouched. Reimporting the same file/period is blocked; confidently identified overlapping rows are reused. Imports with ambiguous overlap need clearer source references/running balances. A mistaken unused import can be voided with a reason; its history remains. Active matches must be undone first.
+4. Post a normal INR bank receipt/payment through Journal studio. Select its bank row and book movement and approve a match. Suggestions require review. Try several bank rows to one book entry, grouped book entries, and a partial amount. A bank or book amount cannot be used twice. Matching existing entries must create no duplicate journal.
+5. Post UPI/card sales over multiple days. Select the net bank credit and use the settlement workflow. Review the receipt lines, gross, total fees and any explicitly supported input GST. Approve the previewed balanced journal. Check Bank, the selected clearing ledger, fees and tax ledgers. Try a partial gross settlement. Card and UPI parts of the same source voucher remain separately available. Cash deposits use the cash channel.
+6. For an unrecorded bank fee, interest or direct credit, choose the reviewed adjustment workflow and the proper branch/contra ledger. Check the journal and matching. Use a normal reviewed compound journal for more complex tax entries, then match it.
+7. Configure the business calendar with a sourced `date,name,source` CSV for each relevant year. Sunday and second/fourth Saturday closures are built in; holiday dates and working-day overrides are editable. Test NBD plus 0 or 1 business day. Holiday years are shown; the app does not fetch or claim to contain an authoritative holiday list automatically. Suggestions outside the usual window may be manually reviewed and matched.
+8. Select the specific statement and open **BRS / handover**. Verify closing bank balance + deposits in transit − unpresented payments − unrecorded bank credits + unrecorded bank debits equals book balance. Prior outstanding items carry forward. A later-dated match must not disappear from an earlier statement. Bank-only unresolved items need an adjustment or an explicit reconciling reason; a zero arithmetic difference alone is insufficient.
+9. Export PDF/CSV or use offline print preview. Verify entity, bank, branch/shared scope, period, balances, outstanding items, reasons and draft/reconciled status. Exporting must not change the books.
+10. Complete a ready statement. Backdated bank postings and undoing its matches must now be blocked. Other banks remain editable. Reopen with a reason to correct it. Undo a match with a date/reason: a plain link is removed; an owned adjustment/settlement is reversed through a new journal, preserving history and prior-period reports. Reload the app and verify all data persists.
+11. Check Work volume: imported and matched bank rows are counted; matching an existing journal does not inflate posted journal counts. Voided rows are excluded. Branch counts for shared-bank matches can overlap and must not be added together.
+
+## Current limits and acceptance
+
+Statements are INR-denominated. Foreign-currency receipt/holding/conversion accounting remains on the existing FX screen; foreign-currency bank statement reconciliation is not included. Column mapping is selected per import rather than saved as reusable bank templates. Calendar source verification, Windows executable checks and client acceptance remain required. No bank connection, automatic posting or online service is used.
+
+Automated checks use disposable data and cover imports, mapping, balances, overlaps, legacy deposits, partial/group matches, fees/GST rounding, bank isolation, historical cutoff/undo, protected periods, voids, migration, exports and desktop persistence. Run `DISPLAY=:99 python -m unittest discover -s tests -q` on a configured Linux display, or the project's normal Windows test command. Windows DPAPI verification requires Windows.

@@ -1,8 +1,10 @@
 # ऋजु · Riju Books
 
+**Unpublished draft 0.14.0-dev:** Financial reports now offer Excel (.xlsx), PDF and CSV for trial balance, P&L, balance sheet, comparatives, branch matrix and general ledger, using the same read-only screen/export snapshot. Prior GST/RCM/2B, tax/history/bank/FX work is preserved. See [financial report export testing instructions](TESTING_FINANCIAL_REPORT_EXPORTS.md) and [the build tracker](BUILD_TRACKER.md). Nothing new has been published. Vault format remains 9.
+
 **Version 0.5.0:** **Ledger A/c** directly below Overview; individual and full ledger books with opening/running/closing balances; branch/date filters and voucher drilldown; offline printing plus PDF/Excel/CSV handover packs. Trial balance includes opening, movement and closing columns. See [ledger testing instructions](TESTING_LEDGERS.md) and [the build tracker](BUILD_TRACKER.md). B01–B05 foundations remain available.
 
-Existing books are migrated in memory first. Before the first upgraded save, select your external-drive backup folder: the original-format vault is backed up and byte-verified. Upgraded books use format version 2; keep the backup because older executables cannot open them. Cross-computer DPAPI recovery remains pending.
+Existing books are migrated in memory first. Before the first upgraded save, select your external-drive backup folder: the original-format vault is backed up and byte-verified. The published 0.5.0 build uses format version 2; the current unpublished draft uses format 9. Keep the original backup because older executables cannot open newer-format books. Cross-computer DPAPI recovery remains pending.
 
 An offline-first, single-user Windows bookkeeping application for one entity with three operating units: JP Nagar, Kammanahalli and Vaikom medical resort. Ivory, sage and pastel saffron interface. No cloud database, telemetry, external fonts, online AI calls or GPU dependency.
 
@@ -37,7 +39,7 @@ Output: `dist\RijuBooks.exe`; end users do not need Python. The build script ins
 6. Ledger A/c provides individual/all-account books with running balances, branch/date filters, voucher drilldown, local print preview and PDF/Excel/CSV exports. Financial reports provide a movement trial balance, working P&L and balance sheet, branch matrix and general ledger. Values use integer paise and avoid floating point for posting. Reports are accounting working statements, not certified Schedule III statements.
 7. For mixed-service or split-payment receipts, use **Sales receipt**, enter the service and payment amounts, and prepare a compound draft. Alternatively choose **Import queue → Upload daily sales XLSX**, select the branch, review source rows and journal lines, and approve the whole report. There is no auto-posting on upload. The importer accepts the supplied H:V service headings, recomputes totals, validates payment splits and rejects duplicate receipts, inconsistent totals and formulas in source amount cells. Unknown nonempty sheets are rejected explicitly.
 8. Import journal CSVs into the review queue, review rows and approve the whole file. Posting is atomic. Exact-file duplicate imports are blocked. A renamed or modified duplicate file still needs manual review.
-9. Import incoming bank deposits separately. Review suggestions grouping UPI/card sales into net bank settlements with a fee difference. Posting a match debits Bank and the reviewed fee and credits the clearing account. Do not approve fees with separately claimable GST through this simplified path.
+9. In Bank reconciliation import an INR bank statement, review and match receipts/payments against books, or approve gross-to-net UPI/card/cash settlements and missing-entry adjustments. Verify bank balances and outstanding items, export the dated BRS, then complete the statement to protect its bank period. Every posting and match requires review.
 
 ### Import formats
 

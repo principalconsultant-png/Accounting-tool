@@ -62,7 +62,98 @@ def run(output):
                 if workbook.sheetnames!=['1011','3000']:raise ValueError('Packaged Excel ledger pack mismatch')
             finally:workbook.close()
             result['ledger_exports_passed']=True
-            result.update(passed=True,revenue_modes=len(MODES),posted_vouchers=1,windows_vault_backup_roundtrip=True)
+            from . import fx,activity
+            fx.save_rate(loaded,'2026-06-01','USD','83.25','Synthetic bank advice')
+            receipt=fx.post_receipt(loaded,payment_date='2026-06-01',code='USD',foreign_amount='20',credit_account='2300',reference='SELFTEST-FX-1')
+            if receipt['fx']['inr_minor']!=166500:raise ValueError('Packaged FX conversion mismatch')
+            v.save(loaded)
+            if v.load()!=loaded:raise ValueError('Packaged FX vault round-trip mismatch')
+            metrics=activity.report(loaded)['metrics']
+            if metrics['fx_receipts_posted']!=1 or metrics['journal_vouchers_posted']!=3:raise ValueError('Packaged work-volume mismatch')
+            result['fx_and_work_volume_passed']=True
+            from . import reconciliation as bank,brs_exports
+            receipt=core.post(loaded,'2026-06-02','Synthetic bank receipt',[
+                dict(account='1011',branch='NEW',debit=5000,credit=0),
+                dict(account='4000',branch='NEW',debit=0,credit=5000)])
+            statement=bank.import_statement(loaded,b'date,narration,reference,amount\n2026-06-02,Receipt,SELFTEST-BANK,50\n','selftest-bank.csv','1011','NEW','2026-06-01','2026-06-30','100','150')
+            bank.match_existing(loaded,statement['row_ids'],[receipt['id']+':0'])
+            report=bank.brs(loaded,statement['id'])
+            if not report['ready']:raise ValueError('Packaged bank reconciliation proof failed')
+            brs_exports.export_pdf(report,root/'brs.pdf')
+            if not (root/'brs.pdf').read_bytes().startswith(b'%PDF-'):raise ValueError('Packaged BRS export failed')
+            bank.finalize(loaded,statement['id']);v.save(loaded)
+            if v.load()!=loaded:raise ValueError('Packaged bank reconciliation vault round-trip mismatch')
+            result['bank_reconciliation_passed']=True
+            from . import history
+            if not history.verify_saved_state(loaded) or not history.integrity_report(loaded)['passed']:
+                raise ValueError('Packaged history integrity review failed')
+            trace=history.trace_voucher(loaded,receipt['id'])
+            if len(trace['matches'])!=1:raise ValueError('Packaged bank history trace failed')
+            history.export_rows(history.entries(loaded),root/'history.csv')
+            history.export_rows(history.entries(loaded),root/'history.json','json')
+            result['history_integrity_passed']=True
+            from . import tax
+            tax.save_rule(loaded,dict(family='GST',key='SELFTEST-GST',label='Synthetic taxable service',effective='2026-04-01',rate='18',treatment='Taxable',hsn_sac='999311',applicability='Invented test rule only',source='Packaged synthetic test',reviewed=True))
+            party=tax.save_party(loaded,dict(name='Synthetic supplier',effective='2026-04-01',category='Unknown'))
+            preview=tax.preview(loaded,'SELFTEST-GST','2026-06-01',party['party_id'])
+            if preview['rule']['rate']!='18':raise ValueError('Packaged tax configuration preview failed')
+            tax.export_config(loaded,root/'tax-config.json');v.save(loaded)
+            if v.load()!=loaded:raise ValueError('Packaged tax configuration vault round-trip mismatch')
+            result['tax_configuration_passed']=True
+            from . import gst
+            gst.post(loaded,dict(date='2026-06-03',branch='JP',kind='Sale',registration='29ABCDE1234F1Z5',place_of_supply='29',counterparty_gstin='',reference='SELFTEST-GST-1',rule_key='SELFTEST-GST',amount='100',inclusive=False,account='4000',counter_account='1010',itc='Not applicable',narration='Synthetic GST sale',confirmed=True))
+            working=gst.summary(loaded,'2026-06-01','2026-06-30')
+            if working['totals']['output_cgst']!=900:raise ValueError('Packaged GST journal/summary failed')
+            gst.export_csv(working,root/'gst-working.csv');gst.export_report(working,root/'gst-working.json');v.save(loaded)
+            if v.load()!=loaded:raise ValueError('Packaged GST vault round-trip mismatch')
+            result['gst_accounting_passed']=True
+            original=loaded['gst_documents'][-1]
+            gst.post_note(loaded,dict(original_document_id=original['id'],date='2026-06-04',document_type='Credit note',amount='25',reference='SELFTEST-CN-1',counter_account='1010',narration='Synthetic partial refund',confirmed=True))
+            corrected=gst.summary(loaded,'2026-06-01','2026-06-30')
+            if corrected['totals']['output_cgst']!=675 or any(corrected['unclassified'].values()):raise ValueError('Packaged GST note proof failed')
+            v.save(loaded)
+            if v.load()!=loaded:raise ValueError('Packaged GST note persistence failed')
+            result['gst_notes_passed']=True
+            purchase=gst.post(loaded,dict(date='2026-06-05',branch='JP',kind='Purchase',registration='29ABCDE1234F1Z5',place_of_supply='29',counterparty_gstin='29ZZZZZ1234Z1Z5',reference='SELFTEST-P-1',rule_key='SELFTEST-GST',amount='100',inclusive=False,account='4590',counter_account='1010',itc='Eligible',narration='Synthetic purchase',confirmed=True))
+            credit=gst.post_note(loaded,dict(original_document_id=purchase['id'],date='2026-06-06',document_type='Credit note',amount='25',reference='SELFTEST-PC-1',counter_account='2000',narration='Synthetic purchase correction',confirmed=True))
+            source=b'supplier_gstin,invoice,date,taxable,cgst,sgst,igst,itc_available,document_type,original_invoice,original_date\n29ZZZZZ1234Z1Z5,SELFTEST-PC-1,2026-06-06,25,2.25,2.25,0,Y,Credit note,SELFTEST-P-1,2026-06-05\n'
+            statement=gst.import_2b(loaded,source,'selftest-2b.csv','29ABCDE1234F1Z5','2026-06')
+            gst.match_2b(loaded,statement['id'],statement['rows'][0]['id'],credit['id'])
+            review=gst.review_2b(loaded,statement['id'])
+            if review['matched_signed_totals']['cgst']!=-225:raise ValueError('Packaged 2B note sign/link failed')
+            gst.export_2b_csv(review,root/'2b-notes.csv');v.save(loaded)
+            if v.load()!=loaded:raise ValueError('Packaged 2B note persistence failed')
+            result['gst_2b_notes_passed']=True
+            from . import rcm
+            reverse=rcm.post(loaded,'Purchase',dict(date='2026-06-07',branch='JP',registration='29ABCDE1234F1Z5',reference='SELFTEST-RCM-1',narration='Synthetic RCM purchase',rule_key='SELFTEST-GST',rcm_basis='Invented test applicability only',supplier_name='Synthetic unregistered supplier',supplier_gstin='',supplier_state='29',place_of_supply='29',amount='100',account='4590',counter_account='2000',claim_expected=True,confirmed=True))
+            rcm.post(loaded,'Deposit',dict(date='2026-06-08',branch='JP',registration='29ABCDE1234F1Z5',reference='SELFTEST-CIN-1',narration='Synthetic electronic cash funding',bank_account='1010',cgst='9',sgst='9',igst='0',confirmed=True))
+            for stage,on,reference in [('Discharge','2026-06-09','SELFTEST-UTIL-1'),('Claim','2026-06-10','SELFTEST-RCM-ITC-1')]:
+                rcm.post(loaded,stage,dict(date=on,purchase_id=reverse['id'],reference=reference,narration='Reviewed synthetic '+stage,eligibility_reviewed=True,confirmed=True))
+            review=rcm.report(loaded,'2026-06-01','2026-06-30')
+            if any(review['unclassified'].values()) or review['outstanding'][0]['itc_pending']:raise ValueError('Packaged RCM stage/proof failed')
+            rcm.export(review,root/'rcm-working.json');v.save(loaded)
+            if v.load()!=loaded:raise ValueError('Packaged RCM persistence failed')
+            result['gst_rcm_passed']=True
+            from . import financial_reports
+            statement=financial_reports.snapshot(loaded,'Balance sheet','2026-04-01','2027-03-31')
+            if any(statement['controls'].values()):raise ValueError('Packaged financial statement proof failed')
+            financial_reports.export_xlsx(statement,root/'financial-report.xlsx')
+            financial_reports.export_pdf(statement,root/'financial-report.pdf')
+            workbook=load_workbook(root/'financial-report.xlsx',read_only=True)
+            try:
+                if workbook.active['A2'].value!='Balance sheet':raise ValueError('Packaged financial workbook mismatch')
+            finally:workbook.close()
+            if not (root/'financial-report.pdf').read_bytes().startswith(b'%PDF-'):raise ValueError('Packaged financial PDF export failed')
+            result['financial_report_exports_passed']=True
+            reports=financial_reports.report_pack(loaded,'2026-04-01','2027-03-31')
+            financial_reports.export_pack_xlsx(reports,root/'financial-pack.xlsx')
+            financial_reports.export_pdf(reports,root/'financial-pack.pdf')
+            workbook=load_workbook(root/'financial-pack.xlsx',read_only=True)
+            try:
+                if workbook.sheetnames!=['Contents',*financial_reports.MODES]:raise ValueError('Packaged financial pack mismatch')
+            finally:workbook.close()
+            result['financial_report_pack_passed']=True
+            result.update(passed=True,revenue_modes=len(MODES),posted_vouchers=len(loaded['vouchers']),windows_vault_backup_roundtrip=True)
     except Exception as error:
         result['error']=str(error)
     Path(output).write_text(json.dumps(result,indent=2),encoding='utf-8')

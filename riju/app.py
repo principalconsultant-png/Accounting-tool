@@ -13,6 +13,13 @@ from . import core, APP_VERSION
 from .storage import Vault
 from .foundation_ui import FoundationUI
 from .ledger_ui import LedgerUI
+from .operations_ui import OperationsUI
+from .bank_ui import BankUI
+from .history_ui import HistoryUI
+from .tax_ui import TaxUI
+from .gst_ui import GstUI
+from .rcm_ui import RcmUI
+from . import activity
 from . import foundation
 
 # Soft Indian tricolor: saffron, ivory, sage, with restrained Chakra-blue accents.
@@ -20,7 +27,7 @@ BG='#FBF9F5'; WHITE='#FFFEFC'; INK='#293B55'; GREEN='#355D49'
 SAGE='#E3EEDF'; SAFFRON='#F9E5D1'; MUTED='#596878'
 SAFFRON_HOVER='#F2D5B5'; SAGE_HOVER='#D1E2CB'; BLUE='#E7EDF7'; BORDER='#DCE2DC'
 
-class App(LedgerUI,FoundationUI,tk.Tk):
+class App(RcmUI,GstUI,TaxUI,HistoryUI,BankUI,OperationsUI,LedgerUI,FoundationUI,tk.Tk):
     def __init__(self,vault):
         super().__init__()
         self.vault=vault
@@ -76,9 +83,15 @@ class App(LedgerUI,FoundationUI,tk.Tk):
         self.status=tk.StringVar()
         ttk.Label(self,textvariable=self.status,padding=(24,9),background=SAFFRON).pack(side='bottom',fill='x')
         body=ttk.Frame(self); body.pack(fill='both',expand=True)
-        nav=ttk.Frame(body,padding=(16,20),width=210); nav.pack(side='left',fill='y'); nav.pack_propagate(False)
-        self.pages={'Overview':self.overview,'Ledger A/c':self.ledger_accounts,'Journal studio':self.studio,'Sales receipt':self.sales_receipt,'Vouchers':self.vouchers,
-                    'Chart of accounts':self.accounts,'Setup & periods':self.setup,'Saved drafts':self.saved_drafts,'Financial reports':self.reports,
+        nav_shell=ttk.Frame(body,width=220);nav_shell.pack(side='left',fill='y');nav_shell.pack_propagate(False)
+        self.nav_canvas=tk.Canvas(nav_shell,bg=BG,highlightthickness=0)
+        nav_scroll=ttk.Scrollbar(nav_shell,orient='vertical',command=self.nav_canvas.yview)
+        self.nav_canvas.configure(yscrollcommand=nav_scroll.set);nav_scroll.pack(side='right',fill='y');self.nav_canvas.pack(side='left',fill='both',expand=True)
+        nav=ttk.Frame(self.nav_canvas,padding=(12,14));nav_window=self.nav_canvas.create_window((0,0),window=nav,anchor='nw')
+        nav.bind('<Configure>',lambda e:self.nav_canvas.configure(scrollregion=self.nav_canvas.bbox('all')))
+        self.nav_canvas.bind('<Configure>',lambda e:self.nav_canvas.itemconfigure(nav_window,width=e.width))
+        self.pages={'Overview':self.overview,'Ledger A/c':self.ledger_accounts,'Work volume':self.work_volume,'Journal studio':self.studio,'Sales receipt':self.sales_receipt,'FX receipts':self.fx_receipts,'Vouchers':self.vouchers,
+                    'Chart of accounts':self.accounts,'Tax setup':self.taxes,'GST accounting':self.gst_accounting,'GST reverse charge':self.reverse_charge,'Setup & periods':self.setup,'Saved drafts':self.saved_drafts,'Financial reports':self.reports,
                     'Import queue':self.imports,'Bank reconciliation':self.banking,
                     'Assets & depreciation':self.assets,'Settings & backup':self.settings,'Change history':self.history}
         self.nav_buttons={}
@@ -102,11 +115,18 @@ class App(LedgerUI,FoundationUI,tk.Tk):
         def wheel(event):
             if str(event.widget).startswith(str(self.content)) and event.widget.winfo_class() not in ('Text','Treeview','TCombobox'):
                 self.page_canvas.yview_scroll(-1 if event.delta>0 else 1,'units')
+            elif str(event.widget).startswith(str(nav)):
+                self.nav_canvas.yview_scroll(-1 if event.delta>0 else 1,'units')
         self.bind_all('<MouseWheel>',wheel)
 
         self.current='Overview'; self.show(self.current)
-        self.after(1500,self.daily_backup)
+        self._backup_after=self.after(1500,self.daily_backup)
     def destroy(self):
+        token=getattr(self,'_backup_after',None)
+        if token:
+            try:self.after_cancel(token)
+            except tk.TclError:pass
+            self._backup_after=None
         guard=getattr(self,'_instance_guard',None)
         if guard is not None:
             self._instance_guard=None;guard.__exit__(None,None,None)
@@ -121,10 +141,12 @@ class App(LedgerUI,FoundationUI,tk.Tk):
                     self.vault.backup(folder)
                 self.status.set('Daily backup available · '+folder)
             except Exception as e: self.status.set('BACKUP PENDING · '+str(e))
-        self.after(60*60*1000,self.daily_backup)
+        self._backup_after=self.after(60*60*1000,self.daily_backup)
     def commit(self,action):
         candidate=copy.deepcopy(self.state)
         result=action(candidate)
+        from .history import record_changes
+        record_changes(self.state,candidate,getattr(self,'current','Application'))
         self.vault.save(candidate)
         self.state=candidate
         self.refresh_masters()
@@ -172,10 +194,13 @@ class App(LedgerUI,FoundationUI,tk.Tk):
         revenue=-sum(b[a['code']] for a in self.state['accounts'] if a['kind']=='Revenue')
         expense=sum(b[a['code']] for a in self.state['accounts'] if a['kind']=='Expense')
         cards=ttk.Frame(self.content); cards.pack(fill='x',pady=14)
-        for (title,val),color in zip([('Operating revenue',revenue),('Operating expenses',expense),('Surplus / (deficit)',revenue-expense),('Cash & bank',allb['1000']+allb['1010'])],(SAFFRON,WHITE,SAGE,BLUE)):
+        for (title,val),color in zip([('Total income',revenue),('Total expenses',expense),('Surplus / (deficit)',revenue-expense),('Cash & bank',sum(allb[a['code']] for a in self.state['accounts'] if a['kind']=='Asset' and self.state['account_details'].get(a['code'],{}).get('group')=='Cash and bank'))],(SAFFRON,WHITE,SAGE,BLUE)):
             f=tk.Frame(cards,bg=color,padx=18,pady=22); f.pack(side='left',fill='both',expand=True,padx=(0,10))
             tk.Label(f,text=title,bg=color,fg=INK,font=('Segoe UI',10)).pack(anchor='w')
             tk.Label(f,text=core.rupees(val),bg=color,fg=INK,font=('Segoe UI',19,'bold')).pack(anchor='w',pady=(12,0))
+        m=activity.report(self.state,branch=self.unit())['metrics']
+        self.work_overview_label=ttk.Label(self.content,text=f"Lifetime work in selected scope: {m['business_transactions_posted']} business transaction records posted · {m['journal_vouchers_posted']} journal vouchers created/posted · {m['saved_drafts_created']} saved drafts created",wraplength=950,padding=10)
+        self.work_overview_label.pack(fill='x')
         ttk.Label(self.content,text='Operating unit snapshot',font=('Segoe UI',15,'bold')).pack(anchor='w',pady=(20,8))
         rows=[]
         for code,name in self.branches.items():
@@ -183,7 +208,7 @@ class App(LedgerUI,FoundationUI,tk.Tk):
             rev=-sum(bb[a['code']] for a in self.state['accounts'] if a['kind']=='Revenue')
             exp=sum(bb[a['code']] for a in self.state['accounts'] if a['kind']=='Expense')
             rows.append((name,self.state['branches'][code]['status'],core.rupees(rev),core.rupees(exp),core.rupees(rev-exp)))
-        self.table(('Operating unit','Status','Revenue','Expenses','Result'),rows,height=5)
+        self.table(('Operating unit','Status','Income','Expenses','Result'),rows,height=5)
         ttk.Label(self.content,text='Start with opening balances or describe a transaction in Journal studio.\nTax rates are starter values: review applicability and effective dates before use.',background=SAFFRON,padding=16).pack(fill='x',pady=12)
     def studio(self):
         self.note('Describe a supported payment or receipt. Review every account before posting. Unknown treatments require manual entry; no LLM is bundled.')
@@ -297,88 +322,57 @@ class App(LedgerUI,FoundationUI,tk.Tk):
             if not t.selection(): raise ValueError('Select a voucher.')
             return next(v for v in vs if v['id']==t.item(t.selection()[0])['values'][0])
         def view():
-            v=selected(); messagebox.showinfo(v['id'],'\n'.join(f"{self.branches[l['branch']]} | {l['account']} {self.account_name(l['account'])} | Dr {core.rupees(l['debit'])} Cr {core.rupees(l['credit'])}" for l in v['lines']),parent=self)
+            v=selected(); messagebox.showinfo(v['id'],core.display_narration(v,self.state)+'\n\n'+'\n'.join(f"{self.branches[l['branch']]} | {l['account']} {self.account_name(l['account'])} | Dr {core.rupees(l['debit'])} Cr {core.rupees(l['credit'])}" for l in v['lines']),parent=self)
         def rev():
             v=selected(); day=simpledialog.askstring('Reversal date','YYYY-MM-DD',initialvalue=date.today().isoformat(),parent=self)
             if day and messagebox.askyesno('Confirm reversal','Reverse '+v['id']+'?',parent=self):
                 self.commit(lambda s:core.reverse(s,v['id'],day)); self.show('Vouchers')
         bar=self.bar(); self.button(bar,'View lines',view); self.button(bar,'Reverse selected voucher',rev)
     def reports(self):
-        self.note('Financial working statements. Final statutory formats and disclosures need accountant review; these are not certified Schedule III statements.')
-        bar=self.bar(); report=self.field(bar,'Report','Trial balance',['Trial balance','Profit and loss','Balance sheet','Comparative P&L','Comparative balance sheet','Branch matrix','General ledger'],width=21)
-        start,end=self.dates(); fromdate=self.field(bar,'From',start,width=12); todate=self.field(bar,'Through',end,width=12)
-        holder=ttk.Frame(self.content); holder.pack(fill='both',expand=True)
-        result={'table':None}
-        def render():
-            date.fromisoformat(fromdate.get()); date.fromisoformat(todate.get())
-            if fromdate.get()>todate.get(): raise ValueError('From date must precede end date.')
-            for w in holder.winfo_children(): w.destroy()
-            mode=report.get(); b=core.balances(self.state,todate.get(),self.unit()); movement=core.balances(self.state,todate.get(),self.unit(),fromdate.get())
-            cols=('Code','Ledger','Debit','Credit'); rows=[]
-            if mode in ('Comparative P&L','Comparative balance sheet'):
-                from calendar import monthrange
-                def previous(day):
-                    d=date.fromisoformat(day);y=d.year-1
-                    return date(y,d.month,min(d.day,monthrange(y,d.month)[1])).isoformat()
-                oldfrom,oldto=previous(fromdate.get()),previous(todate.get())
-                pl=mode=='Comparative P&L'
-                prior=core.balances(self.state,oldto,self.unit(),oldfrom if pl else None)
-                now=movement if pl else b
-                cols=('Code','Ledger','Current period','Previous year','Change')
-                for a in self.state['accounts']:
-                    if (a['kind'] in ('Revenue','Expense'))!=pl:continue
-                    sign=-1 if a['kind'] in ('Revenue','Liability','Equity') else 1
-                    n,o=sign*now[a['code']],sign*prior[a['code']]
-                    rows.append((a['code'],a['name'],core.rupees(n),core.rupees(o),core.rupees(n-o)))
-                if not pl:
-                    current_result=-sum(now[a['code']] for a in self.state['accounts'] if a['kind'] in ('Revenue','Expense'))
-                    prior_result=-sum(prior[a['code']] for a in self.state['accounts'] if a['kind'] in ('Revenue','Expense'))
-                    rows.append(('—','Unclosed accumulated result',core.rupees(current_result),core.rupees(prior_result),core.rupees(current_result-prior_result)))
-            elif mode=='General ledger':
-                cols=('Date','Voucher','Unit','Account','Narration','Debit','Credit')
-                for v in sorted(self.state['vouchers'],key=lambda v:(v['date'],v['id'])):
-                    if not fromdate.get()<=v['date']<=todate.get(): continue
-                    for l in v['lines']:
-                        if self.unit()=='ALL' or l['branch']==self.unit(): rows.append((v['date'],v['id'],self.branches[l['branch']],l['account']+' '+self.account_name(l['account']),v['narration'],core.rupees(l['debit']),core.rupees(l['credit'])))
-            elif mode=='Trial balance':
-                from .ledgers import ledger_pack,number
-                pack=ledger_pack(self.state,[a['code'] for a in self.state['accounts']],fromdate.get(),todate.get(),self.unit())
-                cols=('Code','Ledger','Opening Dr','Opening Cr','Period debit','Period credit','Closing Dr','Closing Cr')
-                totals=[0]*6
-                for book in pack['books']:
-                    values=[max(book['opening'],0),max(-book['opening'],0),book['debit'],book['credit'],max(book['closing'],0),max(-book['closing'],0)]
-                    totals=[a+b for a,b in zip(totals,values)]
-                    rows.append((book['code'],book['name'],*[number(n,True) for n in values]))
-                rows.append(('','TOTAL',*[number(n,True) for n in totals]))
-                differences=[totals[0]-totals[1],totals[2]-totals[3],totals[4]-totals[5]]
-                ttk.Label(holder,text='Balanced — opening, period movements and closing reconcile' if not any(differences) else 'Review differences: '+str(differences),padding=8).pack(anchor='w')
-            elif mode=='Branch matrix':
-                cols=('Account','Classification',*self.branches.values(),'Entity total')
-                units={u:core.balances(self.state,todate.get(),u) for u in self.branches}
-                for a in self.state['accounts']:
-                    values=[units[u][a['code']] for u in self.branches]
-                    rows.append((a['code']+' '+a['name'],a['kind'],*[core.rupees(n) for n in values],core.rupees(sum(values))))
-            else:
-                source=movement if mode=='Profit and loss' else b
-                for a in self.state['accounts']:
-                    if mode=='Profit and loss' and a['kind'] not in ('Revenue','Expense'): continue
-                    if mode=='Balance sheet' and a['kind'] in ('Revenue','Expense'): continue
-                    value=source[a['code']]; rows.append((a['code'],a['name'],core.rupees(max(value,0)),core.rupees(max(-value,0))))
-                if mode=='Balance sheet':
-                    earnings=-sum(b[a['code']] for a in self.state['accounts'] if a['kind'] in ('Revenue','Expense'))
-                    rows.append(('—','Unclosed accumulated result',core.rupees(max(-earnings,0)),core.rupees(max(earnings,0))))
-                if mode=='Profit and loss':
-                    profit=-sum(movement[a['code']] for a in self.state['accounts'] if a['kind'] in ('Revenue','Expense'))
-                    rows.append(('','Profit / (loss)',core.rupees(max(-profit,0)),core.rupees(max(profit,0))))
-                if mode=='Trial balance': rows.append(('','Control difference',core.rupees(sum(b.values())),''))
-            result['table']=self.table(cols,rows,parent=holder)
-        def export():
-            t=result['table']; path=filedialog.asksaveasfilename(defaultextension='.csv',filetypes=[('CSV','*.csv')],parent=self)
-            if path:
-                with open(path,'w',newline='',encoding='utf-8-sig') as f:
-                    w=csv.writer(f); w.writerow(t['columns']); w.writerows(t.item(i)['values'] for i in t.get_children())
-                messagebox.showinfo('Exported','Report exported. This CSV is unencrypted; store it securely.',parent=self)
-        self.button(bar,'Refresh',render,True); self.button(self.bar(),'Export report CSV',export); render()
+        from . import financial_reports as financial
+        self.note('Financial working statements with matching Excel/PDF/CSV exports. Final Schedule III/Ind AS formats and disclosures remain pending accountant review. Exporting does not change the books.')
+        bar=self.bar();self.report_mode=self.field(bar,'Report','Trial balance',list(financial.MODES),width=25)
+        start,end=self.dates();self.report_from=self.field(bar,'From',start,width=12);self.report_through=self.field(bar,'Through',end,width=12)
+        self.button(bar,'Refresh',self.refresh_financial_report,True)
+        actions=self.bar()
+        for kind,label in [('xlsx','Export Excel (.xlsx)'),('pdf','Export PDF'),('csv','Export CSV')]:self.button(actions,label,lambda kind=kind:self.export_financial_report(kind),kind=='xlsx')
+        pack_actions=self.bar()
+        self.button(pack_actions,'Financial pack — Excel',lambda:self.export_financial_pack('xlsx'))
+        self.button(pack_actions,'Financial pack — PDF',lambda:self.export_financial_pack('pdf'))
+        self.financial_holder=ttk.Frame(self.content);self.financial_holder.pack(fill='both',expand=True)
+        self.refresh_financial_report()
+
+    def refresh_financial_report(self):
+        from . import financial_reports as financial
+        pack=financial.snapshot(self.state,self.report_mode.get(),self.report_from.get().strip(),self.report_through.get().strip(),self.unit())
+        for widget in self.financial_holder.winfo_children():widget.destroy()
+        self.financial_snapshot=pack
+        ttk.Label(self.financial_holder,text=pack['entity']+' | '+pack['scope']+' | '+pack['start']+' to '+pack['end']+' | INR',wraplength=950).pack(anchor='w',pady=6)
+        if pack.get('comparison'):ttk.Label(self.financial_holder,text='Previous year: '+pack['comparison']['start']+' to '+pack['comparison']['end']).pack(anchor='w')
+        self.report_table=self.table(pack['columns'],financial.display_rows(pack),parent=self.financial_holder)
+        ttk.Label(self.financial_holder,text=' | '.join(label+': '+core.rupees(value) for label,value in pack['controls'].items()),wraplength=950).pack(anchor='w',pady=8)
+        ttk.Label(self.financial_holder,text=pack['note'],wraplength=950).pack(anchor='w',pady=6)
+
+    def export_financial_report(self,kind):
+        from . import financial_reports as financial
+        if kind not in ('xlsx','pdf','csv'):raise ValueError('Choose Excel, PDF or CSV.')
+        # Refresh edited selectors first so screen and file share one snapshot.
+        self.refresh_financial_report();pack=self.financial_snapshot
+        path=filedialog.asksaveasfilename(parent=self,initialfile=pack['mode'].lower().replace(' ','-').replace('&','and')+'-'+pack['end']+'.'+kind,defaultextension='.'+kind,filetypes=[(kind.upper(),'*.'+kind)])
+        if path:
+            {'xlsx':financial.export_xlsx,'pdf':financial.export_pdf,'csv':financial.export_csv}[kind](pack,path)
+            messagebox.showinfo('Financial report exported',str(path),parent=self)
+
+    def export_financial_pack(self,kind):
+        from . import financial_reports as financial
+        if kind not in ('xlsx','pdf'):raise ValueError('Choose Excel or PDF.')
+        self.refresh_financial_report()
+        packs=financial.report_pack(self.state,self.report_from.get().strip(),self.report_through.get().strip(),self.unit())
+        path=filedialog.asksaveasfilename(parent=self,initialfile='financial-working-pack-'+packs[0]['end']+'.'+kind,defaultextension='.'+kind,filetypes=[(kind.upper(),'*.'+kind)])
+        if path:
+            (financial.export_pack_xlsx if kind=='xlsx' else financial.export_pdf)(packs,path)
+            messagebox.showinfo('Financial pack exported',str(path),parent=self)
+
     def imports(self):
         self.note('Upload the hospital daily-sales XLSX or journal CSV into a local review queue. Select the operating unit before uploading. Every report is checked before posting; Gmail connection remains pending.')
         bar=self.bar()
@@ -439,58 +433,13 @@ class App(LedgerUI,FoundationUI,tk.Tk):
                     from .sales_import import approve_sales
                     approve_sales(s,q['id']);return
                 item=next(x for x in s['queue'] if x['id']==q['id'])
-                for row in item['rows']: core.post(s,row['date'],row['narration'],self.import_lines(row))
+                for index,row in enumerate(item['rows']): core.post(s,row['date'],row['narration'],self.import_lines(row),source={'kind':'journal_csv','document_id':item['id'],'record_id':str(row.get('source_row',index)),'row_count':1})
                 item['status']='PROCESSED'
             self.commit(action); self.show('Import queue')
         bar=self.bar(); self.button(bar,'Review rows',review); self.button(bar,'Approve & post entire file',approve,True)
     def import_lines(self,row):
         return [{'account':row['debit_account'],'branch':row['branch'],'debit':row['amount'],'credit':0},
                 {'account':row['credit_account'],'branch':row['branch'],'debit':0,'credit':row['amount']}]
-    def banking(self):
-        self.note('UPI/card receipts: match one or several sales days to a net bank deposit. Fee differences require explicit review. Set Bengaluru holidays before matching.')
-        bar=self.bar(); bankbranch=self.field(bar,'Operating unit',self.branch.get() if self.unit()!='ALL' else next(iter(self.branches.values())),list(self.branches.values()),width=20)
-        def upload():
-            path=filedialog.askopenfilename(filetypes=[('CSV','*.csv')],parent=self)
-            if not path:return
-            raw=Path(path).read_bytes(); rows=core.read_csv(raw.decode('utf-8-sig'),'bank')
-            branch=self.branch_names[bankbranch.get()]
-            def action(s):
-                for r in rows:
-                    key=hashlib.sha256(json.dumps([branch,r['date'],r['reference'],r['narration'],r['amount']],sort_keys=True).encode()).hexdigest()[:20]
-                    if any(b['id']==key for b in s['bank_lines']): continue
-                    s['bank_lines'].append(dict(r,id=key,branch=branch,status='UNMATCHED'))
-                core.add_audit(s,'BANK_IMPORT',{'filename':Path(path).name,'rows':len(rows),'branch':branch})
-            self.commit(action); self.show('Bank reconciliation')
-        self.button(bar,'Import bank deposits CSV',upload,True)
-        def template():
-            path=filedialog.asksaveasfilename(initialfile='riju-bank-template.csv',defaultextension='.csv',parent=self)
-            if path: Path(path).write_text('date,narration,amount,reference\n2026-04-02,UPI SETTLEMENT -AII125,11880,UTR123\n',encoding='utf-8')
-        self.button(bar,'CSV template',template)
-        banks=[b for b in self.state['bank_lines'] if self.unit()=='ALL' or self.unit()==b['branch']]
-        t=self.table(('ID','Date','Unit','Narration','Amount','Status'),[(b['id'],b['date'],self.branches[b['branch']],b['narration'],core.rupees(b['amount']),b['status']) for b in banks],height=9)
-        def match():
-            if not t.selection(): raise ValueError('Select a bank deposit.')
-            bank=next(b for b in banks if b['id']==t.item(t.selection()[0])['values'][0])
-            if bank['status']=='MATCHED': raise ValueError('This deposit is already matched.')
-            suggestions=core.settlement_matches(self.state,bank,bank['branch'])
-            if not suggestions: raise ValueError('No eligible clearing batch found within 0–1 business day. Review dates, holidays and gross/fee amounts manually.')
-            dialog=tk.Toplevel(self); dialog.title('Review settlement candidates'); dialog.geometry('1000x450'); dialog.transient(self)
-            ttk.Label(dialog,text='Candidates are suggestions. Confirm sales dates, fees, GST and reference before posting.',padding=12).pack(anchor='w')
-            st=self.table(('Candidate','Clearing account','Gross receipts','Bank deposit','Proposed fee','Sales vouchers'),[(i,s['account'],core.rupees(s['gross']),core.rupees(bank['amount']),core.rupees(s['fee']),', '.join(s['vouchers'])) for i,s in enumerate(suggestions)],parent=dialog,height=7)
-            def accept():
-                if not st.selection(): raise ValueError('Select a candidate.')
-                chosen=suggestions[int(st.item(st.selection()[0])['values'][0])]
-                if not messagebox.askyesno('Approve settlement','Confirm the difference is a processing fee with no separately claimable GST?\nThis posts bank / fee debits against the clearing account.',parent=dialog): return
-                branch=bank['branch']; lines=[{'account':'1010','branch':branch,'debit':bank['amount'],'credit':0},{'account':chosen['account'],'branch':branch,'debit':0,'credit':chosen['gross']}]
-                if chosen['fee']:lines.append({'account':'4560','branch':branch,'debit':chosen['fee'],'credit':0})
-                def action(s):
-                    v=core.post(s,bank['date'],'Settlement '+bank['reference']+' '+bank['narration'],lines)
-                    next(b for b in s['bank_lines'] if b['id']==bank['id'])['status']='MATCHED'
-                    s['matches'].append(dict(chosen,bank_id=bank['id'],posting=v['id']))
-                self.commit(action); dialog.destroy(); self.show('Bank reconciliation')
-            f=ttk.Frame(dialog,padding=10); f.pack(fill='x'); self.button(f,'Approve selected settlement',accept,True)
-        self.button(self.bar(),'Find clearing settlement matches',match,True)
-        ttk.Label(self.content,text='Current scope: incoming UPI/card settlement matching. Cash deposits, bank debits, general BRS, OFX and Excel imports require further implementation.',wraplength=900,style='Sub.TLabel').pack(anchor='w',pady=12)
     def assets(self):
         self.note('Register assets and calculate draft book depreciation. Tax rates and useful lives require your review. No depreciation is posted automatically.')
         self.table(('Asset','Unit','Acquired','Cost','Residual','Life (months)','Tax WDV %'),[(a['name'],self.branches[a['branch']],a['date'],core.rupees(a['cost']),core.rupees(a['residual']),a['life'],a['tax_rate']) for a in self.state['assets']],height=7)
@@ -511,7 +460,7 @@ class App(LedgerUI,FoundationUI,tk.Tk):
         bar=self.bar(); entity=self.field(bar,'Legal entity name',self.state['settings']['entity'],width=42); locked=self.field(bar,'Lock through (YYYY-MM-DD)',self.state['locked_through'],width=22)
         ttk.Label(self.content,text='Bengaluru banking holidays — comma-separated YYYY-MM-DD dates. Sundays and 2nd/4th Saturdays are built in.',style='Sub.TLabel',wraplength=900).pack(anchor='w',pady=10)
         holiday=tk.Text(self.content,height=3,bg=WHITE,font=('Segoe UI',10)); holiday.pack(fill='x'); holiday.insert('1.0',', '.join(self.state['holidays']))
-        ttk.Label(self.content,text='Editable tax rule reference — starter values only, not validated legal advice. Manual journals do not automatically apply these rates.',style='Sub.TLabel',wraplength=900).pack(anchor='w',pady=10)
+        ttk.Label(self.content,text='Legacy tax references — starter values only. Use Tax setup for reviewed effective-dated GST/TDS versions and payee registrations. These reference fields and manual journals do not apply taxes automatically.',style='Sub.TLabel',wraplength=900).pack(anchor='w',pady=10)
         rule_fields=[]
         for rule in self.state['settings']['tax_rules']:
             row=self.bar()
@@ -555,10 +504,6 @@ class App(LedgerUI,FoundationUI,tk.Tk):
             if not folder:raise ValueError('Configure the external backup folder first.')
             self.state=self.vault.restore(path,folder);self.refresh_masters();self.show('Overview')
         self.button(self.bar(),'Restore backup',restore)
-    def history(self):
-        self.note('Local hash-chained change history for traceability. This is not a certified statutory audit trail or protection against a fully compromised Windows account.')
-        core.verify_audit(self.state)
-        self.table(('Sequence','Timestamp (UTC)','Action','Hash'),[(a['sequence'],a['timestamp'],a['action'],a['hash']) for a in reversed(self.state['audit'])])
 
 def main():
     parser=argparse.ArgumentParser(description='Riju Books offline Windows accounting')
@@ -569,9 +514,21 @@ def main():
     if args.self_test_output:
         from .selftest import run
         raise SystemExit(0 if run(args.self_test_output) else 1)
+    vault=None
     try:
-        vault=Vault(args.data,args.demo); app=App(vault); app.mainloop()
+        vault=Vault(args.data,args.demo); app=App(vault)
     except Exception as e:
-        root=tk.Tk(); root.withdraw(); messagebox.showerror('Riju Books could not start',str(e)); root.destroy(); raise
+        root=tk.Tk();root.withdraw()
+        try:
+            from .history_ui import offer_integrity_recovery
+            recovered=offer_integrity_recovery(vault,e,root)
+            if not recovered:messagebox.showerror('Riju Books could not start',str(e),parent=root)
+        except Exception as recovery_error:
+            messagebox.showerror('Recovery could not complete',str(recovery_error),parent=root)
+            raise
+        finally:root.destroy()
+        if not recovered:raise
+        app=App(vault)
+    app.mainloop()
 
 if __name__=='__main__': main()

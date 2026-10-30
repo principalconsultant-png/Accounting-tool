@@ -1,5 +1,6 @@
 from __future__ import annotations
 import calendar
+import copy
 import csv
 import hashlib
 import io
@@ -66,15 +67,19 @@ def empty_state():
 
 def add_audit(state, action, payload):
     previous = state['audit'][-1]['hash'] if state['audit'] else '0'*64
-    record = {'sequence':len(state['audit'])+1, 'action':action, 'payload':payload, 'previous':previous}
+    record = {'sequence':len(state['audit'])+1, 'action':action, 'payload':copy.deepcopy(payload), 'previous':previous}
     from datetime import datetime, timezone
+    import getpass
+    try:record['actor']=getpass.getuser()
+    except (OSError,KeyError):record['actor']='Local user (unavailable)'
     record['timestamp'] = datetime.now(timezone.utc).isoformat()
     record['hash'] = hashlib.sha256(json.dumps(record,sort_keys=True,separators=(',',':')).encode()).hexdigest()
     state['audit'].append(record)
 
 def verify_audit(state):
     prev = '0'*64
-    for item in state['audit']:
+    for sequence,item in enumerate(state['audit'],1):
+        if type(item.get('sequence'))!=int or item['sequence']!=sequence:raise ValueError('Change history sequence check failed. Restore a trusted backup.')
         raw = {k:v for k,v in item.items() if k!='hash'}
         if item['previous'] != prev or hashlib.sha256(json.dumps(raw,sort_keys=True,separators=(',',':')).encode()).hexdigest()!=item['hash']:
             raise ValueError('Change history integrity check failed. Restore a trusted backup.')
@@ -83,7 +88,7 @@ def verify_audit(state):
     if posted != state['vouchers']:
         raise ValueError('Voucher records differ from the recorded change history.')
 
-def post(state, day, narration, lines, opening=False, reverses=None, metadata=None, closing=False):
+def post(state, day, narration, lines, opening=False, reverses=None, metadata=None, closing=False, fx=None, source=None):
     from .foundation import branches,opening_lines,clean_metadata
     date.fromisoformat(day)
     if date.fromisoformat(day).isoformat()!=day:raise ValueError('Use YYYY-MM-DD for the transaction date.')
@@ -123,9 +128,26 @@ def post(state, day, narration, lines, opening=False, reverses=None, metadata=No
         bank=metadata['bank_account']
         if state.get('account_details',{}).get(bank,{}).get('group')!='Cash and bank':raise ValueError('Select a cash/bank ledger for the bank reference.')
         if not any(l['account']==bank for l in lines):raise ValueError('Selected cash/bank ledger is absent from the journal lines.')
+    from .reconciliation import validate_post as validate_bank_post
+    validate_bank_post(state,day,lines,reverses)
+    if fx is not None:
+        from .fx import validate_post
+        if not isinstance(fx,dict):raise ValueError('Invalid FX record.')
+        validate_post(state,fx,day,narration.strip(),lines,metadata,reverses)
+    elif any(l['account'] in state.get('foreign_accounts',{}) for l in lines):
+        raise ValueError('Use FX receipts/conversion for a designated foreign-currency account; foreign units must be recorded.')
+    if source is not None:
+        from .activity import validate_source
+        source=validate_source(source)
+        if any(v.get('source',{}).get('kind')==source['kind'] and v['source'].get('document_id')==source['document_id'] and v['source'].get('record_id')==source['record_id'] for v in state['vouchers']):raise ValueError('This source record is already posted.')
     if reverses:
+        from .gst import validate_reversal as validate_gst_reversal
+        validate_gst_reversal(state,reverses,day)
+        from .rcm import validate_reversal as validate_rcm_reversal
+        validate_rcm_reversal(state,reverses,day)
         original=next((v for v in state['vouchers'] if v['id']==reverses),None)
         if original is None:raise ValueError('Original voucher not found.')
+        if original.get('fx') and fx is None:raise ValueError('An FX reversal must preserve its original currency link.')
         if original.get('closing'):raise ValueError('Year-end closing entries cannot be reversed individually.')
         if day<original['date']:raise ValueError('A reversal cannot precede the original voucher.')
         expected=[dict(l,debit=l['credit'],credit=l['debit']) for l in original['lines']]
@@ -136,6 +158,8 @@ def post(state, day, narration, lines, opening=False, reverses=None, metadata=No
        'narration':narration.strip(), 'lines':copy.deepcopy(lines), 'opening':opening,'reverses':reverses}
     if metadata:v['metadata']=metadata
     if closing:v['closing']=True
+    if fx is not None:v['fx']=copy.deepcopy(fx)
+    if source is not None:v['source']=copy.deepcopy(source)
     add_audit(state,'POST',v)
     state['vouchers'].append(v)
     return v
@@ -143,7 +167,14 @@ def post(state, day, narration, lines, opening=False, reverses=None, metadata=No
 def reverse(state, voucher_id, day):
     v=next(v for v in state['vouchers'] if v['id']==voucher_id)
     return post(state,day,'Reversal of '+voucher_id+': '+v['narration'],
-                [dict(l,debit=l['credit'],credit=l['debit']) for l in v['lines']], reverses=voucher_id)
+                [dict(l,debit=l['credit'],credit=l['debit']) for l in v['lines']], reverses=voucher_id,
+                fx={'kind':'reversal','original':voucher_id} if v.get('fx') else None)
+
+def display_narration(voucher,state):
+    if not voucher.get('fx'):return voucher['narration']
+    from .fx import summary
+    return voucher['narration']+'\n'+summary(voucher,state)
+
 
 def balances(state, end, branch='ALL', start=None):
     out={a['code']:0 for a in state['accounts']}
@@ -229,7 +260,7 @@ def next_business_day(day,holidays):
 def settlement_matches(state, bank, branch, tolerance=1):
     """Suggest contiguous daily clearing batches; approval remains manual."""
     if tolerance not in (0,1): raise ValueError('Tolerance must be 0 or 1 business day.')
-    used={x for m in state['matches'] for x in m['vouchers']}
+    used={x for m in state['matches'] if m.get('status','ACTIVE')=='ACTIVE' for x in m.get('vouchers',[])}
     results=[]
     for code in ('1110','1120'):
         eligible=[]

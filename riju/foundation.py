@@ -4,7 +4,7 @@ import re
 import uuid
 from datetime import date
 
-SCHEMA = 2
+SCHEMA = 9
 KINDS = {'Asset':(1000,1999),'Liability':(2000,2999),'Equity':(3000,3999),
          'Revenue':(4000,4499),'Expense':(4500,4999)}
 GROUPS = {
@@ -42,7 +42,7 @@ def migrate(state):
     """Idempotent in-memory migration; the vault backs up before persisting it."""
     from .core import add_audit,BRANCHES
     if state.get('schema_revision',1)>SCHEMA:raise ValueError('These books need a newer version of Riju Books.')
-    if state.get('schema_revision',1)==SCHEMA and state.get('version')==2:return state
+    if state.get('schema_revision',1)==SCHEMA and state.get('version')==9:return state
     settings=state['settings']
     settings.setdefault('departments',['Pharmacy','Therapy rooms','Inpatient diet kitchen','Outpatient consultations','Central administration'])
     state.setdefault('branches',{code:{'name':name,'city':'','state':'','state_code':'','gstin':'',
@@ -63,8 +63,18 @@ def migrate(state):
         state['patient_control']=code
     state.setdefault('financial_years',{})
     state.setdefault('drafts',[])
+    state.setdefault('fx_rates',[])
+    state.setdefault('foreign_accounts',{})
+    state.setdefault('fx_ledgers',{})
+    state.setdefault('bank_statements',[])
+    state.setdefault('bank_exceptions',{})
+    settings.setdefault('bank_reconciliation',{'tolerance':1,'use_value_date':False,'working_days':[],'holiday_sources':[]})
     state['schema_revision']=SCHEMA
-    state['version']=2
+    state.setdefault('tax_config',{'rules':[],'parties':[]})
+    for key in ('gst_documents','gst_2b_imports','gst_2b_matches'):state.setdefault(key,[])
+    state.setdefault('gst_rcm_records',[])
+    state.setdefault('gst_rcm_ledgers',{})
+    state['version']=9
     state['accounts'].sort(key=lambda a:a['code'])
     add_audit(state,'SCHEMA_UPGRADED',{'to':SCHEMA})
     return state
@@ -132,10 +142,11 @@ def save_account(state,code,name,kind,group,cash_flow='Review',active=True,descr
     if kind not in KINDS or not re.fullmatch(r'\d{4}',code):raise ValueError('Select a classification and four-digit account code.')
     lo,hi=KINDS[kind]
     if not lo<=int(code)<=hi:raise ValueError(f'{kind} codes must be between {lo} and {hi}.')
+    if code in state.get('foreign_accounts',{}) and group!='Cash and bank':raise ValueError('A designated foreign-currency bank/cash account must retain its Cash and bank group.')
     if not name.strip() or group not in GROUPS[kind] or cash_flow not in CASH_FLOW:raise ValueError('Enter ledger name and valid report/cash-flow groups.')
     existing=next((a for a in state['accounts'] if a['code']==code),None)
     if existing and existing['kind']!=kind:raise ValueError('Existing ledger classification cannot change. Create a new ledger instead.')
-    protected={'1000','1010','1020','1050','1100','1110','1120','1130','2300','3100',state['patient_control'],*state['revenue_mode_accounts'].values()}
+    protected={'1000','1010','1020','1050','1100','1110','1120','1130','2300','3100',state['patient_control'],*state['revenue_mode_accounts'].values(),*state.get('foreign_accounts',{}),*state.get('gst_rcm_ledgers',{}).values()}
     if not active and code in protected:raise ValueError('This control ledger is required. It may be renamed but not deactivated.')
     old={'account':copy.deepcopy(existing),'details':copy.deepcopy(state['account_details'].get(code))}
     item={'code':code,'name':name.strip(),'kind':kind}
@@ -153,6 +164,7 @@ def delete_account(state,code):
     if any(l['account']==code for v in state['vouchers'] for l in v['lines']):raise ValueError('A ledger used in posted history cannot be deleted.')
     if any(l['account']==code for d in state['drafts'] for l in d['lines']):raise ValueError('A draft references this ledger.')
     if any(code in (r.get('debit_account'),r.get('credit_account')) for q in state['queue'] for r in q['rows']):raise ValueError('An import references this ledger.')
+    if any(code in r.get('ledger_codes',[]) for r in state.get('tax_config',{}).get('rules',[])):raise ValueError('A historical tax rule references this ledger; it cannot be deleted.')
     item=next(a for a in state['accounts'] if a['code']==code)
     state['accounts'].remove(item);state['account_details'].pop(code,None)
     add_audit(state,'LEDGER_DELETED',{'account':item,'details':details})
@@ -187,14 +199,16 @@ def opening_lines(state,day,lines):
 def import_openings(state,text):
     """CSV rows are grouped into balanced branch vouchers and approved atomically."""
     from . import core
-    rows=core.read_csv(text,'journals');candidate=copy.deepcopy(state);groups={}
+    import hashlib
+    digest=hashlib.sha256(text.encode()).hexdigest()
+    rows=core.read_csv(text,'journals');candidate=copy.deepcopy(state);groups={};counts={}
     for row in rows:
-        key=(row['date'],row['branch']);groups.setdefault(key,[]).extend([
+        key=(row['date'],row['branch']);counts[key]=counts.get(key,0)+1;groups.setdefault(key,[]).extend([
           dict(account=row['debit_account'],branch=row['branch'],debit=row['amount'],credit=0),
           dict(account=row['credit_account'],branch=row['branch'],debit=0,credit=row['amount'])])
     vouchers=[]
     for (day,branch),lines in sorted(groups.items()):
-        vouchers.append(core.post(candidate,day,'Imported opening balances',lines,opening=True))
+        vouchers.append(core.post(candidate,day,'Imported opening balances',lines,opening=True,source={'kind':'opening_csv','document_id':digest,'record_id':day+'-'+branch,'row_count':counts[(day,branch)]}))
     state.clear();state.update(candidate)
     return vouchers
 
@@ -261,6 +275,8 @@ def post_draft(state,draft_id):
     d=next((d for d in candidate['drafts'] if d['id']==draft_id),None)
     if d is None:raise ValueError('Saved draft not found or already posted.')
     voucher=post(candidate,d['date'],d['narration'],d['lines'],opening=d['opening'],metadata=d['metadata'])
+    from .core import add_audit
+    add_audit(candidate,'DRAFT_POSTED',{'draft_id':draft_id,'voucher_id':voucher['id']})
     discard_draft(candidate,draft_id)
     state.clear();state.update(candidate)
     return voucher

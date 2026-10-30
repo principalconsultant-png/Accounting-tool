@@ -160,3 +160,365 @@ class LedgerDesktopTests(unittest.TestCase):
                 self.assertIn('0.00',app.ledger_summary.cget('text'))
                 self.assertFalse(errors,errors)
             finally:app.destroy()
+
+@unittest.skipUnless(os.environ.get('DISPLAY') or os.environ.get('RIJU_GUI_TEST'),'A graphical display is required')
+class FxWorkDesktopTests(unittest.TestCase):
+    def test_fx_rate_preview_post_and_work_statistics(self):
+        from riju.app import App
+        from riju import fx,activity,core,ledgers
+        with tempfile.TemporaryDirectory() as directory:
+            p=Path(directory);app=App(Vault(p/'test.json',demo=True))
+            errors=[];app.report_callback_exception=lambda *args:errors.append(args)
+            try:
+                app.commit(lambda s:fx.save_rate(s,'2026-06-01','USD','83.25','Synthetic bank advice'))
+                app.show('FX receipts');app.update()
+                app.fx_input['payment_date'].set('2026-06-01');app.fx_input['foreign_amount'].set('100')
+                app.fx_input['reference'].set('FX-DESKTOP-1')
+                self.assertTrue(app.fx_input['credit_account'].get().startswith('2300'))
+                app.fx_preview_receipt();self.assertEqual(len(app.state['vouchers']),0)
+                self.assertIn('8,325.00',app.fx_summaries['receipt'].cget('text'))
+                app.fx_input['foreign_amount'].set('101')
+                with self.assertRaises(ValueError):app.fx_post_receipt()
+                app.fx_input['foreign_amount'].set('100')
+                with patch('riju.operations_ui.messagebox.askyesno',return_value=True),patch('riju.operations_ui.messagebox.showinfo'):
+                    app.fx_post_receipt()
+                self.assertEqual(len(app.state['vouchers']),1)
+                self.assertEqual(app.state['vouchers'][0]['lines'][0]['branch'],'VK')
+                result=activity.report(app.state)['metrics'];self.assertEqual(result['fx_receipts_posted'],1)
+                self.assertEqual(result['journal_vouchers_created'],1);self.assertEqual(result['journal_vouchers_posted'],1)
+                pack=ledgers.ledger_pack(app.state,['1010'],'2026-06-01','2026-06-30','VK')
+                self.assertIn('USD 100',pack['books'][0]['rows'][0]['narration'])
+                app.show('Work volume');app.update();self.assertTrue(app.work_table.get_children())
+                app.branch.set('JP Nagar');app.show('Work volume');app.update()
+                self.assertEqual(activity.report(app.state,branch='JP')['metrics']['journal_vouchers_posted'],0)
+                app.show('Overview');app.update();self.assertIn('0 journal',app.work_overview_label.cget('text'))
+                app.branch.set('All operating units');app.show('Overview');app.update();self.assertIn('1 journal',app.work_overview_label.cget('text'))
+                self.assertFalse(errors,errors);core.verify_audit(app.state)
+            finally:app.destroy()
+
+@unittest.skipUnless(os.environ.get('DISPLAY') or os.environ.get('RIJU_GUI_TEST'),'A graphical display is required')
+class ForeignHoldingDesktopTests(unittest.TestCase):
+    def test_holding_conversion_and_reload_statistics(self):
+        from riju.app import App
+        from riju import fx,activity
+        with tempfile.TemporaryDirectory() as directory:
+            p=Path(directory)/'test.json';app=App(Vault(p,demo=True))
+            try:
+                app.commit(lambda s:fx.save_rate(s,'2026-06-01','USD','83','Synthetic bank'))
+                app.commit(lambda s:fx.create_foreign_account(s,'1012','USD bank Vaikom','USD'))
+                app.show('FX receipts');app.update()
+                for key,value in dict(payment_date='2026-06-01',foreign_amount='100',reference='HELD-UI-1',mode='Hold foreign currency').items():app.fx_input[key].set(value)
+                app.fx_preview_receipt();self.assertIn('No INR bank conversion',app.fx_summaries['receipt'].cget('text'))
+                with patch('riju.operations_ui.messagebox.askyesno',return_value=True),patch('riju.operations_ui.messagebox.showinfo'):
+                    app.fx_post_receipt()
+                    for key,value in dict(payment_date='2026-06-02',foreign_amount='50',gross_inr='4200',fees_inr='10',reference='CONV-UI-1').items():app.fx_conversion[key].set(value)
+                    app.fx_preview_conversion();app.fx_post_conversion()
+                self.assertEqual(fx.holding_balance(app.state,'1012')['foreign_amount'],'50')
+                self.assertEqual(fx.holding_balance(app.state,'1012')['inr_minor'],415000)
+            finally:app.destroy()
+            reopened=App(Vault(p,demo=True))
+            try:
+                m=activity.report(reopened.state)['metrics'];self.assertEqual(m['journal_vouchers_posted'],2);self.assertEqual(m['fx_conversions_posted'],1)
+                reopened.show('Work volume');reopened.update()
+                self.assertTrue(reopened.work_table.get_children())
+            finally:reopened.destroy()
+
+@unittest.skipUnless(os.environ.get('DISPLAY') or os.environ.get('RIJU_GUI_TEST'),'A graphical display is required')
+class BankReconciliationDesktopTests(unittest.TestCase):
+    def test_bank_review_finalize_and_reload(self):
+        from riju.app import App
+        from riju import core,reconciliation as r
+        with tempfile.TemporaryDirectory() as d:
+            vault=Vault(Path(d)/'demo.json',demo=True);app=App(vault)
+            try:
+                def prepare(state):
+                    v=core.post(state,'2026-04-02','Synthetic receipt',[dict(account='1010',branch='JP',debit=10000,credit=0),dict(account='4000',branch='JP',debit=0,credit=10000)])
+                    statement=r.import_statement(state,b'date,narration,reference,amount\n2026-04-02,Receipt,T1,100\n','bank.csv','1010','ALL','2026-04-01','2026-04-30','0','100')
+                    return v,statement
+                # Exercise the same durable mutation path used by the desktop dialogs.
+                app.commit(prepare)
+                app.show('Bank reconciliation');app.update()
+                self.assertEqual(len(app.brs_bank_table.get_children()),1)
+                self.assertEqual(len(app.brs_book_table.get_children()),1)
+                sid=app.state['bank_statements'][0]['id'];app.brs_selected_statement=sid
+                app.show('Bank reconciliation');app.update()
+                app.brs_bank_table.selection_set(app.brs_bank_table.get_children()[0])
+                app.brs_book_table.selection_set(app.brs_book_table.get_children()[0])
+                with patch('riju.bank_ui.simpledialog.askstring',return_value=''),patch('riju.bank_ui.messagebox.askyesno',return_value=True):
+                    app.match_bank_books()
+                self.assertTrue(r.brs(app.state,sid)['ready'])
+                with patch('riju.bank_ui.messagebox.askyesno',return_value=True):app.finalize_bank_statement()
+                self.assertIn('RECONCILED',app.brs_report_label.cget('text'))
+            finally:app.destroy()
+            loaded=vault.load();self.assertEqual(loaded['bank_statements'][0]['status'],'RECONCILED')
+            self.assertEqual(len(loaded['vouchers']),1)
+
+@unittest.skipUnless(os.environ.get('DISPLAY') or os.environ.get('RIJU_GUI_TEST'),'A graphical display is required')
+class HistoryDesktopTests(unittest.TestCase):
+    def test_history_filter_details_export_and_durable_change_set(self):
+        from riju.app import App
+        from riju import foundation,history as h
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);vault=Vault(root/'demo.json',demo=True);app=App(vault)
+            try:
+                app.commit(lambda s:foundation.save_entity(s,'History test hospital',{}))
+                app.show('Change history');app.update()
+                app.history_action.set('CHANGE_SET');app.refresh_history()
+                self.assertEqual(len(app.history_rows),1)
+                item=app.history_table.get_children()[0];app.history_table.selection_set(item);app.show_history_detail()
+                self.assertIn('History test hospital',app.history_detail.get('1.0','end'))
+                self.assertIn('before',app.history_detail.get('1.0','end'))
+                app.history_query.set('History test hospital')
+                with patch('riju.history_ui.filedialog.asksaveasfilename',return_value=str(root/'history.csv')),patch('riju.history_ui.messagebox.showinfo'):
+                    app.export_history('csv')
+                self.assertTrue((root/'history.csv').exists())
+                with patch.object(app,'_history_dialog') as dialog:
+                    app.check_history_integrity();self.assertTrue(dialog.call_args.args[1]['passed'])
+                self.assertTrue(h.verify_saved_state(app.state))
+            finally:app.destroy()
+            restored=vault.load();self.assertTrue(h.integrity_report(restored)['passed'])
+
+@unittest.skipUnless(os.environ.get('DISPLAY') or os.environ.get('RIJU_GUI_TEST'),'A graphical display is required')
+class TaxSetupDesktopTests(unittest.TestCase):
+    def test_create_version_party_preview_export_and_reload(self):
+        import tkinter as tk
+        from tkinter import ttk
+        from riju.app import App
+        from riju import tax
+        def children(widget):
+            for child in widget.winfo_children():
+                yield child
+                yield from children(child)
+        def set_field(win,label,value):
+            item=next(w for w in children(win) if isinstance(w,ttk.Label) and w.cget('text')==label)
+            entry=next(w for w in item.master.winfo_children() if isinstance(w,ttk.Entry))
+            if isinstance(entry,ttk.Combobox):entry.set(value)
+            else:entry.delete(0,'end');entry.insert(0,value)
+        def press(win,text):next(w for w in children(win) if isinstance(w,ttk.Button) and w.cget('text')==text).invoke()
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);vault=Vault(root/'demo.json',demo=True);app=App(vault)
+            try:
+                app.show('Tax setup');app.update();app.edit_tax_rule();app.update()
+                win=next(w for w in app.winfo_children() if isinstance(w,tk.Toplevel))
+                for label,value in [('Stable rule key','GUI-TEST'),('New effective date','2024-04-01'),('Rule label','Invented service'),('Total rate (%)','18'),('Specific applicability / conditions','Synthetic test only'),('HSN/SAC (TDS: leave blank)','999311')]:set_field(win,label,value)
+                with patch('riju.app.messagebox.showerror') as errors:press(win,'Save new version');errors.assert_not_called()
+                app.update();self.assertEqual(len(app.tax_rule_table.get_children()),1)
+                app.tax_rule_table.selection_set(app.tax_rule_table.get_children()[0]);app.version_tax_rule();app.update()
+                win=next(w for w in app.winfo_children() if isinstance(w,tk.Toplevel))
+                set_field(win,'New effective date','2025-04-01');set_field(win,'Total rate (%)','12')
+                with patch('riju.app.messagebox.showerror') as errors:press(win,'Save new version');errors.assert_not_called()
+                app.update();self.assertEqual(len(app.tax_rule_table.get_children()),2)
+                self.assertEqual(tax.resolve_rule(app.state,'GUI-TEST','2024-05-01')['rate'],'18')
+                app.edit_tax_party();app.update();win=next(w for w in app.winfo_children() if isinstance(w,tk.Toplevel))
+                set_field(win,'Party / payee name','Synthetic supplier');set_field(win,'New effective date','2024-04-01')
+                with patch('riju.app.messagebox.showerror') as errors:press(win,'Save new version');errors.assert_not_called()
+                app.update();self.assertEqual(len(app.tax_party_table.get_children()),1)
+                app.preview_tax_rule();app.update();win=next(w for w in app.winfo_children() if isinstance(w,tk.Toplevel))
+                set_field(win,'Transaction date','2025-04-01');press(win,'Preview')
+                text=next(w for w in children(win) if isinstance(w,tk.Text));self.assertIn('12',text.get('1.0','end'));self.assertIn('not been marked reviewed',text.get('1.0','end'));win.destroy()
+                with patch('riju.tax_ui.filedialog.asksaveasfilename',return_value=str(root/'tax.json')),patch('riju.tax_ui.messagebox.showinfo'):app.export_taxes()
+                self.assertTrue((root/'tax.json').exists());self.assertEqual(len(app.state['vouchers']),0)
+            finally:app.destroy()
+            loaded=vault.load();self.assertEqual(len(tax.rules(loaded)),2);self.assertEqual(len(tax.parties(loaded)),1)
+
+@unittest.skipUnless(os.environ.get('DISPLAY') or os.environ.get('RIJU_GUI_TEST'),'A graphical display is required')
+class GstDesktopTests(unittest.TestCase):
+    def test_review_post_summary_2b_and_reload(self):
+        import tkinter as tk
+        from tkinter import ttk
+        from riju.app import App
+        from riju import tax,gst
+        def walk(w):
+            for child in w.winfo_children():
+                yield child
+                yield from walk(child)
+        def set_field(win,label,value):
+            item=next(w for w in walk(win) if isinstance(w,ttk.Label) and w.cget('text')==label)
+            e=next(w for w in item.master.winfo_children() if isinstance(w,ttk.Entry))
+            if isinstance(e,ttk.Combobox):e.set(value)
+            else:e.delete(0,'end');e.insert(0,value)
+        def press(win,text):next(w for w in walk(win) if isinstance(w,ttk.Button) and w.cget('text')==text).invoke()
+        with tempfile.TemporaryDirectory() as d:
+            vault=Vault(Path(d)/'demo.json',demo=True);app=App(vault)
+            try:
+                app.commit(lambda s:tax.save_rule(s,dict(family='GST',key='GUI-GST',label='Synthetic test GST',effective='2026-04-01',rate='18',treatment='Taxable',hsn_sac='999311',applicability='Invented tests only',source='Synthetic test',reviewed=True)))
+                app.show('GST accounting');app.update();app.new_gst_invoice();app.update()
+                win=next(w for w in app.winfo_children() if isinstance(w,tk.Toplevel))
+                for label,value in [('Invoice date','2026-04-02'),('Document kind','Purchase'),('Our GSTIN for this invoice','29ABCDE1234F1Z5'),('Place-of-supply state code','29'),('Customer/supplier GSTIN (optional B2C)','29ZZZZZ1234Z1Z5'),('Invoice/reference number','GUI-P1'),('INR amount','100'),('Revenue/cost ledger code','4590'),('Purchase ITC assessment','Eligible'),('Narration','Invented GST purchase')]:set_field(win,label,value)
+                with patch('riju.app.messagebox.showerror') as errors:
+                    press(win,'Prepare journal preview');errors.assert_not_called()
+                    # Changing a field invalidates the reviewed preview.
+                    set_field(win,'INR amount','200');press(win,'Approve & post');self.assertTrue(errors.called)
+                    set_field(win,'INR amount','100');press(win,'Prepare journal preview')
+                with patch('riju.gst_ui.messagebox.askyesno',return_value=True):press(win,'Approve & post')
+                app.update();self.assertEqual(len(app.state['gst_documents']),1);self.assertEqual(len(app.gst_docs.get_children()),1)
+                self.assertFalse(any(app.gst_report['unclassified'].values()))
+                raw=b'supplier_gstin,invoice,date,taxable,cgst,sgst,igst,itc_available\n29ZZZZZ1234Z1Z5,GUI-P1,2026-04-02,100,9,9,0,Y\n'
+                app.commit(lambda s:gst.import_2b(s,raw,'2b.csv','29ABCDE1234F1Z5','2026-04'));app.show('GST accounting');app.update()
+                app.gst_import_table.selection_set(app.gst_import_table.get_children()[0]);app.review_gst_2b();app.update()
+                win=next(w for w in app.winfo_children() if isinstance(w,tk.Toplevel));table=next(w for w in walk(win) if isinstance(w,ttk.Treeview) and 'Match status' in w['columns'])
+                table.selection_set(table.get_children()[0])
+                with patch('riju.gst_ui.messagebox.askyesno',return_value=True):press(win,'Approve exact match')
+                self.assertEqual(len(app.state['gst_2b_matches']),1);self.assertEqual(len(app.state['vouchers']),1);win.destroy()
+                with patch('riju.gst_ui.filedialog.asksaveasfilename',return_value=str(Path(d)/'gst.csv')):app.export_gst_summary()
+                self.assertIn('GUI-P1',(Path(d)/'gst.csv').read_text(encoding='utf-8-sig'))
+            finally:app.destroy()
+            loaded=vault.load();self.assertEqual(len(loaded['gst_documents']),1);self.assertEqual(len(loaded['gst_2b_matches']),1)
+
+@unittest.skipUnless(os.environ.get('DISPLAY') or os.environ.get('RIJU_GUI_TEST'),'A graphical display is required')
+class GstNoteDesktopTests(unittest.TestCase):
+    def test_refund_note_preview_approval_and_reload(self):
+        import tkinter as tk
+        from tkinter import ttk
+        from riju.app import App
+        from riju import tax,gst
+        from test_gst import values
+        def walk(w):
+            for child in w.winfo_children():
+                yield child
+                yield from walk(child)
+        def set_field(win,label,value):
+            item=next(w for w in walk(win) if isinstance(w,ttk.Label) and w.cget('text')==label)
+            entry=next(w for w in item.master.winfo_children() if isinstance(w,ttk.Entry))
+            if isinstance(entry,ttk.Combobox):entry.set(value)
+            else:entry.delete(0,'end');entry.insert(0,value)
+        def press(win,text):next(w for w in walk(win) if isinstance(w,ttk.Button) and w.cget('text')==text).invoke()
+        with tempfile.TemporaryDirectory() as d:
+            vault=Vault(Path(d)/'demo.json',demo=True);app=App(vault)
+            try:
+                app.commit(lambda s:tax.save_rule(s,dict(family='GST',key='TEST-GST',effective='2026-04-01',label='Test',rate='18',treatment='Taxable',hsn_sac='999311',applicability='Synthetic tests',source='Invented',reviewed=True)))
+                app.commit(lambda s:gst.post(s,values()));app.show('GST accounting');app.update();app.new_gst_note();app.update()
+                win=next(w for w in app.winfo_children() if isinstance(w,tk.Toplevel))
+                for label,value in [('Note date','2026-05-01'),('Unique note reference','GUI-CN'),('Adjustment base INR (excludes GST)','25'),('Refund / balance-adjustment ledger','1010'),('Reason / narration','Invented partial refund')]:set_field(win,label,value)
+                with patch('riju.app.messagebox.showerror') as error:
+                    press(win,'Approve & post note');self.assertTrue(error.called);error.reset_mock()
+                    press(win,'Prepare note preview');error.assert_not_called()
+                with patch('riju.gst_ui.messagebox.askyesno',return_value=False):press(win,'Approve & post note')
+                self.assertEqual(len(app.state['gst_documents']),1)
+                with patch('riju.gst_ui.messagebox.askyesno',return_value=True):press(win,'Approve & post note')
+                app.update();self.assertEqual(len(app.state['gst_documents']),2)
+                self.assertEqual(app.gst_report['totals']['sales_base'],7500);self.assertFalse(any(app.gst_report['unclassified'].values()))
+                self.assertTrue(any('Credit note' in app.gst_docs.item(i,'values') for i in app.gst_docs.get_children()))
+            finally:app.destroy()
+            loaded=vault.load();self.assertEqual(loaded['gst_documents'][-1]['original_reference'],'TEST-1');self.assertEqual(len(loaded['vouchers']),2)
+
+@unittest.skipUnless(os.environ.get('DISPLAY') or os.environ.get('RIJU_GUI_TEST'),'A graphical display is required')
+class Gst2bNoteDesktopTests(unittest.TestCase):
+    def test_typed_note_import_match_signed_export_and_reopen(self):
+        import copy
+        import tkinter as tk
+        from tkinter import ttk
+        from riju.app import App
+        from riju import gst
+        from test_gst_2b_notes import Gst2bNoteTests
+        def walk(w):
+            for child in w.winfo_children():
+                yield child
+                yield from walk(child)
+        def press(win,text):next(w for w in walk(win) if isinstance(w,ttk.Button) and w.cget('text')==text).invoke()
+        fixture=Gst2bNoteTests();fixture.setUp()
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);source=root/'2b-notes.csv';source.write_bytes(fixture.raw([fixture.row()]))
+            vault=Vault(root/'demo.json',demo=True);app=App(vault)
+            try:
+                app.commit(lambda s:(s.clear(),s.update(copy.deepcopy(fixture.s))));app.show('GST accounting');app.update()
+                count=len(app.state['vouchers'])
+                with patch('riju.gst_ui.filedialog.askopenfilename',return_value=str(source)),patch('riju.gst_ui.simpledialog.askstring',side_effect=['29ABCDE1234F1Z5','2026-05']),patch('riju.gst_ui.messagebox.askyesno',return_value=True):app.import_gst_2b()
+                app.update();app.gst_import_table.selection_set(app.gst_import_table.get_children()[0]);app.review_gst_2b();app.update()
+                win=next(w for w in app.winfo_children() if isinstance(w,tk.Toplevel));table=next(w for w in walk(win) if isinstance(w,ttk.Treeview) and 'Match status' in w['columns'])
+                self.assertIn('Credit note',table.item(table.get_children()[0],'values'));self.assertIn('P-1',table.item(table.get_children()[0],'values'))
+                table.selection_set(table.get_children()[0])
+                with patch('riju.gst_ui.messagebox.askyesno',return_value=True):press(win,'Approve exact match')
+                self.assertEqual(gst.review_2b(app.state,app.state['gst_2b_imports'][0]['id'])['matched_signed_totals']['cgst'],-450)
+                with patch('riju.gst_ui.filedialog.asksaveasfilename',return_value=str(root/'review.csv')):press(win,'Export review CSV / JSON')
+                self.assertIn('-50.00',(root/'review.csv').read_text(encoding='utf-8-sig'));self.assertEqual(len(app.state['vouchers']),count);win.destroy()
+            finally:app.destroy()
+            loaded=vault.load();self.assertEqual(loaded['gst_2b_matches'][0]['document_type'],'Credit note')
+
+@unittest.skipUnless(os.environ.get('DISPLAY') or os.environ.get('RIJU_GUI_TEST'),'A graphical display is required')
+class RcmDesktopTests(unittest.TestCase):
+    def test_review_all_rcm_stages_and_reopen(self):
+        import tkinter as tk
+        from tkinter import ttk
+        from riju.app import App
+        from riju import tax,gst
+        def walk(w):
+            for child in w.winfo_children():
+                yield child
+                yield from walk(child)
+        def fill(win,label,value):
+            item=next(w for w in walk(win) if isinstance(w,ttk.Label) and w.cget('text')==label);entry=next(w for w in item.master.winfo_children() if isinstance(w,ttk.Entry))
+            if isinstance(entry,ttk.Combobox):entry.set(value)
+            else:entry.delete(0,'end');entry.insert(0,value)
+        def press(win,text):next(w for w in walk(win) if isinstance(w,ttk.Button) and w.cget('text')==text).invoke()
+        with tempfile.TemporaryDirectory() as d:
+            vault=Vault(Path(d)/'demo.json',demo=True);app=App(vault)
+            try:
+                app.commit(lambda s:tax.save_rule(s,dict(family='GST',key='GUI-RCM',effective='2026-04-01',label='Invented',rate='18',treatment='Taxable',hsn_sac='999311',applicability='Synthetic tests',source='Invented source',reviewed=True)))
+                app.show('GST reverse charge');app.update()
+                stage_fields=[('Purchase',[('Accounting/action date','2026-04-02'),('Invoice / challan / utilisation reference','GUI-RCM-1'),('Narration / supporting review','Test purchase'),('Recipient GSTIN','29ABCDE1234F1Z5'),('Verified RCM applicability basis','Invented test only'),('Supplier name (required if unregistered)','Test supplier'),('Supplier state code','29'),('Reviewed place-of-supply state','29'),('Purchase base INR (excludes RCM)','100')]),('Deposit',[('Accounting/action date','2026-04-03'),('Invoice / challan / utilisation reference','GUI-CIN'),('Narration / supporting review','Test deposit'),('Recipient GSTIN','29ABCDE1234F1Z5'),('CGST cash deposit INR','9'),('SGST cash deposit INR','9')]),('Discharge',[('Accounting/action date','2026-04-04'),('Invoice / challan / utilisation reference','GUI-UTIL'),('Narration / supporting review','Test actual cash utilisation')]),('Claim',[('Accounting/action date','2026-04-05'),('Invoice / challan / utilisation reference','GUI-ITC'),('Narration / supporting review','Reviewed test credit')])]
+                for stage,fields in stage_fields:
+                    app.new_rcm(stage);app.update();win=next(w for w in app.winfo_children() if isinstance(w,tk.Toplevel))
+                    for label,value in fields:fill(win,label,value)
+                    if stage in ('Purchase','Claim'):next(w for w in walk(win) if isinstance(w,ttk.Checkbutton)).invoke()
+                    with patch('riju.app.messagebox.showerror') as errors:
+                        press(win,'Prepare RCM preview');errors.assert_not_called()
+                        if stage=='Purchase':
+                            app.commit(lambda s:s['settings'].update(entity='Changed synthetic entity'))
+                            press(win,'Approve & post RCM');self.assertTrue(errors.called);self.assertFalse(app.state['gst_rcm_records'])
+                            errors.reset_mock();press(win,'Prepare RCM preview');errors.assert_not_called()
+                    with patch('riju.rcm_ui.messagebox.askyesno',return_value=True):press(win,'Approve & post RCM')
+                    app.update()
+                self.assertEqual(len(app.state['gst_rcm_records']),4);self.assertEqual(len(app.rcm_table.get_children()),4);self.assertFalse(any(app.rcm_report['unclassified'].values()))
+                self.assertEqual(gst.summary(app.state,'2026-04-01','2026-04-30')['totals']['input_cgst'],900)
+                with patch('riju.rcm_ui.filedialog.asksaveasfilename',return_value=str(Path(d)/'rcm.json')):app.export_rcm()
+                self.assertTrue((Path(d)/'rcm.json').exists())
+            finally:app.destroy()
+            loaded=vault.load();self.assertEqual(len(loaded['gst_rcm_records']),4)
+
+@unittest.skipUnless(os.environ.get('DISPLAY') or os.environ.get('RIJU_GUI_TEST'),'A graphical display is required')
+class FinancialReportExportDesktopTests(unittest.TestCase):
+    def test_all_report_exports_match_the_displayed_snapshot(self):
+        from riju.app import App
+        from riju import core,financial_reports as f
+        from openpyxl import load_workbook
+        from pypdf import PdfReader
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);vault=Vault(root/'demo.json',demo=True);app=App(vault)
+            try:
+                app.commit(lambda s:core.post(s,'2026-04-02','Invented report test',[dict(account='1010',branch='JP',debit=12345,credit=0),dict(account='4000',branch='JP',debit=0,credit=12345)]))
+                app.show('Financial reports');app.update()
+                for index,mode in enumerate(f.MODES):
+                    app.report_mode.set(mode);app.report_from.set('2026-04-01');app.report_through.set('2027-03-31')
+                    # Export must refresh edited selectors even when Refresh was not clicked.
+                    for kind in ('xlsx','pdf'):
+                        path=root/f'{index}.{kind}'
+                        with patch('riju.app.filedialog.asksaveasfilename',return_value=str(path)),patch('riju.app.messagebox.showinfo'):app.export_financial_report(kind)
+                        app.update();self.assertEqual(app.financial_snapshot['mode'],mode)
+                        self.assertEqual(len(app.report_table.get_children()),len(app.financial_snapshot['rows']))
+                        if kind=='xlsx':
+                            w=load_workbook(path);self.assertEqual(w.active['A2'].value,mode);w.close()
+                        else:self.assertIn(mode,PdfReader(path).pages[0].extract_text())
+                self.assertEqual(len(app.state['vouchers']),1)
+            finally:app.destroy()
+            self.assertEqual(len(vault.load()['vouchers']),1)
+
+@unittest.skipUnless(os.environ.get('DISPLAY') or os.environ.get('RIJU_GUI_TEST'),'A graphical display is required')
+class FinancialPackDesktopTests(unittest.TestCase):
+    def test_customer_pack_buttons_export_all_reports_without_posting(self):
+        from riju.app import App
+        from riju import financial_reports as f
+        from openpyxl import load_workbook
+        from pypdf import PdfReader
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);vault=Vault(root/'demo.json',demo=True);app=App(vault)
+            try:
+                app.show('Financial reports');app.update()
+                for kind in ('xlsx','pdf'):
+                    path=root/('pack.'+kind)
+                    with patch('riju.app.filedialog.asksaveasfilename',return_value=str(path)),patch('riju.app.messagebox.showinfo'):app.export_financial_pack(kind)
+                    if kind=='xlsx':
+                        wb=load_workbook(path);self.assertEqual(wb.sheetnames,['Contents',*f.MODES]);wb.close()
+                    else:self.assertIn('Financial working report pack',PdfReader(path).pages[0].extract_text())
+                self.assertEqual(app.state['vouchers'],[])
+            finally:app.destroy()

@@ -112,6 +112,6 @@ def approve_sales(state,queue_id):
         if row['key'] in prior:raise ValueError('A source receipt has already been posted.')
         lines=receipt_lines(candidate,row['branch'],row['revenues'],row['payments'],q['treatment_policy'],q['other_policy'])
         narration=f"Daily sales {row['date']} · Receipt {row['receipt'] or '—'} · Invoice {row['invoice'] or '—'} · {q['filename']} / {row['sheet']} row {row['source_row']}"
-        core.post(candidate,row['date'],narration,lines)
+        core.post(candidate,row['date'],narration,lines,source={'kind':'daily_sales','document_id':q['id'],'record_id':row['key'],'row_count':1})
     q['status']='PROCESSED';core.add_audit(candidate,'SALES_REPORT_APPROVED',{'id':q['id'],'receipts':len(q['rows'])})
     state.clear();state.update(candidate)
