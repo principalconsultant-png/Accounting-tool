@@ -46,6 +46,22 @@ def run(output):
             if old.last_upgrade_backup.read_bytes()!=original:raise ValueError('Upgrade backup differs from original vault')
             if old.load()!=upgraded:raise ValueError('Upgrade round-trip mismatch')
             result['foundation_checks_passed']=True
+            from . import ledgers
+            pack=ledgers.ledger_pack(loaded,['1011','3000'],'2024-04-01','2026-06-30','NEW')
+            if pack['books'][0]['opening']!=10000 or pack['books'][0]['closing']!=10000:
+                raise ValueError('Ledger opening/closing mismatch')
+            root=Path(directory)
+            ledgers.export_pdf(pack,root/'ledgers.pdf')
+            ledgers.export_xlsx(pack,root/'ledgers.xlsx')
+            ledgers.export_csv(pack,root/'ledgers.csv')
+            ledgers.export_html(pack,root/'ledgers.html')
+            if not (root/'ledgers.pdf').read_bytes().startswith(b'%PDF-'):raise ValueError('Packaged PDF export failed')
+            from openpyxl import load_workbook
+            workbook=load_workbook(root/'ledgers.xlsx',read_only=True)
+            try:
+                if workbook.sheetnames!=['1011','3000']:raise ValueError('Packaged Excel ledger pack mismatch')
+            finally:workbook.close()
+            result['ledger_exports_passed']=True
             result.update(passed=True,revenue_modes=len(MODES),posted_vouchers=1,windows_vault_backup_roundtrip=True)
     except Exception as error:
         result['error']=str(error)

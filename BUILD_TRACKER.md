@@ -98,3 +98,17 @@ B01–B05 implementation is ready for Windows/client acceptance; do not treat th
 No customer transactions were posted during development. Upgrade and GUI tests use invented, disposable books. Registration checks validate formats only, not government registration or legal applicability. Windows and client test outcomes must be appended when verified rather than inferred from a successful Linux test run.
 
 Windows release verification, 29 October 2026: application commit `dfe2c3e`; [Windows build run](https://github.com/principalconsultant-png/Accounting-tool/actions/runs/40922539163) succeeded. The published packaged self-test reports `passed: true`, `platform: nt`, and `foundation_checks_passed: true`. The downloaded 0.4.0 executable matches its published SHA-256: `6bfd90cc900bac7db7b9d0bd79e6fae24d5ebcaeb66dbebfc2fbd8d035b1b52d`. Locally, 54 tests passed including desktop tests; the Windows-only DPAPI test was skipped locally and covered by the successful Windows workflow. Real 0.3.1-source migration and the provided 62-receipt workbook were separately validated using disposable/in-memory books. B01–B05 are **implemented and ready for client testing**, not client-accepted yet.
+
+## Delivery log — version 0.5.0
+
+B19 ledger books and movement trial balance are implemented and ready for Windows/client testing. **Ledger A/c appears immediately below Overview**, as requested on 30 October 2026.
+
+- Search/open individual ledgers, shared Patient A/C, cash book and separate bank books; include inactive historical accounts.
+- Branch/entity and period filters; opening, voucher-backed movements, debit/credit totals, running/closing balances and Dr/Cr indicators.
+- Double-click a transaction to inspect its original journal; drafts never affect ledger books.
+- Print one or several/all selected accounts using an offline browser preview. Export the same snapshot to PDF, Excel or CSV for CEO handover. Entity details, period/scope, preparation date, repeated headings and balances accompany the books; PDF includes pagination and preparation/review blocks.
+- Initial openings dated at the period start are included once in opening balance; openings later in the range are movements. Year-end closing journals remain visible so closing balances agree with the actual trial balance. Empty-period accounts retain brought-forward balances.
+- Trial balance now shows opening Dr/Cr, period debit/credit and closing Dr/Cr, with balance checks.
+- Read-only reports and exports preserve posted transactions and audit history; no new vault migration from 0.4.0 is required.
+
+The ledger delivery portion of B27 is included; the full executive MIS/PDF pack remains pending. Follow TESTING_LEDGERS.md. B19 remains pending client acceptance until the downloaded build has been tested by the user; this does not mark later BRD modules complete.

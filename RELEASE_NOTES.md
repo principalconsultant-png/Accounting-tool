@@ -1,18 +1,14 @@
-Riju Books 0.4.0 — Bookkeeping foundation B01–B05
+Riju Books 0.5.0 — Ledger A/c and customer handover books
 
-- Optional registration details: enter GSTIN, TAN, PAN, CIN, address and state information now or later. Blank registration numbers never block normal bookkeeping.
-- Setup & periods: edit the entity and branch details, rename branches without changing historical IDs, add/deactivate branches, set capacity/status and configure earlier financial years.
-- Ledger masters: create/edit report and cash-flow groups, add individual bank accounts, use shared Patient A/C, deactivate unused ledgers and protect posted history/control accounts.
-- Initial opening balances: manual or reviewed atomic CSV upload. Later years carry forward without duplicate openings. Revenue/expense accounts are excluded from initial balances.
-- Prior-year comparative P&L/balance-sheet working reports; reviewed year-end close transfers results into retained earnings and locks the period. Closing and locks cannot be undone in this build.
-- Journal studio: voucher types, optional party/reference/cash-bank metadata, edit individual lines, save/reopen unbalanced drafts and review before posting. Advances, refunds and inter-branch entries can be entered with manual compound lines. The offline phrase assistant has not been expanded into the full AI module.
-- Single-instance protection, atomic writes with concurrent-change detection, original-file backup before upgrades, and safer restore handling.
-- Scrollable workspace so actions remain accessible on smaller Windows screens.
+- Ledger A/c now appears directly below Overview in the left navigation.
+- Open individual ledgers, the shared Patient A/C, cash book, individual bank books, or selected/all accounts. Search by code/name and filter by account classification.
+- Branch/entity and date filters; opening balance, transaction/voucher references, debit/credit totals, running balance and closing balance with Dr/Cr indicators.
+- Open original vouchers directly from ledger rows.
+- Print selected ledgers using a local browser preview; export individual or combined packs to PDF, Excel and CSV. PDF packs include entity/registration details where supplied, reporting scope/period, repeated headings, page numbers and preparation/review blocks.
+- Trial balance now shows opening Dr/Cr, period debits/credits and closing Dr/Cr and reconciles with the ledger books.
+- Initial balances are counted once; reversals, prior years, inactive-account history, empty periods and year-end closing journals remain traceable.
+- Read-only reporting: exports do not post transactions or alter the books. Existing 0.4.0 vaults need no new schema migration.
 
-TESTING AND UPGRADE
-1. Close the previous application and run this executable. The title must show 0.4.0.
-2. If existing books require an upgrade, choose your external-drive folder in Settings & backup. The original vault is backed up byte-for-byte before the first upgraded save. If the drive is unavailable, the original books remain unchanged.
-3. Upgraded books use format version 2 and cannot be opened in version 0.3.1. Keep the original-format external backup. Windows DPAPI backups still require the original Windows account/keys; portable cross-computer recovery remains B24.
-4. Follow TESTING_B01_B05.md. Test year-end closing only in disposable test books; it locks posting through year-end.
+Close the previous app and verify 0.5.0 in the title bar. Open Ledger A/c under Overview. Use TESTING_LEDGERS.md to test, including how to print or save PDFs. The existing B01–B05 features, 15 revenue modes and pastel theme are retained.
 
-This unsigned application remains a development/test release. Customer-ready ledger PDF/Excel delivery is B19 and remains pending. Full tax automation, full BRS, statutory statements and offline language-model AI are later builds. No live customer report has been imported by this release process.
+This unsigned application remains a development/test release. Full tax automation, general BRS, statutory financial statements and local language-model AI remain later modules. No real customer postings were made during development.

@@ -122,3 +122,41 @@ class FoundationDesktopTests(unittest.TestCase):
                     self.assertFalse(errors,errors)
                     core.verify_audit(app.state)
             finally:app.destroy()
+
+@unittest.skipUnless(os.environ.get('DISPLAY') or os.environ.get('RIJU_GUI_TEST'),'A graphical display is required')
+class LedgerDesktopTests(unittest.TestCase):
+    def test_navigation_account_filters_exports_and_voucher(self):
+        from riju.app import App
+        from riju import core
+        from openpyxl import load_workbook
+        with tempfile.TemporaryDirectory() as directory:
+            p=Path(directory);app=App(Vault(p/'test.json',demo=True))
+            errors=[];app.report_callback_exception=lambda *args:errors.append(args)
+            try:
+                app.commit(lambda s:core.post(s,'2023-04-01','Synthetic opening',[dict(account='1010',branch='JP',debit=100000,credit=0),dict(account='3000',branch='JP',debit=0,credit=100000)],opening=True))
+                app.commit(lambda s:core.post(s,'2023-04-02','Consultation receipts',[dict(account='1010',branch='JP',debit=50000,credit=0),dict(account='4000',branch='JP',debit=0,credit=50000)],metadata={'reference':'R-TEST'}))
+                self.assertEqual(list(app.pages)[:2],['Overview','Ledger A/c'])
+                app.year.set('2023');app.nav_buttons['Ledger A/c'].invoke();app.update()
+                self.assertIn('Patient A/C',' '.join(app.ledger_list.get(0,'end')))
+                app.ledger_category.set('Bank books');app.update();self.assertIn('1010',app.selected_ledger_codes())
+                self.assertIn('1,500.00 Dr',app.ledger_summary.cget('text'))
+                transaction=next(item for item in app.ledger_table.get_children() if item in app.ledger_row_vouchers)
+                app.ledger_table.selection_set(transaction)
+                with patch('riju.ledger_ui.messagebox.showinfo') as info:
+                    app.ledger_voucher();self.assertIn('R-TEST',info.call_args.args[1])
+                with patch('riju.ledger_ui.filedialog.asksaveasfilename',return_value=str(p/'ledger.xlsx')),patch('riju.ledger_ui.messagebox.showinfo'):
+                    app.export_ledgers('xlsx')
+                wb=load_workbook(p/'ledger.xlsx');self.assertEqual(wb.sheetnames,['1010']);wb.close()
+                with patch('riju.ledger_ui.filedialog.asksaveasfilename',return_value=str(p/'ledger.html')),patch('riju.ledger_ui.webbrowser.open',return_value=True) as browser:
+                    app.export_ledgers('html');browser.assert_called_once();self.assertTrue((p/'ledger.html').is_file())
+                app.ledger_category.set('All ledgers');app.select_all_ledgers();self.assertEqual(len(app.selected_ledger_pack()['books']),len(app.state['accounts']))
+                app.ledger_search.set('does not exist');app.update();self.assertFalse(app.selected_ledger_codes())
+                with self.assertRaises(ValueError):app.export_ledgers('pdf')
+                app.ledger_search.set('1010');app.ledger_from.set('2024-04-01');app.ledger_to.set('2024-04-30');app.render_ledger()
+                self.assertIn('0 lines',app.ledger_summary.cget('text'));self.assertIn('1,500.00 Dr',app.ledger_summary.cget('text'))
+                app.branch.set('Kammanahalli');app.show('Ledger A/c');app.ledger_category.set('Bank books');app.update()
+                self.assertEqual(app.ledger_from.get(),'2024-04-01')
+                self.assertEqual(app.selected_ledger_codes(),['1010'])
+                self.assertIn('0.00',app.ledger_summary.cget('text'))
+                self.assertFalse(errors,errors)
+            finally:app.destroy()

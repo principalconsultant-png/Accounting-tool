@@ -1,6 +1,6 @@
 # ऋजु · Riju Books
 
-**Version 0.4.0:** B01–B05 bookkeeping foundations: optional registration details; configurable entity/branches; grouped ledger masters and shared Patient A/C; earlier years, reviewed initial openings and year-end closing; saved/editable journal drafts and safer upgrades. See [the test guide](TESTING_B01_B05.md) and [build tracker](BUILD_TRACKER.md).
+**Version 0.5.0:** **Ledger A/c** directly below Overview; individual and full ledger books with opening/running/closing balances; branch/date filters and voucher drilldown; offline printing plus PDF/Excel/CSV handover packs. Trial balance includes opening, movement and closing columns. See [ledger testing instructions](TESTING_LEDGERS.md) and [the build tracker](BUILD_TRACKER.md). B01–B05 foundations remain available.
 
 Existing books are migrated in memory first. Before the first upgraded save, select your external-drive backup folder: the original-format vault is backed up and byte-verified. Upgraded books use format version 2; keep the backup because older executables cannot open them. Cross-computer DPAPI recovery remains pending.
 
@@ -17,7 +17,7 @@ py -3 -m pip install -r requirements.txt
 py -3 run_riju.py
 ```
 
-Running from source requires openpyxl for XLSX imports; packaged Windows builds include it. Data defaults to `%LOCALAPPDATA%\RijuBooks\books.riju`. The application has no password and protects the vault using Windows DPAPI under the current Windows account. It does not implement the original BRD's portable AES-GCM vault. Do not use real client data before Windows encryption, restoration and accounting acceptance testing.
+Running from source requires openpyxl for XLSX imports/exports and ReportLab for PDF exports; packaged Windows builds include both. Data defaults to `%LOCALAPPDATA%\RijuBooks\books.riju`. The application has no password and protects the vault using Windows DPAPI under the current Windows account. It does not implement the original BRD's portable AES-GCM vault. Do not use real client data before Windows encryption, restoration and accounting acceptance testing.
 
 Build an unsigned, standalone Windows executable on Windows:
 
@@ -34,7 +34,7 @@ Output: `dist\RijuBooks.exe`; end users do not need Python. The build script ins
 3. In Journal studio select the actual date and unit, then describe a supported payment or receipt, such as `Paid ₹5,000 rent by bank` or `Received ₹12,000 OPD consultation sales by UPI`.
 4. Prepare a draft, review ledger selection, and approve posting. The local rules assistant supports a limited, visible set of templates; it is not a general-purpose language model. All 15 source report categories have receipt templates. It refuses ambiguous categories, missing payment methods, tax/deduction descriptions and unsupported treatments. Enter those through manual journal lines. No model download is required.
 5. Every branch must balance independently. Use inter-branch clearing for cross-unit transactions. Posted vouchers are corrected through dated reversals; period locks block backdated posting.
-6. Reports provide trial balance, working P&L and balance sheet, branch matrix and general ledger, with CSV export. Values use integer paise and avoid floating point for posting. Reports are accounting working statements, not certified Schedule III statements.
+6. Ledger A/c provides individual/all-account books with running balances, branch/date filters, voucher drilldown, local print preview and PDF/Excel/CSV exports. Financial reports provide a movement trial balance, working P&L and balance sheet, branch matrix and general ledger. Values use integer paise and avoid floating point for posting. Reports are accounting working statements, not certified Schedule III statements.
 7. For mixed-service or split-payment receipts, use **Sales receipt**, enter the service and payment amounts, and prepare a compound draft. Alternatively choose **Import queue → Upload daily sales XLSX**, select the branch, review source rows and journal lines, and approve the whole report. There is no auto-posting on upload. The importer accepts the supplied H:V service headings, recomputes totals, validates payment splits and rejects duplicate receipts, inconsistent totals and formulas in source amount cells. Unknown nonempty sheets are rejected explicitly.
 8. Import journal CSVs into the review queue, review rows and approve the whole file. Posting is atomic. Exact-file duplicate imports are blocked. A renamed or modified duplicate file still needs manual review.
 9. Import incoming bank deposits separately. Review suggestions grouping UPI/card sales into net bank settlements with a fee difference. Posting a match debits Bank and the reviewed fee and credits the clearing account. Do not approve fees with separately claimable GST through this simplified path.
@@ -68,6 +68,7 @@ Choose a folder on an external drive, then Back up now. The app also checks once
 ## Validation
 
 ```sh
+python -m pip install -r requirements-build.txt
 python -m unittest discover -s tests -v
 python -m compileall -q riju run_riju.py
 ```
@@ -78,11 +79,11 @@ Linux development can use `python run_riju.py --demo --data /tmp/riju-demo.json`
 
 - Confirm the GitHub Windows build and packaged self-test, then validate DPAPI and backup/restore on the target laptop; portable recovery and single-instance locking.
 - Accountant-approved examples covering hospital/resort revenue recognition, taxes, opening balances, account mapping, and year-end behavior. Local language-model interpretation is not implemented; the offline assistant is rule-based.
-- Full Schedule III statements/disclosures, direct/indirect cash flow, trial-balance movement columns, comparative statements, printable/PDF reports and MIS.
+- Full Schedule III statements/disclosures, direct/indirect cash flow, final statutory comparative statements/disclosures and the complete executive MIS/PDF pack. Movement trial balance, working comparatives and ledger printing/PDF exports are implemented.
 - GST/TDS calculations with applicability, thresholds, editable effective-dated rates, registration configuration and tax summaries. Present tax settings are reference values only, not an automated tax engine.
 - Full Companies Act schedules and income-tax block depreciation with asset additions/disposals and 180-day rules. Current asset screen only registers assets and illustrates SLM/WDV amounts; it does not post depreciation.
 - General bank reconciliation including withdrawals, cash deposits, multiple bank accounts, adjustments, OFX/Excel and authoritative holiday calendars.
 - Gmail OAuth and attachment downloading into the queue; no Gmail access or sending occurs. OAuth consent and credentials will be needed for that later integration.
-- Departmental budgets, package advance recognition automation, full asset/CWIP schedules, inventory cost controls, customer-ready ledger delivery, and improved duplicate detection. Entity/branch metadata and capacity fields are now editable.
+- Departmental budgets, package advance recognition automation, full asset/CWIP schedules, inventory cost controls, broader import duplicate detection. Customer-ready ledger delivery is now available from Ledger A/c. Entity/branch metadata and capacity fields are now editable.
 
 No cloud environment publication, remote push or client data import is performed by these instructions. Use the existing checkout in the isolated cloud task; do not create a worktree unless requested.

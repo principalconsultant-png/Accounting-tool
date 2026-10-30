@@ -12,6 +12,7 @@ from tkinter import ttk, filedialog, messagebox, simpledialog
 from . import core, APP_VERSION
 from .storage import Vault
 from .foundation_ui import FoundationUI
+from .ledger_ui import LedgerUI
 from . import foundation
 
 # Soft Indian tricolor: saffron, ivory, sage, with restrained Chakra-blue accents.
@@ -19,7 +20,7 @@ BG='#FBF9F5'; WHITE='#FFFEFC'; INK='#293B55'; GREEN='#355D49'
 SAGE='#E3EEDF'; SAFFRON='#F9E5D1'; MUTED='#596878'
 SAFFRON_HOVER='#F2D5B5'; SAGE_HOVER='#D1E2CB'; BLUE='#E7EDF7'; BORDER='#DCE2DC'
 
-class App(FoundationUI,tk.Tk):
+class App(LedgerUI,FoundationUI,tk.Tk):
     def __init__(self,vault):
         super().__init__()
         self.vault=vault
@@ -76,7 +77,7 @@ class App(FoundationUI,tk.Tk):
         ttk.Label(self,textvariable=self.status,padding=(24,9),background=SAFFRON).pack(side='bottom',fill='x')
         body=ttk.Frame(self); body.pack(fill='both',expand=True)
         nav=ttk.Frame(body,padding=(16,20),width=210); nav.pack(side='left',fill='y'); nav.pack_propagate(False)
-        self.pages={'Overview':self.overview,'Journal studio':self.studio,'Sales receipt':self.sales_receipt,'Vouchers':self.vouchers,
+        self.pages={'Overview':self.overview,'Ledger A/c':self.ledger_accounts,'Journal studio':self.studio,'Sales receipt':self.sales_receipt,'Vouchers':self.vouchers,
                     'Chart of accounts':self.accounts,'Setup & periods':self.setup,'Saved drafts':self.saved_drafts,'Financial reports':self.reports,
                     'Import queue':self.imports,'Bank reconciliation':self.banking,
                     'Assets & depreciation':self.assets,'Settings & backup':self.settings,'Change history':self.history}
@@ -339,6 +340,18 @@ class App(FoundationUI,tk.Tk):
                     if not fromdate.get()<=v['date']<=todate.get(): continue
                     for l in v['lines']:
                         if self.unit()=='ALL' or l['branch']==self.unit(): rows.append((v['date'],v['id'],self.branches[l['branch']],l['account']+' '+self.account_name(l['account']),v['narration'],core.rupees(l['debit']),core.rupees(l['credit'])))
+            elif mode=='Trial balance':
+                from .ledgers import ledger_pack,number
+                pack=ledger_pack(self.state,[a['code'] for a in self.state['accounts']],fromdate.get(),todate.get(),self.unit())
+                cols=('Code','Ledger','Opening Dr','Opening Cr','Period debit','Period credit','Closing Dr','Closing Cr')
+                totals=[0]*6
+                for book in pack['books']:
+                    values=[max(book['opening'],0),max(-book['opening'],0),book['debit'],book['credit'],max(book['closing'],0),max(-book['closing'],0)]
+                    totals=[a+b for a,b in zip(totals,values)]
+                    rows.append((book['code'],book['name'],*[number(n,True) for n in values]))
+                rows.append(('','TOTAL',*[number(n,True) for n in totals]))
+                differences=[totals[0]-totals[1],totals[2]-totals[3],totals[4]-totals[5]]
+                ttk.Label(holder,text='Balanced — opening, period movements and closing reconcile' if not any(differences) else 'Review differences: '+str(differences),padding=8).pack(anchor='w')
             elif mode=='Branch matrix':
                 cols=('Account','Classification',*self.branches.values(),'Entity total')
                 units={u:core.balances(self.state,todate.get(),u) for u in self.branches}
