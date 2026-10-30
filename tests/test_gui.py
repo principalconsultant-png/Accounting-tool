@@ -522,3 +522,51 @@ class FinancialPackDesktopTests(unittest.TestCase):
                     else:self.assertIn('Financial working report pack',PdfReader(path).pages[0].extract_text())
                 self.assertEqual(app.state['vouchers'],[])
             finally:app.destroy()
+
+@unittest.skipUnless(os.environ.get('DISPLAY') or os.environ.get('RIJU_GUI_TEST'),'A graphical display is required')
+class TdsDesktopTests(unittest.TestCase):
+    def test_complete_tds_expense_challan_allocation_cin_export_and_reopen(self):
+        import tkinter as tk
+        from tkinter import ttk
+        from riju.app import App
+        from riju import tax
+        def walk(w):
+            for child in w.winfo_children():
+                yield child
+                yield from walk(child)
+        def fill(win,label,value):
+            item=next(w for w in walk(win) if isinstance(w,ttk.Label) and w.cget('text')==label);entry=next(w for w in item.master.winfo_children() if isinstance(w,ttk.Entry))
+            if isinstance(entry,ttk.Combobox):entry.set(value)
+            else:entry.delete(0,'end');entry.insert(0,value)
+        def press(win,text):next(w for w in walk(win) if isinstance(w,ttk.Button) and w.cget('text')==text).invoke()
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);vault=Vault(root/'demo.json',demo=True);app=App(vault)
+            try:
+                app.commit(lambda s:tax.save_rule(s,dict(family='TDS',key='GUI-J',effective='2024-04-01',label='Synthetic',section='194J',rate='10',treatment='Withholding',party_category='Company',annual_threshold='1000',threshold_basis='Financial-year aggregate',applicability='Tests only',source='Invented',reviewed=True)))
+                app.commit(lambda s:tax.save_party(s,dict(name='Synthetic payee',effective='2024-04-01',category='Company',pan='ABCDE1234F')))
+                app.show('TDS accounting');app.update()
+                for index in (1,2):
+                    app.new_tds('Expense');app.update();win=next(w for w in app.winfo_children() if isinstance(w,tk.Toplevel))
+                    for label,value in [('Posting date','2026-04-0'+str(index+1)),('Credit/payment tax-point date','2026-04-0'+str(index+1)),('Unique invoice/payment reference','GUI-INV-'+str(index)),('Narration','Synthetic fees'),('Gross expense/payable INR','600'),('Deduction base INR','600')]:fill(win,label,value)
+                    next(w for w in walk(win) if isinstance(w,ttk.Checkbutton)).invoke()
+                    with patch('riju.app.messagebox.showerror') as error:press(win,'Prepare TDS preview');error.assert_not_called()
+                    with patch('riju.tds_ui.messagebox.askyesno',return_value=True):press(win,'Approve & record TDS')
+                    app.update()
+                app.new_tds('Challan');app.update();win=next(w for w in app.winfo_children() if isinstance(w,tk.Toplevel))
+                for label,value in [('Posting date','2026-04-05'),('Unique invoice/payment reference','GUI-UTR'),('Narration','Synthetic tax payment')]:fill(win,label,value)
+                source=next(w for w in walk(win) if isinstance(w,tk.Text) and int(w.cget('height'))==4);source.delete('1.0','end');source.insert('1.0','section,branch,year,tax\n194J,JP,2026,120\n')
+                with patch('riju.app.messagebox.showerror') as error:press(win,'Prepare TDS preview');error.assert_not_called()
+                with patch('riju.tds_ui.messagebox.askyesno',return_value=True):press(win,'Approve & record TDS')
+                app.update();count=len(app.state['vouchers']);app.allocate_tds();app.update();win=next(w for w in app.winfo_children() if isinstance(w,tk.Toplevel))
+                fill(win,'Tax to allocate INR','120');fill(win,'Allocation date','2026-04-06')
+                with patch('riju.tds_ui.messagebox.askyesno',return_value=True):press(win,'Approve allocation')
+                app.update();self.assertEqual(len(app.state['vouchers']),count);self.assertEqual(app.tds_report['outstanding']['rows'],[])
+                app.edit_tds_challan();app.update();win=next(w for w in app.winfo_children() if isinstance(w,tk.Toplevel))
+                for label,value in [('BSR code (optional)','1234567'),('Challan serial (optional)','00001'),('Actual deposit date (optional)','2026-04-05')]:fill(win,label,value)
+                next(w for w in walk(win) if isinstance(w,ttk.Checkbutton)).invoke();press(win,'Save detail revision');app.update()
+                self.assertEqual(app.tds_report['challans']['rows'][0][8],'Reviewed')
+                for kind in ('xlsx','pdf'):
+                    with patch('riju.tds_ui.filedialog.asksaveasfilename',return_value=str(root/('tds.'+kind))):app.export_tds(kind)
+                    self.assertTrue((root/('tds.'+kind)).exists())
+            finally:app.destroy()
+            reopened=vault.load();self.assertEqual(len(reopened['tds_records']),3);self.assertEqual(len(reopened['tds_allocations']),1)

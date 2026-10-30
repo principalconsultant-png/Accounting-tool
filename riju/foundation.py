@@ -4,7 +4,7 @@ import re
 import uuid
 from datetime import date
 
-SCHEMA = 9
+SCHEMA = 10
 KINDS = {'Asset':(1000,1999),'Liability':(2000,2999),'Equity':(3000,3999),
          'Revenue':(4000,4499),'Expense':(4500,4999)}
 GROUPS = {
@@ -42,7 +42,7 @@ def migrate(state):
     """Idempotent in-memory migration; the vault backs up before persisting it."""
     from .core import add_audit,BRANCHES
     if state.get('schema_revision',1)>SCHEMA:raise ValueError('These books need a newer version of Riju Books.')
-    if state.get('schema_revision',1)==SCHEMA and state.get('version')==9:return state
+    if state.get('schema_revision',1)==SCHEMA and state.get('version')==10:return state
     settings=state['settings']
     settings.setdefault('departments',['Pharmacy','Therapy rooms','Inpatient diet kitchen','Outpatient consultations','Central administration'])
     state.setdefault('branches',{code:{'name':name,'city':'','state':'','state_code':'','gstin':'',
@@ -74,7 +74,9 @@ def migrate(state):
     for key in ('gst_documents','gst_2b_imports','gst_2b_matches'):state.setdefault(key,[])
     state.setdefault('gst_rcm_records',[])
     state.setdefault('gst_rcm_ledgers',{})
-    state['version']=9
+    for key in ('tds_records','tds_allocations','tds_challan_details'):state.setdefault(key,[])
+    state.setdefault('tds_ledgers',{})
+    state['version']=10
     state['accounts'].sort(key=lambda a:a['code'])
     add_audit(state,'SCHEMA_UPGRADED',{'to':SCHEMA})
     return state
@@ -146,7 +148,7 @@ def save_account(state,code,name,kind,group,cash_flow='Review',active=True,descr
     if not name.strip() or group not in GROUPS[kind] or cash_flow not in CASH_FLOW:raise ValueError('Enter ledger name and valid report/cash-flow groups.')
     existing=next((a for a in state['accounts'] if a['code']==code),None)
     if existing and existing['kind']!=kind:raise ValueError('Existing ledger classification cannot change. Create a new ledger instead.')
-    protected={'1000','1010','1020','1050','1100','1110','1120','1130','2300','3100',state['patient_control'],*state['revenue_mode_accounts'].values(),*state.get('foreign_accounts',{}),*state.get('gst_rcm_ledgers',{}).values()}
+    protected={'1000','1010','1020','1050','1100','1110','1120','1130','2300','3100',state['patient_control'],*state['revenue_mode_accounts'].values(),*state.get('foreign_accounts',{}),*state.get('gst_rcm_ledgers',{}).values(),*state.get('tds_ledgers',{}).values()}
     if not active and code in protected:raise ValueError('This control ledger is required. It may be renamed but not deactivated.')
     old={'account':copy.deepcopy(existing),'details':copy.deepcopy(state['account_details'].get(code))}
     item={'code':code,'name':name.strip(),'kind':kind}

@@ -145,6 +145,8 @@ def post(state, day, narration, lines, opening=False, reverses=None, metadata=No
         validate_gst_reversal(state,reverses,day)
         from .rcm import validate_reversal as validate_rcm_reversal
         validate_rcm_reversal(state,reverses,day)
+        from .tds import validate_reversal as validate_tds_reversal
+        validate_tds_reversal(state,reverses,day)
         original=next((v for v in state['vouchers'] if v['id']==reverses),None)
         if original is None:raise ValueError('Original voucher not found.')
         if original.get('fx') and fx is None:raise ValueError('An FX reversal must preserve its original currency link.')

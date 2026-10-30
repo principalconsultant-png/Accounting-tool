@@ -66,7 +66,12 @@ def save_rule(state,values):
     if any(r['family']!=family for r in prior):raise ValueError('An existing rule key cannot change tax family.')
     same_date=[r for r in prior if r['effective']==effective]
     revision=1+max((r.get('revision',1) for r in same_date),default=0)
+    threshold_group=str(values.get('threshold_group','')).strip() or section
+    threshold_trigger=values.get('threshold_trigger','Exceeds');deduction_method=values.get('deduction_method','Whole eligible base');rounding=values.get('tds_rounding','Paise')
+    if threshold_trigger not in ('Exceeds','At least') or deduction_method not in ('Whole eligible base','Excess over annual threshold','Current transaction only') or rounding not in ('Paise','Whole rupee'):raise ValueError('Choose supported TDS threshold/computation/rounding settings.')
+    if family=='TDS' and deduction_method=='Excess over annual threshold' and annual is None:raise ValueError('Excess-base calculation requires a known annual threshold.')
     r=dict(id=str(uuid.uuid4()),revision=revision,family=family,key=key,label=label,effective=effective,rate=rate,treatment=treatment,section=section,party_category=category,hsn_sac=hsn,single_threshold=single,annual_threshold=annual,threshold_basis=basis,applicability=scope,source=source,reviewed=reviewed,ledger_codes=ledgers)
+    if family=='TDS':r.update(threshold_group=threshold_group,threshold_trigger=threshold_trigger,deduction_method=deduction_method,tds_rounding=rounding)
     state['tax_config']['rules'].append(r);core.add_audit(state,'TAX_RULE_VERSION_ADDED',copy.deepcopy(r));return copy.deepcopy(r)
 
 

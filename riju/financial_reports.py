@@ -121,7 +121,7 @@ def export_pack_xlsx(packs,path):
     ws.append(['Report','Scope','Currency'])
     for cell in ws[ws.max_row]:cell.font=Font(bold=True);cell.fill=PatternFill('solid',fgColor='E3EEDF')
     for pack in packs:
-        sheet=_worksheet(wb,pack,pack['mode']);ws.append([pack['mode'],pack['scope'],'INR'])
+        sheet=_worksheet(wb,pack,pack['mode'][:31]);ws.append([pack['mode'],pack['scope'],'INR'])
         for cell in ws[ws.max_row]:cell.data_type='s'
         ws.cell(ws.max_row,1).hyperlink="#'"+sheet.title+"'!A1"
     for col in ('A','B','C'):ws.column_dimensions[col].width=38

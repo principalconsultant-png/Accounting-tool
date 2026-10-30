@@ -32,7 +32,11 @@ class TaxUI:
 
     def _tax_form(self,title,specs):
         win=tk.Toplevel(self);win.title(title);win.geometry('1100x790');win.transient(self)
-        body=ttk.Frame(win,padding=14);body.pack(fill='both',expand=True);fields={}
+        canvas=tk.Canvas(win,highlightthickness=0);scroll=ttk.Scrollbar(win,orient='vertical',command=canvas.yview);canvas.configure(yscrollcommand=scroll.set);scroll.pack(side='right',fill='y');canvas.pack(fill='both',expand=True)
+        body=ttk.Frame(canvas,padding=14);window=canvas.create_window((0,0),window=body,anchor='nw');fields={}
+        body.bind('<Configure>',lambda e:canvas.configure(scrollregion=canvas.bbox('all')))
+        canvas.bind('<Configure>',lambda e:canvas.itemconfigure(window,width=max(e.width,body.winfo_reqwidth())))
+        win.bind('<MouseWheel>',lambda e:canvas.yview_scroll(-1 if e.delta>0 else 1,'units') if e.widget.winfo_class() not in ('Text','Treeview','TCombobox') else None)
         for i in range(0,len(specs),3):
             row=ttk.Frame(body);row.pack(fill='x')
             for key,label,value,choices in specs[i:i+3]:fields[key]=self.field(row,label,value,choices,width=30)
@@ -45,6 +49,7 @@ class TaxUI:
             ('section','TDS section (GST: leave blank)',r.get('section',''),None),('party_category','Party category',r.get('party_category','Any'),list(tax.CATEGORIES)),('hsn_sac','HSN/SAC (TDS: leave blank)',r.get('hsn_sac',''),None),
             ('single_threshold','Single threshold INR (blank=unknown)',r.get('single_threshold') or '',None),('annual_threshold','Annual threshold INR (blank=unknown)',r.get('annual_threshold') or '',None),('threshold_basis','Threshold basis (TDS)',r.get('threshold_basis','Review required'),['Review required','Per payment','Financial-year aggregate','Either threshold']),
             ('ledger_codes','Linked ledger codes, comma-separated',', '.join(r.get('ledger_codes',[])),None),('source','Verified source / reference',r.get('source',''),None),('applicability','Specific applicability / conditions',r.get('applicability',''),None)]
+        specs.extend([('threshold_group','TDS aggregation group (blank=section)',r.get('threshold_group',''),None),('threshold_trigger','TDS trigger comparison',r.get('threshold_trigger','Exceeds'),['Exceeds','At least']),('deduction_method','TDS deduction base',r.get('deduction_method','Whole eligible base'),['Whole eligible base','Excess over annual threshold','Current transaction only']),('tds_rounding','TDS rounding',r.get('tds_rounding','Paise'),['Paise','Whole rupee'])])
         win,body,f=self._tax_form('Add tax rule version',specs)
         reviewed=tk.BooleanVar(value=False);ttk.Checkbutton(body,text='I reviewed the source, effective date and applicability for this new version',variable=reviewed).pack(anchor='w',pady=12)
         ttk.Label(body,text='Changing a key creates a separate rule. The latest version effective on a transaction date is selected, including an unreviewed version; the app never silently falls back to an older reviewed rate. Exempt, nil-rated, zero-rated and outside-GST are distinct. GST rates are total percentages. Threshold tests and tax posting follow in B08/B09.',wraplength=1000).pack(anchor='w',pady=10)

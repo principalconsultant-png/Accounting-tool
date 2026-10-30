@@ -126,7 +126,12 @@ def trace_voucher(state,voucher_id):
     rcm_ids={r['id'] for r in rcm_records if r['voucher_id'] in related}
     rcm_ids|={r['purchase_id'] for r in rcm_records if r['id'] in rcm_ids and r.get('purchase_id')}
     rcm_context=[copy.deepcopy(r) for r in rcm_records if r['id'] in rcm_ids or r.get('purchase_id') in rcm_ids]
-    return dict(voucher=copy.deepcopy(v),gst_context=gst_context,rcm_context=rcm_context,original=next((copy.deepcopy(x) for x in state['vouchers'] if x['id']==v.get('reverses')),None),reversals=[copy.deepcopy(x) for x in state['vouchers'] if x.get('reverses')==voucher_id],source=copy.deepcopy(source),imports=imports,drafts=draft_links,matches=matches,events=events,coverage='Explicit source/draft links are shown where recorded. Older unlinked entries are not attributed by guessing.')
+    tds_records=state.get('tds_records',[])
+    tds_ids={r['id'] for r in tds_records if r.get('voucher_id') in related or r.get('source_voucher') in related}
+    tds_links=[copy.deepcopy(a) for a in state.get('tds_allocations',[]) if a['document_id'] in tds_ids or a['payment_id'] in tds_ids]
+    tds_ids|={a[k] for a in tds_links for k in ('document_id','payment_id')}
+    tds_context=[copy.deepcopy(r) for r in tds_records if r['id'] in tds_ids]
+    return dict(voucher=copy.deepcopy(v),gst_context=gst_context,rcm_context=rcm_context,tds_context=tds_context,tds_allocations=tds_links,original=next((copy.deepcopy(x) for x in state['vouchers'] if x['id']==v.get('reverses')),None),reversals=[copy.deepcopy(x) for x in state['vouchers'] if x.get('reverses')==voucher_id],source=copy.deepcopy(source),imports=imports,drafts=draft_links,matches=matches,events=events,coverage='Explicit source/draft links are shown where recorded. Older unlinked entries are not attributed by guessing.')
 
 
 def integrity_report(state):

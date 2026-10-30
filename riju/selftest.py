@@ -153,6 +153,20 @@ def run(output):
                 if workbook.sheetnames!=['Contents',*financial_reports.MODES]:raise ValueError('Packaged financial pack mismatch')
             finally:workbook.close()
             result['financial_report_pack_passed']=True
+            from . import tds
+            payee=tax.save_party(loaded,dict(name='Synthetic TDS company',effective='2026-04-01',category='Company',pan='ABCDE1234F'))
+            tax.save_rule(loaded,dict(family='TDS',key='SELFTEST-J',label='Synthetic TDS rule',effective='2026-04-01',section='194J',rate='10',treatment='Withholding',party_category='Company',annual_threshold='1000',threshold_basis='Financial-year aggregate',applicability='Invented test only',source='Packaged test',reviewed=True))
+            for day,reference in [('2026-06-11','SELFTEST-TDS-1'),('2026-06-12','SELFTEST-TDS-2')]:
+                deduction=tds.post(loaded,'Expense',dict(date=day,branch='JP',reference=reference,narration='Synthetic professional fees',rule_key='SELFTEST-J',party_id=payee['party_id'],mode='Automatic',gross='600',base='600',account='4510',counter_account='2000',resident_reviewed=True,confirmed=True))
+            if deduction['withheld']!=12000:raise ValueError('Packaged TDS catch-up failed')
+            payment=tds.post(loaded,'Challan',dict(date='2026-06-13',branch='JP',reference='SELFTEST-TDS-UTR',narration='Synthetic TDS payment',bank_account='1010',rows=[dict(section='194J',branch='JP',year=2026,tax='120')],confirmed=True))
+            tds.allocate(loaded,deduction['id'],payment['id'],0,'120','2026-06-13')
+            tds.challan_details(loaded,payment['id'],dict(bsr='0123456',serial='00001',deposit_date='2026-06-13',verified=True))
+            working=tds.report(loaded,'2026-04-01','2027-03-31')
+            if working['outstanding']['rows'] or any(working['deductions']['controls'].values()):raise ValueError('Packaged TDS reconciliation failed')
+            tds.export(loaded,'2026-04-01','2027-03-31','ALL',root/'tds.xlsx','xlsx');tds.export(loaded,'2026-04-01','2027-03-31','ALL',root/'tds.pdf','pdf');v.save(loaded)
+            if v.load()!=loaded:raise ValueError('Packaged TDS persistence failed')
+            result['tds_bookkeeping_passed']=True
             result.update(passed=True,revenue_modes=len(MODES),posted_vouchers=len(loaded['vouchers']),windows_vault_backup_roundtrip=True)
     except Exception as error:
         result['error']=str(error)
