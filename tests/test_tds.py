@@ -160,3 +160,9 @@ class TdsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             path=Path(d)/'tds.xlsx';tds.export(self.s,'2026-04-01','2027-03-31','ALL',path,'xlsx');w=load_workbook(path)
             ws=w['TDS challan reconciliation'];values=[c.value for row in ws for c in row];self.assertIn('0123456',values);self.assertIn('00001',values);w.close()
+
+    def test_late_backfilled_tax_point_includes_later_known_year_bases(self):
+        first=self.expense('600',date='2026-05-03',tax_date='2026-05-03',reference='MAY-3')
+        self.assertEqual(first['withheld'],0)
+        late=self.expense('600',date='2026-06-02',tax_date='2026-05-02',reference='LATE-MAY-2')
+        self.assertEqual(late['withheld'],12000);self.assertEqual(late['assessment']['base_after'],120000)

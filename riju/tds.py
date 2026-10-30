@@ -69,8 +69,8 @@ def _tax(base,rule):
 
 
 def assess(state,rule,party,on,base=0,posted_through=None):
-    ids=_party_ids(state,party,on);year=core.financial_year(on);posted_through=posted_through or on;net=_net(state,posted_through)
-    prior=[r for r in state['tds_records'] if r['kind']!='Challan' and r['section']==rule['section'] and r['group']==_group(rule) and r['year']==year and r['party_id'] in ids and r.get('tax_date',r['date'])<=on and active(state,r,posted_through,net)]
+    posted_through=posted_through or on;ids=_party_ids(state,party,posted_through);year=core.financial_year(on);net=_net(state,posted_through)
+    prior=[r for r in state['tds_records'] if r['kind']!='Challan' and r['section']==rule['section'] and r['group']==_group(rule) and r['year']==year and r['party_id'] in ids and r.get('tax_date',r['date'])<=posted_through and active(state,r,posted_through,net)]
     entries=[r for r in prior if r['kind']!='Adjustment']
     if base:entries.append(dict(base=base,rule=rule,mode='Automatic',date=on,_new=True))
     aggregate=sum(r['base'] for r in entries);withheld=sum(r['withheld'] for r in prior)
@@ -95,7 +95,7 @@ def assess(state,rule,party,on,base=0,posted_through=None):
             eligible=b
         else:eligible=b
         target+=_tax(eligible,rr)
-    return dict(base_before=aggregate-base,base_after=aggregate,withheld_before=withheld,target=target,due=target-withheld,source_records=[r['id'] for r in prior],party_ids=sorted(ids),year=year)
+    return dict(base_before=aggregate-base,base_after=aggregate,withheld_before=withheld,target=target,due=target-withheld,source_records=[r['id'] for r in prior],party_ids=sorted(ids),year=year,scope='All recorded bases known through posting date in this liability FY; a late source can trigger catch-up on later known tax points. Stored deductions are not rewritten.')
 
 
 def _base_context(state,values):
