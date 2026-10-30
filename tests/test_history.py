@@ -107,7 +107,7 @@ class HistoryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             p=Path(d);h.export_rows(rows,p/'history.csv');h.export_rows(rows,p/'history.json','json')
             self.assertIn("'=HYPERLINK",(p/'history.csv').read_text(encoding='utf-8-sig'))
-            self.assertEqual(json.loads((p/'history.json').read_text()),rows)
+            self.assertEqual(json.loads((p/'history.json').read_text(encoding='utf-8')),rows)
         self.assertEqual(self.s,before)
 
     def test_backup_inspection_and_restore_checkpoint(self):
