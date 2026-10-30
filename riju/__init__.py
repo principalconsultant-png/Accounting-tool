@@ -1,3 +1,3 @@
 """Riju Books — offline bookkeeping."""
 
-APP_VERSION = "0.15.0-dev"
+APP_VERSION = "0.16.0-dev"

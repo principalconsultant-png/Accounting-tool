@@ -167,6 +167,19 @@ def run(output):
             tds.export(loaded,'2026-04-01','2027-03-31','ALL',root/'tds.xlsx','xlsx');tds.export(loaded,'2026-04-01','2027-03-31','ALL',root/'tds.pdf','pdf');v.save(loaded)
             if v.load()!=loaded:raise ValueError('Packaged TDS persistence failed')
             result['tds_bookkeeping_passed']=True
+            from . import cash_flow
+            cfbook=core.empty_state()
+            def cfpost(dr,cr,amount,opening=False):
+                return core.post(cfbook,'2026-04-01','Synthetic cash-flow check',[dict(account=dr,branch='JP',debit=amount,credit=0),dict(account=cr,branch='JP',debit=0,credit=amount)],opening=opening)
+            cfpost('1010','3000',100000,True)
+            cfpost('1010','4000',20000);cfpost('1030','1010',10000);cfpost('1010','2400',30000);cfpost('4570','1050',2000)
+            cash_flow.save_policy(cfbook,dict(cash_flow.defaults(cfbook),effective='2026-04-01',note='Synthetic reviewed policy only',reviewed=True))
+            cfresult=cash_flow.analyse(cfbook,'2026-04-01','2026-04-30')
+            if not cfresult['ready'] or cfresult['totals']['Investing']!=-10000 or cfresult['totals']['Financing']!=30000:raise ValueError('Packaged cash-flow classification/proof failed')
+            for kind in ('xlsx','pdf'):cash_flow.export(cfbook,'2026-04-01','2026-04-30','ALL',root/('cash-flow.'+kind),kind)
+            cfvault=Vault(root/'cash-flow.riju');cfvault.save(cfbook)
+            if cfvault.load()!=cfbook:raise ValueError('Packaged cash-flow policy persistence failed')
+            result['cash_flow_passed']=True
             result.update(passed=True,revenue_modes=len(MODES),posted_vouchers=len(loaded['vouchers']),windows_vault_backup_roundtrip=True)
     except Exception as error:
         result['error']=str(error)

@@ -570,3 +570,37 @@ class TdsDesktopTests(unittest.TestCase):
                     self.assertTrue((root/('tds.'+kind)).exists())
             finally:app.destroy()
             reopened=vault.load();self.assertEqual(len(reopened['tds_records']),3);self.assertEqual(len(reopened['tds_allocations']),1)
+
+@unittest.skipUnless(os.environ.get('DISPLAY') or os.environ.get('RIJU_GUI_TEST'),'A graphical display is required')
+class CashFlowDesktopTests(unittest.TestCase):
+    def test_policy_review_mixed_voucher_allocation_export_and_reopen(self):
+        import tkinter as tk
+        from tkinter import ttk
+        from riju.app import App
+        from riju import core,cash_flow as cf
+        def walk(w):
+            for child in w.winfo_children():
+                yield child
+                yield from walk(child)
+        def fill(win,label,value):
+            item=next(w for w in walk(win) if isinstance(w,ttk.Label) and w.cget('text')==label);entry=next(w for w in item.master.winfo_children() if isinstance(w,ttk.Entry))
+            if isinstance(entry,ttk.Combobox):entry.set(value)
+            else:entry.delete(0,'end');entry.insert(0,value)
+        def press(win,text):next(w for w in walk(win) if isinstance(w,ttk.Button) and w.cget('text')==text).invoke()
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);vault=Vault(root/'demo.json',demo=True);app=App(vault)
+            try:
+                app.commit(lambda s:core.post(s,'2026-04-02','Synthetic loan and noncash equipment',[dict(account='1010',branch='JP',debit=10000,credit=0),dict(account='1030',branch='JP',debit=10000,credit=0),dict(account='2400',branch='JP',debit=0,credit=20000)]))
+                app.show('Cash flow setup');app.update();self.assertFalse(app.cash_flow_result['ready']);app.new_cash_flow_policy();app.update()
+                win=next(w for w in app.winfo_children() if isinstance(w,tk.Toplevel));fill(win,'Effective report-policy date','2026-04-01');fill(win,'Verified definition/classification basis','Synthetic cash policy reviewed')
+                next(w for w in walk(win) if isinstance(w,ttk.Checkbutton)).invoke();press(win,'Save policy version');app.update()
+                app.review_cash_flow_voucher();app.update();win=next(w for w in app.winfo_children() if isinstance(w,tk.Toplevel));fill(win,'Supporting classification reason','Verified cash portion of loan, remaining equipment funded noncash')
+                text=next(w for w in walk(win) if isinstance(w,tk.Text));text.delete('1.0','end');text.insert('1.0','category,amount,label\nFinancing,100,Cash portion of loan\n');press(win,'Save reviewed cash allocation');app.update()
+                self.assertTrue(app.cash_flow_result['ready']);count=len(app.state['vouchers'])
+                for kind in ('xlsx','pdf'):
+                    with patch('riju.cash_flow_ui.filedialog.asksaveasfilename',return_value=str(root/('cash.'+kind))):app.export_cash_flow(kind)
+                    self.assertTrue((root/('cash.'+kind)).exists())
+                self.assertEqual(len(app.state['vouchers']),count)
+                app.show('Financial reports');app.report_mode.set(cf.INDIRECT);app.refresh_financial_report();self.assertEqual(app.financial_snapshot['cash_flow']['indirect_difference'],0)
+            finally:app.destroy()
+            loaded=vault.load();self.assertEqual(len(loaded['cash_flow_policies']),1);self.assertEqual(len(loaded['cash_flow_allocations']),1)

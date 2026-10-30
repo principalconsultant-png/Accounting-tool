@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 from . import core,foundation,ledgers
 
-MODES=('Trial balance','Profit and loss','Balance sheet','Comparative P&L','Comparative balance sheet','Branch matrix','General ledger')
+MODES=('Trial balance','Profit and loss','Balance sheet','Comparative P&L','Comparative balance sheet','Branch matrix','General ledger','Cash flow - direct','Cash flow - indirect')
 
 
 def previous_year(day):
@@ -22,6 +22,9 @@ def snapshot(state,mode,start,end,branch='ALL'):
     if date.fromisoformat(start).isoformat()!=start or date.fromisoformat(end).isoformat()!=end or start>end:raise ValueError('Choose a valid YYYY-MM-DD reporting period.')
     names=foundation.branches(state)
     if branch!='ALL' and branch not in names:raise ValueError('Select a valid branch.')
+    if mode in ('Cash flow - direct','Cash flow - indirect'):
+        from . import cash_flow
+        return cash_flow.snapshot(state,mode,start,end,branch)
     effective='ALL' if mode=='Branch matrix' else branch
     pack=dict(entity=state['settings']['entity'],registration=copy.deepcopy(state['settings'].get('registration',{})),mode=mode,start=start,end=end,branch=effective,scope='All operating units' if effective=='ALL' else names[effective],prepared=datetime.now(timezone(timedelta(hours=5,minutes=30))).isoformat(timespec='seconds'),currency='INR',columns=[],money_columns=[],rows=[],controls={},note='Accounting working report. Applicable Schedule III/Ind AS presentation, disclosures and final review remain pending.')
     rows=pack['rows'];closing=core.balances(state,end,effective);movement=core.balances(state,end,effective,start)
@@ -73,6 +76,7 @@ def display_rows(pack):return [[ledgers.number(v,True) if i in pack['money_colum
 def captions(pack):
     result=[pack['entity'],pack['mode'],pack['scope'],pack['start']+' to '+pack['end']+' | INR','Prepared India: '+pack['prepared']]
     if pack.get('comparison'):result.append('Previous year: '+pack['comparison']['start']+' to '+pack['comparison']['end'])
+    if pack.get('status'):result.append('Status: '+pack['status'])
     result.extend(k.upper()+': '+v for k,v in pack['registration'].items() if v)
     return result
 
@@ -118,13 +122,13 @@ def export_pack_xlsx(packs,path):
     lines=[packs[0]['entity'],'Financial working report pack',packs[0]['start']+' to '+packs[0]['end'],'Prepared India: '+packs[0]['prepared'],packs[0]['note']]
     for line in lines:
         ws.append([line]);ws.cell(ws.max_row,1).data_type='s';ws.merge_cells(start_row=ws.max_row,start_column=1,end_row=ws.max_row,end_column=3);ws.cell(ws.max_row,1).alignment=Alignment(wrap_text=True);ws.row_dimensions[ws.max_row].height=35
-    ws.append(['Report','Scope','Currency'])
+    ws.append(['Report','Scope','Currency','Review status'])
     for cell in ws[ws.max_row]:cell.font=Font(bold=True);cell.fill=PatternFill('solid',fgColor='E3EEDF')
     for pack in packs:
-        sheet=_worksheet(wb,pack,pack['mode'][:31]);ws.append([pack['mode'],pack['scope'],'INR'])
+        sheet=_worksheet(wb,pack,pack['mode'][:31]);ws.append([pack['mode'],pack['scope'],'INR',pack.get('status','Working report')])
         for cell in ws[ws.max_row]:cell.data_type='s'
         ws.cell(ws.max_row,1).hyperlink="#'"+sheet.title+"'!A1"
-    for col in ('A','B','C'):ws.column_dimensions[col].width=38
+    for col in ('A','B','C','D'):ws.column_dimensions[col].width=38
     ws.freeze_panes='A7';wb.save(path);wb.close()
 
 

@@ -156,7 +156,7 @@ class NewFeatureEdgeTests(unittest.TestCase):
             old.update(version=2,schema_revision=2)
             for key in ('fx_rates','foreign_accounts','fx_ledgers'):old.pop(key,None)
             p=Path(d)/'legacy.json';p.write_text(json.dumps(old));original=p.read_bytes();v=Vault(p,demo=True);new=v.load()
-            self.assertTrue(v.migration_pending);self.assertEqual(new['vouchers'],old['vouchers']);self.assertEqual(new['version'],10)
+            self.assertTrue(v.migration_pending);self.assertEqual(new['vouchers'],old['vouchers']);self.assertEqual(new['version'],11)
             with self.assertRaises(ValueError):v.save(new)
             external=Path(d)/'external';external.mkdir();new['settings']['backup_dir']=str(external);v.save(new)
             self.assertEqual(v.last_upgrade_backup.read_bytes(),original)
