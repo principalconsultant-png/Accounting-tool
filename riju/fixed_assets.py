@@ -187,7 +187,8 @@ def link_prior_depreciation(state,asset_id,voucher_id,amount,through,basis,revie
     a=asset(state,asset_id);through=day(through);n=amounts.amount(amount)
     source=next((v for v in state['vouchers'] if v['id']==voucher_id and not v.get('reverses') and not v.get('opening') and not v.get('closing')),None)
     if not source or family(state,voucher_id)!=1 or through>source['date'] or reviewed is not True or not str(basis).strip() or n<=0:raise ValueError('Review an active original depreciation journal, positive amount, coverage and source basis.')
-    _latest(state,a,source['date']);unit=branch_at(state,a,source['date'])
+    if not present(state,a,source['date']) or disposed(state,a,source['date']):raise ValueError('The asset must be live at the original depreciation journal date.')
+    unit=branch_at(state,a,source['date'])
     if through<a['baseline']:raise ValueError('Prior depreciation coverage precedes this book baseline.')
     dr=sum(l['debit']-l['credit'] for l in source['lines'] if l['branch']==unit and l['account']==a['expense']);cr=sum(l['credit']-l['debit'] for l in source['lines'] if l['branch']==unit and l['account']==a['accum'])
     used_dr=used_cr=0

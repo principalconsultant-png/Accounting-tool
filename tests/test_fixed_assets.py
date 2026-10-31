@@ -162,3 +162,7 @@ class FixedAssetTests(unittest.TestCase):
         a=self.create();b=self.create(reference='EQ-2');v=core.post(self.s,'2026-04-30','Combined prior depreciation',pair('4570','1050',20000))
         fa.link_prior_depreciation(self.s,a['id'],v['id'],'100','2026-04-30','Reviewed allocation A',True);fa.link_prior_depreciation(self.s,b['id'],v['id'],'100','2026-04-30','Reviewed allocation B',True);self.assertTrue(self.result()['ready'])
         core.reverse(self.s,v['id'],'2026-05-01');self.assertEqual(fa.accumulated(self.s,a,'2026-05-01'),0);self.assertEqual(fa.accumulated(self.s,b,'2026-05-01'),0)
+    def test_historical_source_link_after_later_reversals_preserves_asof_differences(self):
+        a=self.create();june=fa.post_depreciation(self.s,'2026-06-30');core.reverse(self.s,june['voucher'],'2026-07-01')
+        manual=core.post(self.s,'2026-05-31','Backfilled existing manual depreciation',pair('4570','1050',20000));fa.link_prior_depreciation(self.s,a['id'],manual['id'],'200','2026-05-31','Reviewed historical source; later duplicate reversed',True)
+        self.assertFalse(self.result('2026-06-30')['ready']);fa.post_depreciation(self.s,'2026-07-31');self.assertTrue(self.result('2026-07-31')['ready'])
