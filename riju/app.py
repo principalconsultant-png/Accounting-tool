@@ -21,6 +21,7 @@ from .gst_ui import GstUI
 from .rcm_ui import RcmUI
 from .tds_ui import TdsUI
 from .cash_flow_ui import CashFlowUI
+from .fixed_assets_ui import FixedAssetsUI
 from . import activity
 from . import foundation
 
@@ -29,7 +30,7 @@ BG='#FBF9F5'; WHITE='#FFFEFC'; INK='#293B55'; GREEN='#355D49'
 SAGE='#E3EEDF'; SAFFRON='#F9E5D1'; MUTED='#596878'
 SAFFRON_HOVER='#F2D5B5'; SAGE_HOVER='#D1E2CB'; BLUE='#E7EDF7'; BORDER='#DCE2DC'
 
-class App(CashFlowUI,TdsUI,RcmUI,GstUI,TaxUI,HistoryUI,BankUI,OperationsUI,LedgerUI,FoundationUI,tk.Tk):
+class App(FixedAssetsUI,CashFlowUI,TdsUI,RcmUI,GstUI,TaxUI,HistoryUI,BankUI,OperationsUI,LedgerUI,FoundationUI,tk.Tk):
     def __init__(self,vault):
         super().__init__()
         self.vault=vault
@@ -442,21 +443,6 @@ class App(CashFlowUI,TdsUI,RcmUI,GstUI,TaxUI,HistoryUI,BankUI,OperationsUI,Ledge
     def import_lines(self,row):
         return [{'account':row['debit_account'],'branch':row['branch'],'debit':row['amount'],'credit':0},
                 {'account':row['credit_account'],'branch':row['branch'],'debit':0,'credit':row['amount']}]
-    def assets(self):
-        self.note('Register assets and calculate draft book depreciation. Tax rates and useful lives require your review. No depreciation is posted automatically.')
-        self.table(('Asset','Unit','Acquired','Cost','Residual','Life (months)','Tax WDV %'),[(a['name'],self.branches[a['branch']],a['date'],core.rupees(a['cost']),core.rupees(a['residual']),a['life'],a['tax_rate']) for a in self.state['assets']],height=7)
-        bar=self.bar(); name=self.field(bar,'Asset name','',width=23); branch=self.field(bar,'Unit',next(iter(self.branches.values())),list(self.branches.values()),width=20); day=self.field(bar,'Acquired','',width=12)
-        bar2=self.bar(); cost=self.field(bar2,'Cost (₹)','',width=13); residual=self.field(bar2,'Residual (₹)','0',width=13); life=self.field(bar2,'Life (months)','60',width=12); tax=self.field(bar2,'Tax WDV %','15',width=12)
-        def register():
-            date.fromisoformat(day.get()); c=core.money(cost.get()); r=core.money(residual.get()); months=int(life.get()); rate=float(tax.get())
-            book,taxvalue=core.depreciation(c,r,months,rate)
-            if not name.get().strip():raise ValueError('Enter the asset name.')
-            def action(s):
-                item={'name':name.get().strip(),'branch':self.branch_names[branch.get()],'date':day.get(),'cost':c,'residual':r,'life':months,'tax_rate':rate}
-                s['assets'].append(item); core.add_audit(s,'ASSET_REGISTERED',item)
-            self.commit(action); messagebox.showinfo('Registered',f'Full-year illustration only:\nBook SLM: {core.rupees(book)}\nTax WDV: {core.rupees(taxvalue)}\n\nTax block pooling, additions/disposals and the 180-day rule are not yet implemented. Do not use this estimate as a tax depreciation schedule.',parent=self); self.show('Assets & depreciation')
-        self.button(self.bar(),'Register asset',register,True)
-        ttk.Label(self.content,text='Asset registration does not post an acquisition voucher. Post the purchase separately in Journal studio. Full Companies Act and Income-tax schedules are pending.',wraplength=900,style='Sub.TLabel').pack(anchor='w',pady=15)
     def settings(self):
         self.note('No app password. Windows protects the live vault. Backups currently require the same Windows account; portable recovery is pending.')
         bar=self.bar(); entity=self.field(bar,'Legal entity name',self.state['settings']['entity'],width=42); locked=self.field(bar,'Lock through (YYYY-MM-DD)',self.state['locked_through'],width=22)

@@ -648,3 +648,56 @@ class BankTemplateDesktopTests(unittest.TestCase):
                 self.assertFalse(app.state['bank_mapping_templates'][0]['active']);win.destroy()
             finally:app.destroy()
             loaded=vault.load();self.assertEqual(len(loaded['bank_statements']),2);self.assertFalse(loaded['bank_mapping_templates'][0]['active']);self.assertTrue(loaded['bank_statements'][0]['mapping_template']['active'])
+
+@unittest.skipUnless(os.environ.get('DISPLAY') or os.environ.get('RIJU_GUI_TEST'),'A graphical display is required')
+class FixedAssetsDesktopTests(unittest.TestCase):
+    def walk(self,w):
+        for child in w.winfo_children():
+            yield child
+            yield from self.walk(child)
+    def fill(self,win,label,value):
+        from tkinter import ttk
+        item=next(w for w in self.walk(win) if isinstance(w,ttk.Label) and w.cget('text')==label);entry=next(w for w in item.master.winfo_children() if isinstance(w,ttk.Entry))
+        if isinstance(entry,ttk.Combobox):entry.set(value)
+        else:entry.delete(0,'end');entry.insert(0,value)
+    def press(self,win,label):
+        from tkinter import ttk
+        next(w for w in self.walk(win) if isinstance(w,ttk.Button) and w.cget('text')==label).invoke()
+    def top(self,parent):
+        import tkinter as tk
+        return [w for w in parent.winfo_children() if isinstance(w,tk.Toplevel)][-1]
+    def test_register_depreciate_transfer_dispose_export_and_reload(self):
+        from tkinter import ttk
+        from riju.app import App
+        from riju import fixed_assets as fa
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);vault=Vault(root/'demo.json',demo=True);app=App(vault)
+            try:
+                app.year.set('2026');app.show('Assets & depreciation');app.asset_to.set('2026-04-30');app.show('Assets & depreciation');app.register_book_asset();app.update();form=self.top(app)
+                for label,value in [('Unique asset reference','GUI-1'),('Asset / component name','Synthetic diagnostic equipment'),('Cost source mode','Post purchase'),('Acquired date','2026-04-01'),('Put-to-use date','2026-04-01'),('Book baseline date','2026-04-01'),('Original capitalized cost INR','1200'),('Useful / remaining life months','12'),('Reviewed classification/source basis','Synthetic reviewed medical category, life and cost source')]:self.fill(form,label,value)
+                next(w for w in self.walk(form) if isinstance(w,ttk.Checkbutton)).invoke();self.press(form,'Validate & preview asset');app.update();preview=self.top(app)
+                # Editing the form after preview must not alter the approved snapshot.
+                self.fill(form,'Original capitalized cost INR','9999');self.press(preview,'Approve asset action');app.update();self.assertEqual(app.state['book_assets'][0]['cost'],120000);self.assertEqual(len(app.state['vouchers']),1)
+                app.book_depreciation();form=self.top(app);self.press(form,'Preview depreciation journal');app.update();self.press(self.top(app),'Approve asset action');app.update();self.assertTrue(app.asset_report['ready'])
+                for kind in ('xlsx','pdf'):
+                    with patch('riju.fixed_assets_ui.filedialog.asksaveasfilename',return_value=str(root/('assets.'+kind))):app.export_assets(kind)
+                    self.assertTrue((root/('assets.'+kind)).exists())
+                app.asset_table.selection_set(app.asset_table.get_children()[0]);app.asset_transfer();form=self.top(app)
+                for label,value in [('Transfer date','2026-05-01'),('Destination unit code','KM'),('Transfer source basis','Reviewed physical move')]:self.fill(form,label,value)
+                next(w for w in self.walk(form) if isinstance(w,ttk.Checkbutton)).invoke();self.press(form,'Preview transfer journal');app.update();self.press(self.top(app),'Approve asset action');app.update()
+                app.asset_to.set('2026-05-31');app.show('Assets & depreciation');app.asset_table.selection_set(app.asset_table.get_children()[0]);app.asset_disposal();form=self.top(app)
+                for label,value in [('Disposal date','2026-05-31'),('Proceeds excluding taxes INR','1050'),('Disposal source / tax-review basis','Reviewed sale with separately considered tax')]:self.fill(form,label,value)
+                next(w for w in self.walk(form) if isinstance(w,ttk.Checkbutton)).invoke();self.press(form,'Preview disposal journal');app.update();self.press(self.top(app),'Approve asset action');app.update();self.assertTrue(app.asset_report['ready']);self.assertEqual(app.asset_report['register'][0][9],'Disposed')
+            finally:app.destroy()
+            loaded=vault.load();self.assertEqual(len(loaded['fixed_asset_events']),3);self.assertTrue(fa.disposed(loaded,loaded['book_assets'][0],'2026-05-31'))
+    def test_changed_books_reject_stale_asset_preview_without_posting(self):
+        from riju.app import App
+        from riju import foundation,fixed_assets as fa
+        with tempfile.TemporaryDirectory() as d:
+            app=App(Vault(Path(d)/'demo.json',demo=True))
+            try:
+                app.show('Assets & depreciation');app.commit(lambda s:fa.register(s,dict(reference='STALE',name='Synthetic',branch='JP',category='Manual / specific Schedule II category',mode='Post purchase',acquired='2026-04-01',put_to_use='2026-04-01',baseline='2026-04-01',cost='1200',months=12,residual='0',basis='Reviewed test',reviewed=True)))
+                app._asset_preview('Synthetic stale preview',lambda s:fa.post_depreciation(s,'2026-04-30'));preview=self.top(app);count=len(app.state['vouchers']);app.commit(lambda s:foundation.save_entity(s,'Changed entity',{}))
+                with patch('riju.app.messagebox.showerror') as error:self.press(preview,'Approve asset action');self.assertTrue(error.called)
+                self.assertEqual(len(app.state['vouchers']),count);self.assertFalse(app.state['fixed_asset_events'])
+            finally:app.destroy()

@@ -4,7 +4,7 @@ import re
 import uuid
 from datetime import date
 
-SCHEMA = 12
+SCHEMA = 13
 KINDS = {'Asset':(1000,1999),'Liability':(2000,2999),'Equity':(3000,3999),
          'Revenue':(4000,4499),'Expense':(4500,4999)}
 GROUPS = {
@@ -42,7 +42,7 @@ def migrate(state):
     """Idempotent in-memory migration; the vault backs up before persisting it."""
     from .core import add_audit,BRANCHES
     if state.get('schema_revision',1)>SCHEMA:raise ValueError('These books need a newer version of Riju Books.')
-    if state.get('schema_revision',1)==SCHEMA and state.get('version')==12:return state
+    if state.get('schema_revision',1)==SCHEMA and state.get('version')==13:return state
     settings=state['settings']
     settings.setdefault('departments',['Pharmacy','Therapy rooms','Inpatient diet kitchen','Outpatient consultations','Central administration'])
     state.setdefault('branches',{code:{'name':name,'city':'','state':'','state_code':'','gstin':'',
@@ -79,7 +79,10 @@ def migrate(state):
     state.setdefault('cash_flow_policies',[])
     state.setdefault('cash_flow_allocations',[])
     state.setdefault('bank_mapping_templates',[])
-    state['version']=12
+    state.setdefault('book_assets',[])
+    state.setdefault('fixed_asset_events',[])
+    state.setdefault('asset_ledgers',{})
+    state['version']=13
     state['accounts'].sort(key=lambda a:a['code'])
     add_audit(state,'SCHEMA_UPGRADED',{'to':SCHEMA})
     return state
@@ -153,6 +156,9 @@ def save_account(state,code,name,kind,group,cash_flow='Review',active=True,descr
     if existing and existing['kind']!=kind:raise ValueError('Existing ledger classification cannot change. Create a new ledger instead.')
     protected={'1000','1010','1020','1050','1100','1110','1120','1130','2300','3100',state['patient_control'],*state['revenue_mode_accounts'].values(),*state.get('foreign_accounts',{}),*state.get('gst_rcm_ledgers',{}).values(),*state.get('tds_ledgers',{}).values()}
     if not active and code in protected:raise ValueError('This control ledger is required. It may be renamed but not deactivated.')
+    for asset in state.get('book_assets',[]):
+        for field,required in (('ppe','PPE'),('accum','Accumulated depreciation'),('expense','Depreciation')):
+            if asset[field]==code and group!=required:raise ValueError('Retain the historical asset ledger group: '+required+'.')
     old={'account':copy.deepcopy(existing),'details':copy.deepcopy(state['account_details'].get(code))}
     item={'code':code,'name':name.strip(),'kind':kind}
     if existing:state['accounts'].remove(existing)
@@ -172,6 +178,8 @@ def delete_account(state,code):
     if any(code in r.get('ledger_codes',[]) for r in state.get('tax_config',{}).get('rules',[])):raise ValueError('A historical tax rule references this ledger; it cannot be deleted.')
     if any(code in p['mapping'] or code in p['cash_accounts'] for p in state.get('cash_flow_policies',[])):raise ValueError('A historical cash-flow policy references this ledger; retain its inactive master.')
     if any(t['bank_account']==code for t in state.get('bank_mapping_templates',[])):raise ValueError('A saved bank layout references this ledger; retain its inactive master.')
+    if code in state.get('asset_ledgers',{}).values():raise ValueError('Retain the historical disposal control ledger.')
+    if any(code in (a['ppe'],a['accum'],a['expense']) for a in state.get('book_assets',[])):raise ValueError('A historical book asset references this ledger; retain its inactive master.')
     item=next(a for a in state['accounts'] if a['code']==code)
     state['accounts'].remove(item);state['account_details'].pop(code,None)
     add_audit(state,'LEDGER_DELETED',{'account':item,'details':details})

@@ -189,6 +189,17 @@ def run(output):
             templatevault=Vault(root/'bank-template.riju');templatevault.save(templatebook)
             if templatevault.load()!=templatebook:raise ValueError('Packaged saved bank layout persistence failed')
             result['bank_mapping_templates_passed']=True
+            from . import fixed_assets
+            assetbook=core.empty_state()
+            registered=fixed_assets.register(assetbook,dict(reference='PACKAGED-ASSET',name='Synthetic medical equipment',branch='JP',category='Manual / specific Schedule II category',mode='Post purchase',acquired='2026-04-01',put_to_use='2026-04-01',baseline='2026-04-01',cost='1200',opening_accum='0',residual='0',months=12,basis='Synthetic reviewed book SLM and source only',reviewed=True))
+            fixed_assets.post_depreciation(assetbook,'2026-04-30')
+            fixed_assets.transfer(assetbook,registered['id'],'2026-05-01','KM','Synthetic approved transfer',True)
+            for kind in ('xlsx','pdf'):fixed_assets.export(assetbook,'2026-04-01','2026-04-30','ALL',root/('fixed-assets.'+kind),kind)
+            fixed_assets.dispose(assetbook,registered['id'],'2026-05-31','1050','1010','','','Synthetic disposal and separate tax review',True)
+            if not fixed_assets.report(assetbook,'2026-04-01','2026-05-31')['ready']:raise ValueError('Packaged fixed-asset ledger/depreciation proof failed')
+            avault=Vault(root/'fixed-assets.riju');avault.save(assetbook)
+            if avault.load()!=assetbook:raise ValueError('Packaged fixed-asset persistence failed')
+            result['book_fixed_assets_passed']=True
             result.update(passed=True,revenue_modes=len(MODES),posted_vouchers=len(loaded['vouchers']),windows_vault_backup_roundtrip=True)
     except Exception as error:
         result['error']=str(error)
