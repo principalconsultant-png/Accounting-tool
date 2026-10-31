@@ -701,3 +701,59 @@ class FixedAssetsDesktopTests(unittest.TestCase):
                 with patch('riju.app.messagebox.showerror') as error:self.press(preview,'Approve asset action');self.assertTrue(error.called)
                 self.assertEqual(len(app.state['vouchers']),count);self.assertFalse(app.state['fixed_asset_events'])
             finally:app.destroy()
+
+@unittest.skipUnless(os.environ.get('DISPLAY') or os.environ.get('RIJU_GUI_TEST'),'A graphical display is required')
+class TaxDepreciationDesktopTests(unittest.TestCase):
+    def walk(self,w):
+        for c in w.winfo_children():
+            yield c
+            yield from self.walk(c)
+    def form(self,app):
+        import tkinter as tk
+        return [w for w in app.winfo_children() if isinstance(w,tk.Toplevel)][-1]
+    def fill(self,win,label,value):
+        from tkinter import ttk
+        item=next(w for w in self.walk(win) if isinstance(w,ttk.Label) and w.cget('text')==label);field=next(w for w in item.master.winfo_children() if isinstance(w,ttk.Entry))
+        if isinstance(field,ttk.Combobox):field.set(value)
+        else:field.delete(0,'end');field.insert(0,value)
+    def press(self,win,label):
+        from tkinter import ttk
+        next(w for w in self.walk(win) if isinstance(w,ttk.Button) and w.cget('text')==label).invoke()
+    def reviewed(self,win):
+        from tkinter import ttk
+        [w for w in self.walk(win) if isinstance(w,ttk.Checkbutton)][-1].invoke()
+    def approve(self,app,form,label):
+        self.press(form,label);app.update();self.press(self.form(app),'Approve tax working action');app.update()
+    def select(self,app):app.tax_block_table.selection_set(app.tax_block_table.get_children()[0])
+    def test_entity_tax_block_addition_finalize_exports_reopen_and_reload(self):
+        import tkinter as tk
+        from riju.app import App
+        from riju import tax_depreciation as td
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);vault=Vault(root/'demo.json',demo=True);app=App(vault)
+            try:
+                app.year.set('2024');app.show('Tax depreciation');app.new_tax_block();form=self.form(app)
+                for label,value in [('Block key','P15'),('Block name','Synthetic plant tax block'),('First tax financial year','2024'),('Opening WDV / control-count source basis','Reviewed opening WDV and asset counts')]:self.fill(form,label,value)
+                text=next(w for w in self.walk(form) if isinstance(w,tk.Text));text.delete('1.0','end');text.insert('1.0','unit,wdv,count\nJP,1000,2\nKM,0,0\nVK,0,0\n');self.reviewed(form);self.approve(app,form,'Preview opening tax pool');self.select(app);app.tax_depreciation_rule();form=self.form(app)
+                for label,value in [('Effective financial year','2024'),('WDV rate %','15'),('Reviewed year / regime / rate source','Reviewed synthetic Appendix I rate')]:self.fill(form,label,value)
+                self.reviewed(form);self.approve(app,form,'Preview tax rate policy');self.select(app);app.tax_addition();form=self.form(app)
+                for label,value in [('Unique tax addition reference','GUI-TAX-1'),('Acquired date','2024-12-01'),('Actual first use (blank if unused)','2024-12-01'),('Actual tax cost INR','1000'),('Reviewed cost / tax-source basis','Reviewed capital cost and actual commissioning')]:self.fill(form,label,value)
+                self.reviewed(form);self.approve(app,form,'Preview tax addition');self.assertEqual(app.tax_dep_report['normal'],22500);self.assertTrue(app.tax_dep_report['ready']);self.assertFalse(app.state['vouchers'])
+                for kind in ('xlsx','pdf'):
+                    with patch('riju.tax_depreciation_ui.filedialog.asksaveasfilename',return_value=str(root/('tax.'+kind))):app.export_tax_depreciation(kind)
+                    self.assertTrue((root/('tax.'+kind)).exists())
+                app.finalize_tax_year();form=self.form(app);self.fill(form,'Entity year-end source / tax review basis','Reviewed complete annual source and regime working');self.reviewed(form);self.approve(app,form,'Preview final tax working');self.assertTrue(app.tax_dep_report.get('finalized_review_id'))
+                with patch('riju.tax_depreciation_ui.simpledialog.askstring',return_value='Revisit original client source'):app.reopen_tax_year()
+                self.press(self.form(app),'Approve tax working action');app.update();self.assertFalse(app.tax_dep_report.get('finalized_review_id'))
+            finally:app.destroy()
+            loaded=vault.load();self.assertEqual(td.data(loaded)['reviews'][0]['status'],'REOPENED');self.assertEqual(td.calculate(loaded,2024)['normal'],22500);self.assertFalse(loaded['vouchers'])
+    def test_changed_books_reject_stale_tax_working(self):
+        from riju.app import App
+        from riju import tax_depreciation as td,foundation
+        with tempfile.TemporaryDirectory() as d:
+            app=App(Vault(Path(d)/'demo.json',demo=True))
+            try:
+                app.show('Tax depreciation');app._tax_work_preview('Synthetic preview',lambda s:td.save_block(s,'STALE','Synthetic',2024,{},'Reviewed',True));preview=self.form(app);app.commit(lambda s:foundation.save_entity(s,'Changed entity',{}))
+                with patch('riju.app.messagebox.showerror') as error:self.press(preview,'Approve tax working action');self.assertTrue(error.called)
+                self.assertFalse(td.data(app.state)['blocks']);self.assertFalse(app.state['vouchers'])
+            finally:app.destroy()

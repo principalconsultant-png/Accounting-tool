@@ -111,7 +111,7 @@ class TaxConfigurationTests(unittest.TestCase):
             s['version']=4;s['schema_revision']=4;s.pop('tax_config');history.checkpoint(s)
             p=root/'old.json';p.write_text(json.dumps(s));original=p.read_bytes()
             v=Vault(p,demo=True);upgraded=v.load();self.assertTrue(v.migration_pending)
-            self.assertEqual(upgraded['version'],13);self.assertEqual(upgraded['vouchers'],s['vouchers'])
+            self.assertEqual(upgraded['version'],14);self.assertEqual(upgraded['vouchers'],s['vouchers'])
             with self.assertRaises(ValueError):v.save(upgraded)
             self.assertEqual(p.read_bytes(),original)
             upgraded['settings']['backup_dir']=str(external);v.save(upgraded)

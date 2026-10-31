@@ -100,7 +100,7 @@ class CashFlowTests(unittest.TestCase):
     def test_format_ten_upgrade_backup_and_policy_allocation_persistence(self):
         with tempfile.TemporaryDirectory() as d:
             root=Path(d);ext=root/'external';ext.mkdir();old=copy.deepcopy(self.s);old['version']=10;old['schema_revision']=10;old.pop('cash_flow_policies');old.pop('cash_flow_allocations');history.checkpoint(old)
-            path=root/'old.json';path.write_text(json.dumps(old),encoding='utf-8');raw=path.read_bytes();v=Vault(path,demo=True);self.s=v.load();self.s['settings']['backup_dir']=str(ext);v.save(self.s);self.assertEqual(v.last_upgrade_backup.read_bytes(),raw);self.assertEqual(self.s['version'],13)
+            path=root/'old.json';path.write_text(json.dumps(old),encoding='utf-8');raw=path.read_bytes();v=Vault(path,demo=True);self.s=v.load();self.s['settings']['backup_dir']=str(ext);v.save(self.s);self.assertEqual(v.last_upgrade_backup.read_bytes(),raw);self.assertEqual(self.s['version'],14)
             self.approve();v.save(self.s);self.assertEqual(v.load(),self.s)
 
     def test_manual_fx_revaluation_effect_and_fee_reversal_keep_bridge(self):

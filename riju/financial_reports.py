@@ -168,7 +168,7 @@ def export_pdf(pack,path):
     for section_number,pack in enumerate(packs):
         if section_number:story.append(PageBreak())
         fixed=[i for i in range(len(pack['columns'])) if i not in pack['money_columns']];money=pack['money_columns']
-        panels=[list(range(len(pack['columns'])))] if len(pack['columns'])<=9 else [fixed+money[i:i+4] for i in range(0,len(money),4)]
+        panels=[list(range(len(pack['columns'])))] if len(pack['columns'])<=9 or not money else [fixed+money[i:i+4] for i in range(0,len(money),4)]
         for panelno,indices in enumerate(panels):
             if panelno:story.append(PageBreak())
             for i,line in enumerate(captions(pack)):story.append(Paragraph(html.escape(line),heading if i<2 else style))

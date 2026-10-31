@@ -9,7 +9,7 @@ from . import fixed_assets as fa,core,history
 
 class FixedAssetsUI:
     def assets(self):
-        self.note('Book fixed-asset register: reviewed Schedule II life/residual and put-to-use dates; monthly straight-line depreciation with actual-day partial months. Link opening/purchase journals already posted, or explicitly post a new purchase. Each depreciation, transfer or disposal is previewed before posting. Income Tax block depreciation is a separate build.')
+        self.note('Book fixed-asset register: reviewed Schedule II life/residual and put-to-use dates; monthly straight-line depreciation with actual-day partial months. Link opening/purchase journals already posted, or explicitly post a new purchase. Each depreciation, transfer or disposal is previewed before posting. Income Tax block depreciation is available separately under Tax depreciation.')
         start,end=self.dates()
         if getattr(self,'asset_report_year',None)==self.year.get():start,end=self.asset_from.get(),self.asset_to.get()
         else:end=min(end,max(start,datetime.now(history.INDIA).date().isoformat()))

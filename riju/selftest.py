@@ -200,6 +200,19 @@ def run(output):
             avault=Vault(root/'fixed-assets.riju');avault.save(assetbook)
             if avault.load()!=assetbook:raise ValueError('Packaged fixed-asset persistence failed')
             result['book_fixed_assets_passed']=True
+            from . import tax_depreciation
+            taxbook=core.empty_state()
+            taxblock=tax_depreciation.save_block(taxbook,'PACKAGED-TAX','Synthetic tax block',2024,{'JP':{'wdv':'1000','count':2}},'Synthetic reviewed opening tax WDV',True)
+            tax_depreciation.save_rule(taxbook,taxblock['id'],2024,'15','Synthetic reviewed rate/regime',True)
+            tax_depreciation.add_asset(taxbook,taxblock['id'],'TAX-ADD','JP','2024-12-01','500','Synthetic reviewed tax cost',True,put_to_use='2024-12-01')
+            taxworking=tax_depreciation.calculate(taxbook,2024)
+            if taxworking['normal']!=18750 or not taxworking['ready'] or taxbook['vouchers']:raise ValueError('Packaged tax WDV/short-use/no-journal proof failed')
+            tax_depreciation.finalize(taxbook,2024,'Synthetic reviewed ended tax year',True)
+            if tax_depreciation.calculate(taxbook,2025)['blocks'][0]['opening']!=131250:raise ValueError('Packaged tax carry-forward failed')
+            for kind in ('xlsx','pdf'):tax_depreciation.export(taxbook,2024,'ALL',root/('income-tax-depreciation.'+kind),kind)
+            tvault=Vault(root/'tax-depreciation.riju');tvault.save(taxbook)
+            if tvault.load()!=taxbook:raise ValueError('Packaged tax depreciation persistence failed')
+            result['tax_depreciation_passed']=True
             result.update(passed=True,revenue_modes=len(MODES),posted_vouchers=len(loaded['vouchers']),windows_vault_backup_roundtrip=True)
     except Exception as error:
         result['error']=str(error)

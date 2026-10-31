@@ -88,7 +88,7 @@ class Gst2bNoteTests(unittest.TestCase):
             root=Path(d);ext=root/'external';ext.mkdir();old=copy.deepcopy(state);old['version']=7;old['schema_revision']=7;history.checkpoint(old)
             p=root/'old.json';p.write_text(json.dumps(old));original=p.read_bytes();v=Vault(p,demo=True);new=v.load();new['settings']['backup_dir']=str(ext)
             self.assertTrue(v.migration_pending);self.assertEqual(new['gst_2b_imports'],old['gst_2b_imports']);self.assertEqual(new['gst_2b_matches'],old['gst_2b_matches'])
-            v.save(new);self.assertEqual(v.last_upgrade_backup.read_bytes(),original);self.assertEqual(new['version'],13);self.assertEqual(v.load(),new)
+            v.save(new);self.assertEqual(v.last_upgrade_backup.read_bytes(),original);self.assertEqual(new['version'],14);self.assertEqual(v.load(),new)
             self.assertEqual(gst.candidates_2b(new,item['id'])[0]['status'],'Matched')
 
     def test_matched_row_uses_its_actual_link_not_a_reused_reference_in_another_year(self):
