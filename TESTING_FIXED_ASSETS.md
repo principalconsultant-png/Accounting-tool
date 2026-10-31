@@ -18,3 +18,5 @@ Use disposable books first. Development 0.18.0-dev uses vault format 13; preserv
 14. Reload and confirm source/policy/event persistence, unchanged journal count for links/exports and original-byte migration backup. Test the verified Windows executable with actual Excel/PDF printing and one reviewed client asset example per category before acceptance.
 
 The software's reviewed/reconciled status records explicit configuration and accounting proofs. It does not certify statutory applicability or replace source/technical review. Useful-life reference proposals, NESD/shift eligibility and residual overrides require client/year-specific confirmation. Revaluation/impairment and statutory disclosures are not supplied by this monthly-SLM workflow.
+
+Verified Windows build: [run 41190020514](https://github.com/principalconsultant-png/Accounting-tool/actions/runs/41190020514), implementation `3850d1c`. Download **RijuBooks-Windows** under Artifacts. This is the development test executable, separate from the main/public release.
