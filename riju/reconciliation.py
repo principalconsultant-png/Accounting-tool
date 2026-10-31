@@ -14,6 +14,8 @@ from pathlib import Path
 from . import core,foundation
 
 
+STATEMENT_ALIASES={'date':('date','transactiondate','posteddate'), 'value_date':('valuedate',), 'narration':('narration','description','particulars','memo'), 'reference':('reference','utr','chequeno','chequenumber','refno'), 'debit':('debit','withdrawal','withdrawalamt','withdrawalamount'), 'credit':('credit','deposit','depositamt','depositamount'), 'amount':('amount','signedamount'), 'balance':('balance','closingbalance','runningbalance'), 'fitid':('fitid',)}
+
 def _day(value):
     if date.fromisoformat(value).isoformat()!=value:raise ValueError('Use YYYY-MM-DD for statement/report dates.')
     return value
@@ -81,7 +83,10 @@ def _raw_rows(raw,kind,sheet=None,header_row=1):
         try:
             stream=io.StringIO(raw.decode('utf-8-sig'))
             for _ in range(header_row-1):next(stream,None)
-            reader=csv.DictReader(stream);return list(reader),{'columns':reader.fieldnames or []}
+            reader=csv.DictReader(stream)
+            headers=reader.fieldnames or []
+            if len(set(headers))!=len(headers):raise ValueError('Statement column headings must be unique.')
+            return list(reader),{'columns':headers}
         except UnicodeDecodeError:raise ValueError('Save the bank CSV using UTF-8 encoding, or use XLSX.') from None
     if kind=='xlsx':
         from openpyxl import load_workbook
@@ -130,7 +135,7 @@ def read_statement(raw,kind,mapping=None,date_format='ISO',order='Oldest first',
     if kind=='ofx' and not rows:return [],header
     if len(rows)>50000:raise ValueError('Maximum 50,000 statement rows per import.')
     if not rows and not header.get('columns'):raise ValueError('No statement headings or rows found.')
-    aliases={'date':('date','transactiondate','posteddate'), 'value_date':('valuedate',), 'narration':('narration','description','particulars','memo'), 'reference':('reference','utr','chequeno','chequenumber','refno'), 'debit':('debit','withdrawal','withdrawalamt','withdrawalamount'), 'credit':('credit','deposit','depositamt','depositamount'), 'amount':('amount','signedamount'), 'balance':('balance','closingbalance','runningbalance'), 'fitid':('fitid',)}
+    aliases=STATEMENT_ALIASES
     fields={_normal(k):k for k in (rows[0] if rows else header['columns']) if k}
     chosen={key:next((fields[a] for a in names if a in fields),None) for key,names in aliases.items()}
     for key,value in (mapping or {}).items():
@@ -185,7 +190,13 @@ def _editable_bank(state,rows):
         if any(r['date']<=s['through'] for s in _finals(state,r['bank_account'],r.get('branch','ALL'))):raise ValueError('This bank period is reconciled. Reopen the statement with a reason before changing its matches or transactions.')
 
 
-def import_statement(state,raw,filename,account,scope,start,end,opening='',closing='',mapping=None,date_format='ISO',order='Oldest first',sheet=None,header_row=1):
+def import_statement(state,raw,filename,account,scope,start,end,opening='',closing='',mapping=None,date_format='ISO',order='Oldest first',sheet=None,header_row=1,template_id=None):
+    template_snapshot=None
+    if template_id:
+        if mapping is not None or date_format!='ISO' or order!='Oldest first' or sheet is not None or header_row!=1:raise ValueError('Use either a saved layout or manual parser settings, not both.')
+        from . import bank_templates
+        opts,template_snapshot=bank_templates.resolve(state,template_id,raw,filename,account,scope)
+        mapping=opts['mapping'];date_format=opts['date_format'];order=opts['order'];sheet=opts['sheet'];header_row=opts['header_row']
     _account(state,account);_scope(state,scope);_day(start);_day(end)
     if start>end:raise ValueError('Statement start must precede its end.')
     rows,header=read_statement(raw,Path(filename).suffix.lower().lstrip('.'),mapping,date_format,order,sheet,header_row)
@@ -216,6 +227,8 @@ def import_statement(state,raw,filename,account,scope,start,end,opening='',closi
             _editable_bank(candidate,[record]);candidate['bank_lines'].append(record);existing.append(record);new_count+=1
         used.add(bank_id);ids.append(bank_id)
     statement=dict(id=sid,digest=digest,filename=Path(filename).name,bank_account=account,scope=scope,start=start,through=end,opening=op,closing=cl,coverage=coverage,row_ids=ids,imported_at=now,status='OPEN',ofx_account=header.get('ofx_account',''))
+    statement['parser_options']=dict(mapping=copy.deepcopy(mapping),date_format=date_format,order=order,sheet=sheet,header_row=header_row)
+    statement['mapping_template']=template_snapshot
     candidate.setdefault('bank_statements',[]).append(statement)
     core.add_audit(candidate,'BANK_STATEMENT_IMPORTED',{'statement':copy.deepcopy(statement),'new_rows':new_count,'reused_rows':len(ids)-new_count})
     state.clear();state.update(candidate)

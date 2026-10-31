@@ -1,0 +1,14 @@
+# B12 saved bank statement layouts
+
+Version 0.17.0-dev uses vault format 12. Test with disposable books first; keep the verified original external-drive backup when upgrading earlier books.
+
+1. Open **Bank reconciliation**, select the INR bank ledger and statement scope, then import a CSV or XLSX. Choose the actual statement dates, balances, date format, row order, worksheet/header row and column mappings. Debit means withdrawal; credit means deposit; signed Amount is positive for receipts.
+2. Enter **Layout name**, then **Validate & save layout**. The layout is restricted to that bank, operating-unit/shared scope and file type. Source columns and explicit absent optional fields are frozen. This validates the source parsing, saves no bank transactions and creates no journal.
+3. **Validate & preview rows**, inspect the complete statement, then **Approve statement import**. Required date/amount validation and running/opening/closing proofs remain in effect. Missing balances prevent formal reconciliation as before.
+4. Import the next month's file. Select **Saved layout** and **Apply saved layout**. Verify the mapped fields; enter this statement's dates/opening/closing independently. Layouts never retain period dates or balances. Preview and approve again. No accounting entries or matching are automatic.
+5. Try changed/reordered headings, a different bank/scope/type, duplicate/ambiguous headings and conflicting manual settings. These must fail without importing anything. For a changed bank export, choose **Use manual mapping**, review the new source and save the same name to create a new revision. The prior revision becomes unavailable for new imports; existing statements keep their original evidence.
+6. **Disable layout** with a reason. Reload the application: it must disappear from active choices while prior imported statements/history retain the exact revision and parser settings. Disabling or revising after preview must also block approval using the stale revision.
+7. Reimport the same file and overlapping statement periods. Exact-file duplicates must still fail, identifiable overlap rows must be reused and ambiguous overlap must require review. Test a multi-sheet XLSX with a non-first header row/newest-first data. OFX continues using its fixed fields without saved templates.
+8. Reopen the vault and verify layouts, parser snapshots, original external migration backup and unchanged journal counts. Review one actual client statement from each bank before accepting its saved layout.
+
+Automated checks include twelve backend cases, a full desktop save/reuse/import/disable/reload flow, prior reconciliation regressions and packaged Windows self-test coverage. Excel/PDF financial and cash-flow exports remain available; this change concerns source import layouts.

@@ -4,7 +4,7 @@ from datetime import datetime
 import tkinter as tk
 from tkinter import ttk,filedialog,messagebox,simpledialog
 import webbrowser
-from . import reconciliation as r,brs_exports,ledgers,foundation,activity
+from . import reconciliation as r,brs_exports,ledgers,foundation,activity,bank_templates as bt
 
 
 class BankUI:
@@ -104,7 +104,7 @@ class BankUI:
         path=filedialog.askopenfilename(filetypes=[('Bank statements','*.csv *.xlsx *.ofx'),('CSV','*.csv'),('Excel','*.xlsx'),('OFX','*.ofx')],parent=self)
         if not path:return
         raw=Path(path).read_bytes();account=self._bank_account();scope='ALL' if self.brs_scope.get()=='All operating units' else self.branch_names[self.brs_scope.get()]
-        dialog=tk.Toplevel(self);dialog.title('Review bank statement import');dialog.geometry('1020x760');dialog.transient(self);dialog.grab_set()
+        dialog=tk.Toplevel(self);dialog.title('Review bank statement import');dialog.geometry('1020x880');dialog.transient(self);dialog.grab_set()
         f=ttk.Frame(dialog,padding=12);f.pack(fill='both',expand=True)
         ttk.Label(f,text=Path(path).name+' | '+account+' | '+('All branches / shared bank' if scope=='ALL' else self.branches[scope]),wraplength=950).pack(anchor='w')
         row=ttk.Frame(f);row.pack(fill='x');start,end=self.dates()
@@ -123,8 +123,45 @@ class BankUI:
             names=list(records[0]) if records else head.get('columns',[])
             for combo in widgets.values():combo.configure(values=['(Auto)','(Not provided)']+[str(v) for v in names if v])
         self.button(f,'Load column names for mapping',columns)
+        kind=Path(path).suffix.lower().lstrip('.')
+        layout_row=ttk.Frame(f);layout_row.pack(fill='x',pady=5)
+        saved=self.field(layout_row,'Saved layout','(Manual mapping)',['(Manual mapping)'],width=34)
+        name=self.field(layout_row,'Layout name','',width=28)
+        selected={'id':None,'options':None};choices={}
+        def parser_options():
+            return dict(date_format=fmt.get(),order=order.get(),sheet=sheet.get().strip() or None,header_row=int(header.get()),mapping={k:'' if v.get()=='(Not provided)' else v.get() for k,v in mapping.items() if v.get()!='(Auto)'})
+        def refresh_layouts():
+            choices.clear()
+            for t in bt.available(self.state,account,scope,kind):choices[t['name']+' · v'+str(t['revision'])+' · '+t['id'][:8]]=t
+            combo=layout_row.winfo_children()[0].winfo_children()[-1];combo.configure(values=['(Manual mapping)',*choices])
+        def manual():
+            selected.update(id=None,options=None);saved.set('(Manual mapping)')
+        def apply_layout():
+            if saved.get() not in choices:raise ValueError('Select a saved bank layout.')
+            t=choices[saved.get()];opts,_=bt.resolve(self.state,t['id'],raw,Path(path).name,account,scope)
+            fmt.set(opts['date_format']);order.set(opts['order']);sheet.set(opts['sheet'] or '');header.set(str(opts['header_row']))
+            for key,var in mapping.items():var.set(opts['mapping'][key] or '(Not provided)')
+            name.set(t['name']);selected.update(id=t['id'],options=opts)
+        def save_layout():
+            t=self.commit(lambda state:bt.save(state,raw,Path(path).name,account,scope,name.get(),**parser_options()))
+            refresh_layouts();saved.set(next(label for label,item in choices.items() if item['id']==t['id']));apply_layout()
+        def disable_layout():
+            if saved.get() not in choices:raise ValueError('Select a saved bank layout.')
+            reason=simpledialog.askstring('Disable saved layout','Reason for disabling this layout:',parent=dialog)
+            if reason is None:return
+            self.commit(lambda state:bt.disable(state,choices[saved.get()]['id'],reason));manual();refresh_layouts()
+        actions=ttk.Frame(f);actions.pack(fill='x')
+        self.button(actions,'Apply saved layout',apply_layout);self.button(actions,'Use manual mapping',manual)
+        self.button(actions,'Validate & save layout',save_layout);self.button(actions,'Disable layout',disable_layout)
+        ttk.Label(f,text='Layouts are saved per bank ledger, scope and file type. Changed headings require a reviewed revision. Dates and balances are never reused. OFX has fixed fields and does not need a layout.',wraplength=950).pack(anchor='w',pady=5)
+        refresh_layouts()
         def review():
-            args=dict(filename=Path(path).name,account=account,scope=scope,start=start_v.get(),end=end_v.get(),opening=opening.get(),closing=closing.get(),date_format=fmt.get(),order=order.get(),sheet=sheet.get().strip() or None,header_row=int(header.get()),mapping={k:'' if v.get()=='(Not provided)' else v.get() for k,v in mapping.items() if v.get()!='(Auto)'})
+            args=dict(filename=Path(path).name,account=account,scope=scope,start=start_v.get(),end=end_v.get(),opening=opening.get(),closing=closing.get())
+            opts=parser_options()
+            if selected['id']:
+                if opts!=selected['options']:raise ValueError('Parser fields changed after applying the layout. Use manual mapping or save a reviewed layout revision.')
+                args['template_id']=selected['id']
+            else:args.update(opts)
             import copy
             temp=copy.deepcopy(self.state);s=r.import_statement(temp,raw,**args)
             preview=tk.Toplevel(dialog);preview.title('Verify statement before importing');preview.geometry('1100x620');preview.transient(dialog);preview.grab_set()

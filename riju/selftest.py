@@ -180,6 +180,15 @@ def run(output):
             cfvault=Vault(root/'cash-flow.riju');cfvault.save(cfbook)
             if cfvault.load()!=cfbook:raise ValueError('Packaged cash-flow policy persistence failed')
             result['cash_flow_passed']=True
+            from . import bank_templates
+            templatebook=core.empty_state();bankraw=b'Booked,Movement,Ref\n02/04/2026,100,TEST-TEMPLATE-1\n'
+            template=bank_templates.save(templatebook,bankraw,'bank.csv','1010','ALL','Synthetic packaged layout',mapping={'date':'Booked','amount':'Movement','reference':'Ref'},date_format='DD/MM/YYYY')
+            from . import reconciliation
+            imported=reconciliation.import_statement(templatebook,bankraw,'bank.csv','1010','ALL','2026-04-01','2026-04-30','0','100',template_id=template['id'])
+            if imported['mapping_template']['id']!=template['id'] or len(templatebook['bank_lines'])!=1 or templatebook['vouchers']:raise ValueError('Packaged saved bank layout/provenance failed')
+            templatevault=Vault(root/'bank-template.riju');templatevault.save(templatebook)
+            if templatevault.load()!=templatebook:raise ValueError('Packaged saved bank layout persistence failed')
+            result['bank_mapping_templates_passed']=True
             result.update(passed=True,revenue_modes=len(MODES),posted_vouchers=len(loaded['vouchers']),windows_vault_backup_roundtrip=True)
     except Exception as error:
         result['error']=str(error)

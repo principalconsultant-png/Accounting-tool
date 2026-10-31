@@ -4,7 +4,7 @@ import re
 import uuid
 from datetime import date
 
-SCHEMA = 11
+SCHEMA = 12
 KINDS = {'Asset':(1000,1999),'Liability':(2000,2999),'Equity':(3000,3999),
          'Revenue':(4000,4499),'Expense':(4500,4999)}
 GROUPS = {
@@ -42,7 +42,7 @@ def migrate(state):
     """Idempotent in-memory migration; the vault backs up before persisting it."""
     from .core import add_audit,BRANCHES
     if state.get('schema_revision',1)>SCHEMA:raise ValueError('These books need a newer version of Riju Books.')
-    if state.get('schema_revision',1)==SCHEMA and state.get('version')==11:return state
+    if state.get('schema_revision',1)==SCHEMA and state.get('version')==12:return state
     settings=state['settings']
     settings.setdefault('departments',['Pharmacy','Therapy rooms','Inpatient diet kitchen','Outpatient consultations','Central administration'])
     state.setdefault('branches',{code:{'name':name,'city':'','state':'','state_code':'','gstin':'',
@@ -78,7 +78,8 @@ def migrate(state):
     state.setdefault('tds_ledgers',{})
     state.setdefault('cash_flow_policies',[])
     state.setdefault('cash_flow_allocations',[])
-    state['version']=11
+    state.setdefault('bank_mapping_templates',[])
+    state['version']=12
     state['accounts'].sort(key=lambda a:a['code'])
     add_audit(state,'SCHEMA_UPGRADED',{'to':SCHEMA})
     return state
@@ -170,6 +171,7 @@ def delete_account(state,code):
     if any(code in (r.get('debit_account'),r.get('credit_account')) for q in state['queue'] for r in q['rows']):raise ValueError('An import references this ledger.')
     if any(code in r.get('ledger_codes',[]) for r in state.get('tax_config',{}).get('rules',[])):raise ValueError('A historical tax rule references this ledger; it cannot be deleted.')
     if any(code in p['mapping'] or code in p['cash_accounts'] for p in state.get('cash_flow_policies',[])):raise ValueError('A historical cash-flow policy references this ledger; retain its inactive master.')
+    if any(t['bank_account']==code for t in state.get('bank_mapping_templates',[])):raise ValueError('A saved bank layout references this ledger; retain its inactive master.')
     item=next(a for a in state['accounts'] if a['code']==code)
     state['accounts'].remove(item);state['account_details'].pop(code,None)
     add_audit(state,'LEDGER_DELETED',{'account':item,'details':details})

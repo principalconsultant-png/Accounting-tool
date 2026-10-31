@@ -604,3 +604,46 @@ class CashFlowDesktopTests(unittest.TestCase):
                 app.show('Financial reports');app.report_mode.set(cf.INDIRECT);app.refresh_financial_report();self.assertEqual(app.financial_snapshot['cash_flow']['indirect_difference'],0)
             finally:app.destroy()
             loaded=vault.load();self.assertEqual(len(loaded['cash_flow_policies']),1);self.assertEqual(len(loaded['cash_flow_allocations']),1)
+
+@unittest.skipUnless(os.environ.get('DISPLAY') or os.environ.get('RIJU_GUI_TEST'),'A graphical display is required')
+class BankTemplateDesktopTests(unittest.TestCase):
+    def test_save_reuse_preview_approve_disable_and_reload_layout(self):
+        import tkinter as tk
+        from tkinter import ttk
+        from riju.app import App
+        def walk(w):
+            for child in w.winfo_children():
+                yield child
+                yield from walk(child)
+        def field(win,label):
+            item=next(w for w in walk(win) if isinstance(w,ttk.Label) and w.cget('text')==label)
+            return next(w for w in item.master.winfo_children() if isinstance(w,ttk.Entry))
+        def fill(win,label,value):
+            w=field(win,label)
+            if isinstance(w,ttk.Combobox):w.set(value)
+            else:w.delete(0,'end');w.insert(0,value)
+        def press(win,label):next(w for w in walk(win) if isinstance(w,ttk.Button) and w.cget('text')==label).invoke()
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);vault=Vault(root/'demo.json',demo=True);app=App(vault)
+            try:
+                app.show('Bank reconciliation');app.update()
+                april=root/'april.csv';april.write_text('When,Movement,Ref\n02/04/2026,100,A1\n',encoding='utf-8')
+                with patch('riju.bank_ui.filedialog.askopenfilename',return_value=str(april)):app.import_bank_statement()
+                win=next(w for w in app.winfo_children() if isinstance(w,tk.Toplevel))
+                for label,value in [('Date format','DD/MM/YYYY'),('Date column','When'),('Amount column','Movement'),('Reference column','Ref'),('Layout name','Synthetic bank layout'),('Statement from','2026-04-01'),('Through','2026-04-30'),('Bank opening INR (optional)','0'),('Bank closing INR (optional)','100')]:fill(win,label,value)
+                press(win,'Validate & save layout');app.update();self.assertEqual(len(app.state['bank_mapping_templates']),1)
+                press(win,'Validate & preview rows');app.update();preview=next(w for w in win.winfo_children() if isinstance(w,tk.Toplevel));press(preview,'Approve statement import');app.update()
+                self.assertEqual(len(app.state['bank_statements']),1)
+                may=root/'may.csv';may.write_text('When,Movement,Ref\n02/05/2026,50,M1\n',encoding='utf-8')
+                with patch('riju.bank_ui.filedialog.askopenfilename',return_value=str(may)):app.import_bank_statement()
+                win=next(w for w in app.winfo_children() if isinstance(w,tk.Toplevel));choice=field(win,'Saved layout');choice.set(choice.cget('values')[1]);press(win,'Apply saved layout')
+                self.assertEqual(field(win,'Date column').get(),'When');self.assertEqual(field(win,'Bank opening INR (optional)').get(),'')
+                for label,value in [('Statement from','2026-05-01'),('Through','2026-05-31'),('Bank opening INR (optional)','100'),('Bank closing INR (optional)','150')]:fill(win,label,value)
+                press(win,'Validate & preview rows');app.update();preview=next(w for w in win.winfo_children() if isinstance(w,tk.Toplevel));press(preview,'Approve statement import');app.update()
+                self.assertEqual(len(app.state['bank_statements']),2);self.assertEqual(len(app.state['vouchers']),0)
+                with patch('riju.bank_ui.filedialog.askopenfilename',return_value=str(may)):app.import_bank_statement()
+                win=next(w for w in app.winfo_children() if isinstance(w,tk.Toplevel));choice=field(win,'Saved layout');choice.set(choice.cget('values')[1])
+                with patch('riju.bank_ui.simpledialog.askstring',return_value='Obsolete layout'):press(win,'Disable layout')
+                self.assertFalse(app.state['bank_mapping_templates'][0]['active']);win.destroy()
+            finally:app.destroy()
+            loaded=vault.load();self.assertEqual(len(loaded['bank_statements']),2);self.assertFalse(loaded['bank_mapping_templates'][0]['active']);self.assertTrue(loaded['bank_statements'][0]['mapping_template']['active'])

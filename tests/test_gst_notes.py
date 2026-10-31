@@ -82,7 +82,7 @@ class GstNoteTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             root=Path(d);ext=root/'external';ext.mkdir();old=copy.deepcopy(self.s);old['version']=6;old['schema_revision']=6;history.checkpoint(old)
             p=root/'old.json';p.write_text(json.dumps(old));raw=p.read_bytes();v=Vault(p,demo=True);self.s=v.load();self.s['settings']['backup_dir']=str(ext);v.save(self.s)
-            self.assertEqual(v.last_upgrade_backup.read_bytes(),raw);self.assertEqual(self.s['version'],11)
+            self.assertEqual(v.last_upgrade_backup.read_bytes(),raw);self.assertEqual(self.s['version'],12)
             self.note();v.save(self.s);self.assertEqual(v.load(),self.s);before=copy.deepcopy(self.s)
             gst.export_csv(gst.summary(self.s,'2026-04-01','2026-05-31'),root/'gst.csv');text=(root/'gst.csv').read_text(encoding='utf-8-sig')
             self.assertIn('Credit note',text);self.assertIn('TEST-1',text);self.assertIn('-50.00',text);self.assertEqual(before,self.s)
