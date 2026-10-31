@@ -104,8 +104,14 @@ class BankUI:
         path=filedialog.askopenfilename(filetypes=[('Bank statements','*.csv *.xlsx *.ofx'),('CSV','*.csv'),('Excel','*.xlsx'),('OFX','*.ofx')],parent=self)
         if not path:return
         raw=Path(path).read_bytes();account=self._bank_account();scope='ALL' if self.brs_scope.get()=='All operating units' else self.branch_names[self.brs_scope.get()]
-        dialog=tk.Toplevel(self);dialog.title('Review bank statement import');dialog.geometry('1020x880');dialog.transient(self);dialog.grab_set()
-        f=ttk.Frame(dialog,padding=12);f.pack(fill='both',expand=True)
+        dialog=tk.Toplevel(self);dialog.title('Review bank statement import');dialog.geometry(f'{min(1020,self.winfo_screenwidth()-80)}x{min(760,self.winfo_screenheight()-100)}');dialog.transient(self);dialog.grab_set()
+        canvas=tk.Canvas(dialog,highlightthickness=0);vertical=ttk.Scrollbar(dialog,orient='vertical',command=canvas.yview);horizontal=ttk.Scrollbar(dialog,orient='horizontal',command=canvas.xview)
+        canvas.configure(yscrollcommand=vertical.set,xscrollcommand=horizontal.set)
+        vertical.pack(side='right',fill='y');horizontal.pack(side='bottom',fill='x');canvas.pack(fill='both',expand=True)
+        f=ttk.Frame(canvas,padding=12);window=canvas.create_window((0,0),window=f,anchor='nw')
+        f.bind('<Configure>',lambda e:canvas.configure(scrollregion=canvas.bbox('all')))
+        canvas.bind('<Configure>',lambda e:canvas.itemconfigure(window,width=max(e.width,f.winfo_reqwidth())))
+        dialog.bind('<MouseWheel>',lambda e:canvas.yview_scroll(-1 if e.delta>0 else 1,'units') if e.widget.winfo_class() not in ('Text','Treeview','TCombobox') else None)
         ttk.Label(f,text=Path(path).name+' | '+account+' | '+('All branches / shared bank' if scope=='ALL' else self.branches[scope]),wraplength=950).pack(anchor='w')
         row=ttk.Frame(f);row.pack(fill='x');start,end=self.dates()
         start_v=self.field(row,'Statement from',start,width=13);end_v=self.field(row,'Through',end,width=13);opening=self.field(row,'Bank opening INR (optional)','',width=20);closing=self.field(row,'Bank closing INR (optional)','',width=20)
