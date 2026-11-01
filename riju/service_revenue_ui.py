@@ -36,7 +36,7 @@ class ServiceRevenueUI:
             self.commit(save);win.destroy()
             if form and form.winfo_exists():form.destroy()
             self.show(page)
-        self.button(bar,'Approve service action' if page=='Service revenue' else 'Approve bulk import' if page=='Bulk import review' else 'Approve GST action',approve,True)
+        self.button(bar,'Approve service action' if page=='Service revenue' else 'Approve bulk import' if page=='Bulk import review' else 'Approve provision' if page=='Statement review' else 'Approve GST action',approve,True)
 
     def service_action(self,kind):
         source=None if kind in sr.KINDS[:3] else self._selected_service();rules=sorted({r['key'] for r in tax.rules(self.state) if r['family']=='GST'})

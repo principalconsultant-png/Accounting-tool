@@ -891,3 +891,22 @@ class GstCompletionDesktopTests(unittest.TestCase):
                     self.assertTrue((root/('gst.'+kind)).exists())
             finally:app.destroy()
             loaded=v.load();self.assertFalse(any(gst.summary(loaded,'2026-04-01','2026-04-30')['unclassified'].values()))
+
+@unittest.skipUnless(os.environ.get('DISPLAY') or os.environ.get('RIJU_GUI_TEST'),'A graphical display is required')
+class StatementDesktopTests(unittest.TestCase):
+    def test_policy_editor_save_and_exports(self):
+        from riju.app import App
+        from tkinter import ttk
+        helper=TaxDepreciationDesktopTests()
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);app=App(Vault(root/'s.json',demo=True))
+            try:
+                app.year.set('2026');app.show('Statement review');app.statement_setup();form=helper.form(app)
+                helper.fill(form,'Legal applicability, effective standard and source review','Synthetic reviewed framework and mappings')
+                next(w for w in helper.walk(form) if isinstance(w,ttk.Checkbutton)).invoke();helper.press(form,'Save reviewed presentation');app.update()
+                self.assertEqual(len(app.state['statement_policies']),1);self.assertTrue(app.statement_packs)
+                for kind in ('xlsx','pdf'):
+                    with patch('riju.statements_ui.filedialog.asksaveasfilename',return_value=str(root/('statements.'+kind))):app.export_statements(kind)
+                    self.assertTrue((root/('statements.'+kind)).exists())
+                self.assertFalse(app.state['vouchers'])
+            finally:app.destroy()

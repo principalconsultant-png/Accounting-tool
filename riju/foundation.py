@@ -90,6 +90,7 @@ def migrate(state):
     state.setdefault('gst_cash_ledgers',{})
     state.setdefault('gst_filing_reviews',[])
     state.setdefault('gst_portal_imports',[])
+    state.setdefault('statement_policies',[])
     state['version']=19
     state['accounts'].sort(key=lambda a:a['code'])
     add_audit(state,'SCHEMA_UPGRADED',{'to':SCHEMA})
@@ -194,6 +195,7 @@ def delete_account(state,code):
     if any(code in (a['ppe'],a['accum'],a['expense']) for a in state.get('book_assets',[])):raise ValueError('A historical book asset references this ledger; retain its inactive master.')
     if any(code in [*p['ledgers'].values(),p['retention']] for p in state.get('cwip',{}).get('projects',[])):raise ValueError('Retain historical project ledgers.')
     if any(code in mapping.values() for mapping in state.get('gst_cash_ledgers',{}).values()):raise ValueError('Retain historical GST cash controls.')
+    if any(code in p['mappings'] for p in state.get('statement_policies',[])):raise ValueError('Retain historical statement classification ledgers.')
     item=next(a for a in state['accounts'] if a['code']==code)
     state['accounts'].remove(item);state['account_details'].pop(code,None)
     add_audit(state,'LEDGER_DELETED',{'account':item,'details':details})

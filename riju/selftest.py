@@ -275,6 +275,21 @@ def run(output):
             calendarpack=bank_calendar.snapshot(completed_gst,'2026-03-27','2026-04-03')
             financial_reports.export_xlsx(calendarpack,root/'calendar.xlsx');financial_reports.export_pdf(calendarpack,root/'calendar.pdf')
             result['bank_calendar_passed']=True
+            from . import statements
+            statements.save_policy(completed_gst,dict(start='2026-04-01',end='2027-03-31',framework=statements.FRAMEWORKS[0],basis='Synthetic packaged presentation review',mappings=statements.proposal(completed_gst),disclosures={},confirmed=True))
+            statementpacks=statements.report_pack(completed_gst,'2026-04-01','2027-03-31')
+            if any(statementpacks[0]['controls'].values()):raise ValueError('Packaged statement proof failed')
+            financial_reports.export_pack_xlsx(statementpacks,root/'presented-statements.xlsx');financial_reports.export_pdf(statementpacks,root/'presented-statements.pdf')
+            taxbook=core.empty_state()
+            foundation.save_account(taxbook,'2500','Reviewed current tax payable','Liability','Other liabilities')
+            core.post(taxbook,'2026-04-02','Synthetic earned revenue',[dict(account='1010',branch='JP',debit=10000,credit=0),dict(account='4000',branch='JP',debit=0,credit=10000)])
+            mapping=statements.proposal(taxbook);mapping['2500']['section']='Current liabilities: current tax'
+            statements.save_policy(taxbook,dict(start='2026-04-01',end='2027-03-31',framework=statements.FRAMEWORKS[0],basis='Synthetic tax review',mappings=mapping,disclosures={},confirmed=True))
+            taxvalues=dict(start='2026-04-01',end='2027-03-31',branch='JP',expense_account='4610',payable_account='2500',rate='25',surcharge='0',cess='4',basis='Synthetic assumptions',confirmed=True)
+            taxpreview=statements.tax_estimate(taxbook,taxvalues);statements.post_tax(taxbook,taxpreview)
+            if statements.tax_estimate(taxbook,taxvalues)['delta']:raise ValueError('Packaged incremental tax provision duplicated')
+            financial_reports.export_xlsx(statements.tax_pack(taxbook,taxpreview),root/'tax-provision.xlsx');financial_reports.export_pdf(statements.tax_pack(taxbook,taxpreview),root/'tax-provision.pdf')
+            result['statement_presentation_passed']=True
 
 
 
