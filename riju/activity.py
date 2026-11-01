@@ -32,7 +32,7 @@ LABELS={k:k.replace('_',' ').capitalize() for k in DEFINITIONS}
 
 def validate_source(value):
     if not isinstance(value,dict) or set(value)!={'kind','document_id','record_id','row_count'}:raise ValueError('Invalid import source link.')
-    if value['kind'] not in ('daily_sales','journal_csv','opening_csv'):raise ValueError('Unknown import source kind.')
+    if value['kind'] not in ('daily_sales','journal_csv','opening_csv','bulk_import'):raise ValueError('Unknown import source kind.')
     if any(not isinstance(value[k],str) or not value[k].strip() for k in ('document_id','record_id')):raise ValueError('Import document/row IDs are required.')
     if type(value['row_count'])!=int or value['row_count']<=0:raise ValueError('Source row count must be a positive integer.')
     return dict(value)
@@ -72,7 +72,7 @@ def _import_links(state):
             if key not in used:records.append((v,s));used.add(key)
     assigned={v['id'] for v,s in records};unlinked=[]
     for q in state['queue']:
-        if q['status']!='PROCESSED':continue
+        if q['status']!='PROCESSED' or q.get('kind')=='bulk':continue
         kind='daily_sales' if q.get('kind')=='daily_sales' else 'journal_csv'
         if (kind,q['id']) in modern_docs:continue
         for n,r in enumerate(q['rows']):
@@ -122,11 +122,11 @@ def report(state,start=None,end=None,branch='ALL',basis='work'):
     metrics['legacy_rows_unlinked']=sum((branch=='ALL' or r.get('branch')==branch) and (start is None or basis=='work' or in_dates(r['date'])) for r in unlinked)
     stage_dates={}
     for a in state['audit']:
-        if a['action']=='SALES_REPORT_STAGED':stage_dates[a['payload']['id']]=india_day(a.get('timestamp'))
+        if a['action'] in ('SALES_REPORT_STAGED','BULK_IMPORT_STAGED'):stage_dates[a['payload']['id']]=india_day(a.get('timestamp'))
         elif a['action']=='IMPORT_STAGED':stage_dates[a['payload']['digest'][:12]]=india_day(a.get('timestamp'))
     for q in state['queue']:
         if q['status']=='PENDING_REVIEW':
-            metrics['import_rows_pending']+=sum((branch=='ALL' or r.get('branch')==branch) and in_dates(r['date'] if basis=='book' else stage_dates.get(q['id'])) for r in q['rows'])
+            metrics['import_rows_pending']+=sum((branch=='ALL' or r.get('branch')==branch) and in_dates(r.get('date') if basis=='book' else stage_dates.get(q['id'])) for i,r in enumerate(q['rows']) if r.get('review')!='REJECTED' and q.get('row_reviews',{}).get(str(i),{}).get('status')!='REJECTED')
     match_dates={}
     match_branches={}
     for m in state['matches']:

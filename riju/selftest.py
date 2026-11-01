@@ -242,6 +242,18 @@ def run(output):
             servicevault=Vault(root/'service-revenue.riju');servicevault.save(servicebook)
             if servicevault.load()!=servicebook:raise ValueError('Packaged service source persistence failed')
             result['service_revenue_passed']=True
+            from . import bulk_import
+            bulkbook=core.empty_state()
+            raw=b'date,reference,branch,narration,debit_account,credit_account,amount,journal_id\n2026-04-01,SELF-BULK,JP,Synthetic expense,4590,2000,100,\n'
+            batch=bulk_import.stage(bulkbook,raw,'synthetic.csv','Expense')
+            bulk_import.review_row(bulkbook,batch['id'],0,True,'Synthetic source review')
+            bulk_import.approve(bulkbook,batch['id'])
+            if core.balances(bulkbook,'2026-04-30')['4590']!=10000 or activity.report(bulkbook)['metrics']['import_rows_processed']!=1:raise ValueError('Packaged mapped import/source counts failed')
+            for kind in ('xlsx','pdf'):bulk_import.export(bulkbook,batch['id'],root/('bulk-review.'+kind),kind)
+            bulkvault=Vault(root/'bulk.riju');bulkvault.save(bulkbook)
+            if bulkvault.load()!=bulkbook:raise ValueError('Packaged mapped import persistence failed')
+            result['bulk_import_review_passed']=True
+
 
 
             result.update(passed=True,revenue_modes=len(MODES),posted_vouchers=len(loaded['vouchers']),windows_vault_backup_roundtrip=True)

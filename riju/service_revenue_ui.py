@@ -26,7 +26,7 @@ class ServiceRevenueUI:
         if not self.service_table.selection():raise ValueError('Select the original advance/bill or action first.')
         return sr.get(self.state,self.service_rows[self.service_table.selection()[0]][5])
 
-    def _service_preview(self,title,action,form=None):
+    def _service_preview(self,title,action,form=None,page='Service revenue'):
         before=copy.deepcopy(self.state);candidate=copy.deepcopy(before);result=action(candidate)
         win=tk.Toplevel(self);win.title(title);win.geometry('1000x650');win.transient(form or self);win.grab_set()
         bar=ttk.Frame(win);bar.pack(side='bottom',fill='x');text=tk.Text(win,wrap='word');text.pack(fill='both',expand=True);text.insert('1.0',json.dumps(dict(result=result,journals=candidate['vouchers'][len(before['vouchers']):]),ensure_ascii=False,indent=2));text.configure(state='disabled')
@@ -35,7 +35,7 @@ class ServiceRevenueUI:
             def save(s):s.clear();s.update(copy.deepcopy(candidate));return result
             self.commit(save);win.destroy()
             if form and form.winfo_exists():form.destroy()
-            self.show('Service revenue')
+            self.show(page)
         self.button(bar,'Approve service action',approve,True)
 
     def service_action(self,kind):

@@ -840,3 +840,22 @@ class ServiceRevenueDesktopTests(unittest.TestCase):
                 self.assertEqual(len(app.state['service_revenue']),2)
             finally:app.destroy()
             self.assertEqual(len(vault.load()['service_revenue']),2)
+
+@unittest.skipUnless(os.environ.get('DISPLAY') or os.environ.get('RIJU_GUI_TEST'),'A graphical display is required')
+class BulkImportDesktopTests(unittest.TestCase):
+    def test_mapped_row_review_frozen_post_export_and_reload(self):
+        from riju.app import App
+        from riju import bulk_import as bulk
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);vault=Vault(root/'bulk.json',demo=True);app=App(vault)
+            try:
+                raw=b'date,reference,branch,narration,debit_account,credit_account,amount,journal_id\n2026-04-01,GUI-BULK,JP,Synthetic,4590,2000,100,\n'
+                app.commit(lambda s:bulk.stage(s,raw,'gui.csv','Expense'));app.show('Bulk import review');app.bulk_batches.selection_set(app.bulk_batches.get_children()[0]);app.open_bulk_rows();app.bulk_rows.selection_set(app.bulk_rows.get_children()[0])
+                with patch('riju.bulk_import_ui.simpledialog.askstring',return_value='Reviewed synthetic source'):app.review_bulk_row(True)
+                app.post_bulk();app.update();helper=TaxDepreciationDesktopTests();helper.press(helper.form(app),'Approve service action');app.update();self.assertEqual(len(app.state['vouchers']),1)
+                app.bulk_batches.selection_set(app.bulk_batches.get_children()[0])
+                for kind in ('xlsx','pdf'):
+                    with patch('riju.bulk_import_ui.filedialog.asksaveasfilename',return_value=str(root/('bulk.'+kind))):app.export_bulk(kind)
+                    self.assertTrue((root/('bulk.'+kind)).exists())
+            finally:app.destroy()
+            self.assertEqual(vault.load()['queue'][0]['status'],'PROCESSED')

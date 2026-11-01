@@ -329,3 +329,30 @@ advance/earn/export/reload/stale-preview workflow. Packaged readiness logic pass
 with disposable identity-encryption stubs; native Windows verification follows the
 push. Client tax-point, service completion/cancellation and actual source acceptance
 remain pending. B11/B24 have not started before this functional checkpoint.
+
+B10 native Windows completion, 1 November 2026 (IST): source `f4dfca65f6ea45854ba7398b3dc3b29894ed4afb` passed [Windows run 41288111387](https://github.com/principalconsultant-png/Accounting-tool/actions/runs/41288111387). Native regression, PyInstaller build and executable self-test succeeded; no main-only release was published. B10 functional/native gates are complete; actual service/tax/source and target-PC acceptance remain pending.
+
+## B11 functional delivery — 0.22.0-dev
+
+Mapped CSV/XLSX journal/expense/petty-cash/opening imports now retain exact source
+headings, explicit mapping/sheet, digest, raw literals, row IDs, validation errors,
+approval/rejection reasons and posted voucher links. Staging never posts. Invalid
+and changed-file duplicate sources require rejection/correction, and every row
+requires a review decision before atomic batch posting. Expense/cash constraints,
+paise precision, earlier years/branch isolation, closed/locked periods and active
+masters are revalidated. Compound groups cannot be partly approved; opening rows
+are grouped into one branch/date opening voucher to avoid duplicate openings.
+Source metadata feeds history and work-volume counts. Frozen approval rejects
+changed books. Existing daily-sales XLSX supports reasoned individual row decisions
+and excludes rejected sources from posting and processed counts; its previous
+whole-file explicit review remains available. New ordinary journal uploads route
+to mapped review. Read-only Excel/PDF review packs include source decisions,
+errors and journal links. Follow TESTING_BULK_IMPORT.md.
+
+Local full regression: 417 tests ran, 416 passed and one Windows-only DPAPI test
+was skipped. Includes 14 bulk/backend and sales row-review cases plus the desktop
+mapped-file/review/preview/post/export/reload flow. Packaged self-test logic passed
+with test-only encryption stubs, including mapped import/source count/export/save
+assertions. Native Windows checks follow the push. Actual source mappings and
+opening/account classifications remain client acceptance. B24 has not started
+before recording this B11 functional checkpoint.

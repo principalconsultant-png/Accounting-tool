@@ -93,7 +93,7 @@ def stage_sales(state,raw,filename,branch,treatment_policy='earned',other_policy
     if any(q['digest']==digest and q.get('branch',branch)==branch for q in state['queue']):raise ValueError('This report is already in the queue for that branch.')
     from .foundation import branches
     rows,warnings=read_sales_xlsx(raw,branch,branches(state,active_only=True))
-    prior={r['key'] for q in state['queue'] if q.get('kind')=='daily_sales' for r in q['rows']}
+    prior={r['key'] for q in state['queue'] if q.get('kind')=='daily_sales' for i,r in enumerate(q['rows']) if q.get('row_reviews',{}).get(str(i),{}).get('status')!='REJECTED'}
     if any(r['key'] in prior for r in rows):raise ValueError('A receipt in this report is already queued or posted for this branch. Review the earlier import.')
     if any(r['revenues']['treatment_receipt'] for r in rows) and treatment_policy=='review':
         warnings.append('Trtmt Pymt RECD requires earned-revenue versus advance classification before approval.')
@@ -107,11 +107,23 @@ def approve_sales(state,queue_id):
     candidate=copy.deepcopy(state)
     q=next(q for q in candidate['queue'] if q['id']==queue_id)
     if q['status']!='PENDING_REVIEW':raise ValueError('Only pending reports may be posted.')
-    prior={r['key'] for item in candidate['queue'] if item.get('kind')=='daily_sales' and item['status']=='PROCESSED' for r in item['rows']}
-    for row in q['rows']:
+    prior={r['key'] for item in candidate['queue'] if item.get('kind')=='daily_sales' and item['status']=='PROCESSED' for i,r in enumerate(item['rows']) if item.get('row_reviews',{}).get(str(i),{}).get('status')!='REJECTED'}
+    reviews=q.get('row_reviews')
+    if reviews and (len(reviews)!=len(q['rows']) or any(x['status'] not in ('APPROVED','REJECTED') for x in reviews.values())):raise ValueError('Review every sales row before approval.')
+    selected=[row for i,row in enumerate(q['rows']) if not reviews or reviews[str(i)]['status']=='APPROVED']
+    if not selected:raise ValueError('No approved sales rows.')
+    for row in selected:
         if row['key'] in prior:raise ValueError('A source receipt has already been posted.')
         lines=receipt_lines(candidate,row['branch'],row['revenues'],row['payments'],q['treatment_policy'],q['other_policy'])
         narration=f"Daily sales {row['date']} · Receipt {row['receipt'] or '—'} · Invoice {row['invoice'] or '—'} · {q['filename']} / {row['sheet']} row {row['source_row']}"
         core.post(candidate,row['date'],narration,lines,source={'kind':'daily_sales','document_id':q['id'],'record_id':row['key'],'row_count':1})
-    q['status']='PROCESSED';core.add_audit(candidate,'SALES_REPORT_APPROVED',{'id':q['id'],'receipts':len(q['rows'])})
+    q['status']='PROCESSED';core.add_audit(candidate,'SALES_REPORT_APPROVED',{'id':q['id'],'receipts':len(selected),'rejected':len(q['rows'])-len(selected)})
     state.clear();state.update(candidate)
+
+
+def review_sales_row(state,queue_id,index,approved,reason):
+    q=next((q for q in state['queue'] if q['id']==queue_id and q.get('kind')=='daily_sales'),None)
+    if not q or q['status']!='PENDING_REVIEW' or type(index)!=int or not 0<=index<len(q['rows']) or not str(reason).strip():raise ValueError('Review a pending sales row with a reason.')
+    if approved:receipt_lines(state,q['branch'],q['rows'][index]['revenues'],q['rows'][index]['payments'],q['treatment_policy'],q['other_policy'])
+    q.setdefault('row_reviews',{})[str(index)]={'status':'APPROVED' if approved else 'REJECTED','reason':str(reason).strip()}
+    core.add_audit(state,'SALES_ROW_REVIEWED',dict(batch=queue_id,row=index,review=q['row_reviews'][str(index)]))

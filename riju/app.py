@@ -25,6 +25,7 @@ from .fixed_assets_ui import FixedAssetsUI
 from .tax_depreciation_ui import TaxDepreciationUI
 from .cwip_ui import CwipUI
 from .service_revenue_ui import ServiceRevenueUI
+from .bulk_import_ui import BulkImportUI
 from . import activity
 from . import foundation
 
@@ -33,7 +34,7 @@ BG='#FBF9F5'; WHITE='#FFFEFC'; INK='#293B55'; GREEN='#355D49'
 SAGE='#E3EEDF'; SAFFRON='#F9E5D1'; MUTED='#596878'
 SAFFRON_HOVER='#F2D5B5'; SAGE_HOVER='#D1E2CB'; BLUE='#E7EDF7'; BORDER='#DCE2DC'
 
-class App(ServiceRevenueUI,CwipUI,TaxDepreciationUI,FixedAssetsUI,CashFlowUI,TdsUI,RcmUI,GstUI,TaxUI,HistoryUI,BankUI,OperationsUI,LedgerUI,FoundationUI,tk.Tk):
+class App(BulkImportUI,ServiceRevenueUI,CwipUI,TaxDepreciationUI,FixedAssetsUI,CashFlowUI,TdsUI,RcmUI,GstUI,TaxUI,HistoryUI,BankUI,OperationsUI,LedgerUI,FoundationUI,tk.Tk):
     def __init__(self,vault):
         super().__init__()
         self.vault=vault
@@ -98,7 +99,7 @@ class App(ServiceRevenueUI,CwipUI,TaxDepreciationUI,FixedAssetsUI,CashFlowUI,Tds
         self.nav_canvas.bind('<Configure>',lambda e:self.nav_canvas.itemconfigure(nav_window,width=e.width))
         self.pages={'Overview':self.overview,'Ledger A/c':self.ledger_accounts,'Work volume':self.work_volume,'Journal studio':self.studio,'Sales receipt':self.sales_receipt,'Service revenue':self.service_revenue,'FX receipts':self.fx_receipts,'Vouchers':self.vouchers,
                     'Chart of accounts':self.accounts,'Tax setup':self.taxes,'TDS accounting':self.tds_accounting,'GST accounting':self.gst_accounting,'GST reverse charge':self.reverse_charge,'Setup & periods':self.setup,'Saved drafts':self.saved_drafts,'Financial reports':self.reports,'Cash flow setup':self.cash_flow_setup,
-                    'Import queue':self.imports,'Bank reconciliation':self.banking,
+                    'Import queue':self.imports,'Bulk import review':self.bulk_imports,'Bank reconciliation':self.banking,
                     'Assets & depreciation':self.assets,'Tax depreciation':self.tax_depreciation,'CWIP & commissioning':self.cwip_projects,'Settings & backup':self.settings,'Change history':self.history}
         self.nav_buttons={}
         for name in self.pages:
@@ -395,7 +396,7 @@ class App(ServiceRevenueUI,CwipUI,TaxDepreciationUI,FixedAssetsUI,CashFlowUI,Tds
                 s['queue'].append({'id':digest[:12],'digest':digest,'filename':Path(path).name,'rows':rows,'status':'PENDING_REVIEW'})
                 core.add_audit(s,'IMPORT_STAGED',{'digest':digest,'rows':len(rows)})
             self.commit(action); self.show('Import queue')
-        self.button(bar,'Upload journal CSV',upload)
+        self.button(bar,'Upload journal CSV',lambda:self.show('Bulk import review'))
         salesbranch=self.field(bar,'Sales report operating unit',self.branch.get() if self.unit()!='ALL' else next(iter(self.branches.values())),list(self.branches.values()),width=21)
         def upload_sales():
             from .sales_import import stage_sales
@@ -416,7 +417,9 @@ class App(ServiceRevenueUI,CwipUI,TaxDepreciationUI,FixedAssetsUI,CashFlowUI,Tds
             if not t.selection(): raise ValueError('Select an import file.')
             return self.state['queue'][t.index(t.selection()[0])]
         def review():
-            q=selected(); dialog=tk.Toplevel(self); dialog.title('Review '+q['filename']); dialog.geometry('1050x600')
+            q=selected()
+            if q.get('kind')=='bulk':self.show('Bulk import review');return
+            dialog=tk.Toplevel(self); dialog.title('Review '+q['filename']); dialog.geometry('1050x600')
             if q.get('kind')=='daily_sales':
                 from .revenue import MODES, receipt_lines
                 totals={key:sum(r['revenues'].get(key,0) for r in q['rows']) for key,*_ in MODES}
@@ -435,6 +438,9 @@ class App(ServiceRevenueUI,CwipUI,TaxDepreciationUI,FixedAssetsUI,CashFlowUI,Tds
             if q['status']!='PENDING_REVIEW': raise ValueError('Only pending files can be posted.')
             if not messagebox.askyesno('Approve import',f'Have you reviewed all {len(q["rows"])} rows? Post them together?',parent=self): return
             def action(s):
+                if q.get('kind')=='bulk':
+                    from .bulk_import import approve
+                    approve(s,q['id']);return
                 if q.get('kind')=='daily_sales':
                     from .sales_import import approve_sales
                     approve_sales(s,q['id']);return
@@ -442,7 +448,7 @@ class App(ServiceRevenueUI,CwipUI,TaxDepreciationUI,FixedAssetsUI,CashFlowUI,Tds
                 for index,row in enumerate(item['rows']): core.post(s,row['date'],row['narration'],self.import_lines(row),source={'kind':'journal_csv','document_id':item['id'],'record_id':str(row.get('source_row',index)),'row_count':1})
                 item['status']='PROCESSED'
             self.commit(action); self.show('Import queue')
-        bar=self.bar(); self.button(bar,'Review rows',review); self.button(bar,'Approve & post entire file',approve,True)
+        bar=self.bar(); self.button(bar,'Review sales rows individually',lambda:self.review_sales_rows(selected()['id'])); self.button(bar,'Review rows',review); self.button(bar,'Approve & post entire file',approve,True)
     def import_lines(self,row):
         return [{'account':row['debit_account'],'branch':row['branch'],'debit':row['amount'],'credit':0},
                 {'account':row['credit_account'],'branch':row['branch'],'debit':0,'credit':row['amount']}]
