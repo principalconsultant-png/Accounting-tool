@@ -811,3 +811,32 @@ class CwipDesktopTests(unittest.TestCase):
                 with patch('riju.app.messagebox.showerror') as err:self.press(preview,'Approve CWIP action');self.assertTrue(err.called)
                 self.assertFalse(cwip.data(app.state)['projects']);self.assertFalse(app.state['vouchers'])
             finally:app.destroy()
+
+@unittest.skipUnless(os.environ.get('DISPLAY') or os.environ.get('RIJU_GUI_TEST'),'A graphical display is required')
+class ServiceRevenueDesktopTests(unittest.TestCase):
+    walk=TaxDepreciationDesktopTests.walk
+    form=TaxDepreciationDesktopTests.form
+    fill=TaxDepreciationDesktopTests.fill
+    press=TaxDepreciationDesktopTests.press
+    reviewed=TaxDepreciationDesktopTests.reviewed
+    def test_advance_earning_export_reload_and_stale_preview(self):
+        from riju.app import App
+        from riju import tax,service_revenue as sr,foundation
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);vault=Vault(root/'service.json',demo=True);app=App(vault)
+            try:
+                app.commit(lambda s:tax.save_rule(s,dict(family='GST',key='GUI-SERVICE',effective='2026-04-01',label='Synthetic',rate='0',treatment='Exempt',source='Test',applicability='Test',reviewed=True)))
+                app.service_report_end='2026-04-30';app.show('Service revenue');app.service_action('Advance');f=self.form(app)
+                for k,v in [('Action date','2026-04-01'),('Unique action reference','GUI-ADV'),('Service / allocated gross INR','1000'),('Actual payments JSON','{"1010":"1000"}'),('Service / tax / source review basis','Reviewed synthetic advance')]:self.fill(f,k,v)
+                self.reviewed(f);self.press(f,'Validate service preview');app.update();self.press(self.form(app),'Approve service action');app.update()
+                app.service_table.selection_set(app.service_table.get_children()[0]);app.service_action('Earn advance');f=self.form(app)
+                for k,v in [('Action date','2026-04-02'),('Unique action reference','GUI-EARN'),('Service / allocated gross INR','600'),('Service / tax / source review basis','Reviewed synthetic earned service')]:self.fill(f,k,v)
+                self.reviewed(f);self.press(f,'Validate service preview');app.update();self.press(self.form(app),'Approve service action');app.update();self.assertEqual(__import__('riju.core',fromlist=['balances']).balances(app.state,'2026-04-30')['2300'],-40000)
+                for kind in ('xlsx','pdf'):
+                    with patch('riju.service_revenue_ui.filedialog.asksaveasfilename',return_value=str(root/('service.'+kind))):app.export_service_revenue(kind)
+                    self.assertTrue((root/('service.'+kind)).exists())
+                app._service_preview('Stale',lambda s:sr.post(s,'Bill',dict(date='2026-04-03',reference='STALE',branch='JP',account='4010',rule_key='GUI-SERVICE',amount='1',basis='Review',reviewed=True)));f=self.form(app);app.commit(lambda s:foundation.save_entity(s,'Changed',{}))
+                with patch('riju.app.messagebox.showerror') as error:self.press(f,'Approve service action');self.assertTrue(error.called)
+                self.assertEqual(len(app.state['service_revenue']),2)
+            finally:app.destroy()
+            self.assertEqual(len(vault.load()['service_revenue']),2)

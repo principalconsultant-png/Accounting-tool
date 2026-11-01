@@ -334,6 +334,7 @@ def _check_family(state,original_id,extra=None,through=None,extra_original_delta
 def plan_note(state,values):
     original=next((d for d in state['gst_documents'] if d['id']==values.get('original_document_id')),None)
     if original is None or original.get('original_document_id'):raise ValueError('Select an original GST invoice; notes must link directly to it.')
+    if original.get('service_revenue_id'):raise ValueError('Use Service revenue to cancel/refund this source so service and collection capacity remain linked.')
     on=tax.day(values.get('date',''));note_type=values.get('document_type')
     if on<original['date'] or note_type not in ('Credit note','Debit note'):raise ValueError('Choose a credit/debit note dated on or after the original invoice.')
     roots=_roots(state);original_net=sum(sign for v in state['vouchers'] if v['date']<=on for root,sign in [roots[v['id']]] if root==original['voucher_id'])

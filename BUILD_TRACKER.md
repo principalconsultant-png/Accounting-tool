@@ -294,3 +294,38 @@ Read-only Excel/PDF/JSON packs share the screen's as-of date/unit scope and incl
 Local verification: 389 tests ran, 388 passed with the single Windows-only DPAPI check skipped on Linux. Includes 34 CWIP backend cases and two desktop workflows covering source/capacity/reversal/retention/TDS controls, historical compound cost/retention/TDS linking, B09 existing-source linking, partial commissioning, depreciation start, source tracing, ledger proofs, Excel/PDF exports, stale preview rejection, reload and format-14 original-backup migration. Compilation/whitespace checks passed. Packaged readiness logic passed with a disposable identity-encryption test stub, including its new CWIP assertions; this is not native Windows/encryption verification. Native Windows regression/build/packaged checks are pending the development push and will be recorded here before completion. No other module has started.
 
 B18 native Windows completion, 1 November 2026 (IST): implementation `f0bb2202b55d15632747fe0f8fc3b432e3f46ebd` passed native regression tests, PyInstaller executable build and packaged Windows executable self-test in [run 41286935587](https://github.com/principalconsultant-png/Accounting-tool/actions/runs/41286935587). The self-test covers project plan/source review, retention/TDS, commissioning, actual put-to-use depreciation, reconciliation, Excel/PDF export and encrypted persistence. `RijuBooks-Windows` was uploaded successfully, containing the executable/checksum/self-test result. Main-only release publication was explicitly skipped. B18 functional/native build gates are complete; client accounting/source/legal/technical and target-PC acceptance remain pending. A synthetic PDF layout was also visually inspected locally and its category/source/event and reconciliation totals agreed with the tested Excel snapshot. No subsequent module was started, no main merge was made and no release was published.
+
+## First three-module batch — B10, B11 and B24
+
+1 November 2026 (IST): user authorized batches of three remaining development
+items, targeting build completion today before user testing. First batch is B10
+service revenue, B11 bulk-import review and B24 portable encrypted recovery.
+Implementation, native Windows verification and client acceptance remain distinct.
+All source saves stay on the existing development branch; no main merge or release.
+
+## B10 functional delivery — 0.21.0-dev
+
+Source-linked direct earned receipts, package/service advances, unpaid bills,
+advance recognition, bill collections, cancellations and actual refunds now use
+shared advance/Patient A/C controls without individual patient ledgers or ageing.
+Existing posted originals can be linked against exact reviewed journals without
+reposting. Partial source allocations, split payments, future/backdated capacities,
+original-rate component rounding and dated reversal dependencies prevent duplicate
+revenue, payment or tax. Taxable advances recognize their reviewed GST at receipt;
+earning transfers the base only. Untaxed advances remain outside earned turnover
+until recognition. Original service components retain effective-dated rule and
+source basis; mixed services use separate source components/ledgers. Changed tax
+treatment requires explicit source correction/review. GST source notes are routed
+through the linked service workflow, preserving B08 ledger proofs. B08 filing,
+export/SEZ and broader amendments are not claimed completed by this module.
+
+The desktop includes frozen approvals, stale-book rejection, reference-backed
+bill credit/collection/refund controls, unearned gross and outstanding bill amounts,
+shared-control proof and read-only Excel/PDF. Existing 15 collection modes remain
+unchanged. Format 16 adds service sources with original-file external backup.
+See TESTING_SERVICE_REVENUE.md. Local full regression: 402 tests ran, 401 passed,
+one Windows-only DPAPI skip; includes 12 backend service tests and a desktop
+advance/earn/export/reload/stale-preview workflow. Packaged readiness logic passed
+with disposable identity-encryption stubs; native Windows verification follows the
+push. Client tax-point, service completion/cancellation and actual source acceptance
+remain pending. B11/B24 have not started before this functional checkpoint.

@@ -151,6 +151,8 @@ def post(state, day, narration, lines, opening=False, reverses=None, metadata=No
         validate_asset_reversal(state,reverses,day)
         from .tax_depreciation import validate_reversal as validate_tax_asset_reversal
         validate_tax_asset_reversal(state,reverses,day)
+        from .service_revenue import validate_reversal as validate_revenue_reversal
+        validate_revenue_reversal(state,reverses,day)
         from .cwip import validate_reversal as validate_cwip_reversal
         validate_cwip_reversal(state,reverses,day)
         original=next((v for v in state['vouchers'] if v['id']==reverses),None)

@@ -231,6 +231,18 @@ def run(output):
             cwvault=Vault(root/'cwip.riju');cwvault.save(cwbook)
             if cwvault.load()!=cwbook:raise ValueError('Packaged CWIP persistence failed')
             result['cwip_commissioning_passed']=True
+            from . import service_revenue
+            servicebook=core.empty_state()
+            tax.save_rule(servicebook,dict(family='GST',key='SELF-SERVICE',effective='2026-04-01',label='Synthetic exempt service',rate='0',treatment='Exempt',source='Packaged test',applicability='Synthetic only',reviewed=True))
+            advance=service_revenue.post(servicebook,'Advance',dict(date='2026-04-01',reference='SELF-ADV',branch='JP',account='4010',rule_key='SELF-SERVICE',amount='1000',payments={'1010':'1000'},basis='Synthetic source review only',reviewed=True))
+            service_revenue.post(servicebook,'Earn advance',dict(date='2026-04-02',reference='SELF-EARN',branch='JP',source=advance['id'],amount='600',basis='Synthetic service completed',reviewed=True))
+            service_revenue.post(servicebook,'Refund advance',dict(date='2026-04-03',reference='SELF-REFUND',branch='JP',source=advance['id'],amount='400',payments={'1010':'400'},basis='Synthetic actual cancellation refund',reviewed=True))
+            if core.balances(servicebook,'2026-04-30')['2300'] or core.balances(servicebook,'2026-04-30')['4010']!=-60000:raise ValueError('Packaged revenue recognition/refund failed')
+            for kind in ('xlsx','pdf'):service_revenue.export(servicebook,'2026-04-01','2026-04-30','JP',root/('service-revenue.'+kind),kind)
+            servicevault=Vault(root/'service-revenue.riju');servicevault.save(servicebook)
+            if servicevault.load()!=servicebook:raise ValueError('Packaged service source persistence failed')
+            result['service_revenue_passed']=True
+
 
             result.update(passed=True,revenue_modes=len(MODES),posted_vouchers=len(loaded['vouchers']),windows_vault_backup_roundtrip=True)
     except Exception as error:

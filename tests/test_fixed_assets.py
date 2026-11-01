@@ -123,7 +123,7 @@ class FixedAssetTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             root=Path(d);ext=root/'external';ext.mkdir();old=core.empty_state();old['version']=12;old['schema_revision']=12
             for key in ('book_assets','fixed_asset_events','asset_ledgers'):old.pop(key)
-            history.checkpoint(old);path=root/'old.json';path.write_text(json.dumps(old),encoding='utf-8');raw=path.read_bytes();v=Vault(path,demo=True);self.s=v.load();self.s['settings']['backup_dir']=str(ext);self.create();fa.post_depreciation(self.s,'2026-04-30');v.save(self.s);self.assertEqual(v.last_upgrade_backup.read_bytes(),raw);self.assertEqual(v.load(),self.s);self.assertEqual(self.s['version'],15)
+            history.checkpoint(old);path=root/'old.json';path.write_text(json.dumps(old),encoding='utf-8');raw=path.read_bytes();v=Vault(path,demo=True);self.s=v.load();self.s['settings']['backup_dir']=str(ext);self.create();fa.post_depreciation(self.s,'2026-04-30');v.save(self.s);self.assertEqual(v.last_upgrade_backup.read_bytes(),raw);self.assertEqual(v.load(),self.s);self.assertEqual(self.s['version'],16)
     def test_extra_shift_usage_is_reviewed_dated_and_capped(self):
         a=self.create();fa.save_shift_usage(self.s,a['id'],'2026-04-01','2026-04-15','1.5','Reviewed actual double-shift use; confirmed not NESD',True)
         self.assertEqual(fa.target(fa.asset(self.s,a['id']),'2026-04-30'),12500);fa.post_depreciation(self.s,'2026-04-30')
