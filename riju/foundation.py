@@ -4,7 +4,7 @@ import re
 import uuid
 from datetime import date
 
-SCHEMA = 16
+SCHEMA = 17
 KINDS = {'Asset':(1000,1999),'Liability':(2000,2999),'Equity':(3000,3999),
          'Revenue':(4000,4499),'Expense':(4500,4999)}
 GROUPS = {
@@ -42,7 +42,7 @@ def migrate(state):
     """Idempotent in-memory migration; the vault backs up before persisting it."""
     from .core import add_audit,BRANCHES
     if state.get('schema_revision',1)>SCHEMA:raise ValueError('These books need a newer version of Riju Books.')
-    if state.get('schema_revision',1)==SCHEMA and state.get('version')==16:return state
+    if state.get('schema_revision',1)==SCHEMA and state.get('version')==17:return state
     settings=state['settings']
     settings.setdefault('departments',['Pharmacy','Therapy rooms','Inpatient diet kitchen','Outpatient consultations','Central administration'])
     state.setdefault('branches',{code:{'name':name,'city':'','state':'','state_code':'','gstin':'',
@@ -83,9 +83,10 @@ def migrate(state):
     state.setdefault('fixed_asset_events',[])
     state.setdefault('asset_ledgers',{})
     state.setdefault('tax_depreciation',{k:[] for k in ('blocks','rules','additions','uses','disposals','claims','reviews','status_reviews')})
+    settings.setdefault('backup_retention',30)
     state.setdefault('cwip',{'projects':[], 'costs':[], 'events':[]})
     state.setdefault('service_revenue',[])
-    state['version']=16
+    state['version']=17
     state['accounts'].sort(key=lambda a:a['code'])
     add_audit(state,'SCHEMA_UPGRADED',{'to':SCHEMA})
     return state

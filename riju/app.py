@@ -26,6 +26,7 @@ from .tax_depreciation_ui import TaxDepreciationUI
 from .cwip_ui import CwipUI
 from .service_revenue_ui import ServiceRevenueUI
 from .bulk_import_ui import BulkImportUI
+from .recovery_ui import RecoveryUI
 from . import activity
 from . import foundation
 
@@ -34,7 +35,7 @@ BG='#FBF9F5'; WHITE='#FFFEFC'; INK='#293B55'; GREEN='#355D49'
 SAGE='#E3EEDF'; SAFFRON='#F9E5D1'; MUTED='#596878'
 SAFFRON_HOVER='#F2D5B5'; SAGE_HOVER='#D1E2CB'; BLUE='#E7EDF7'; BORDER='#DCE2DC'
 
-class App(BulkImportUI,ServiceRevenueUI,CwipUI,TaxDepreciationUI,FixedAssetsUI,CashFlowUI,TdsUI,RcmUI,GstUI,TaxUI,HistoryUI,BankUI,OperationsUI,LedgerUI,FoundationUI,tk.Tk):
+class App(RecoveryUI,BulkImportUI,ServiceRevenueUI,CwipUI,TaxDepreciationUI,FixedAssetsUI,CashFlowUI,TdsUI,RcmUI,GstUI,TaxUI,HistoryUI,BankUI,OperationsUI,LedgerUI,FoundationUI,tk.Tk):
     def __init__(self,vault):
         super().__init__()
         self.vault=vault
@@ -142,10 +143,10 @@ class App(BulkImportUI,ServiceRevenueUI,CwipUI,TaxDepreciationUI,FixedAssetsUI,C
         folder=self.state['settings'].get('backup_dir')
         if folder:
             try:
-                existing=list(Path(folder).glob('Riju-'+date.today().strftime('%Y%m%d')+'-*')) if Path(folder).is_dir() else []
+                existing=self.vault.verified_backup_today(folder,date.today())
                 if not existing:
                     if not self.vault.path.exists(): self.vault.save(self.state)
-                    self.vault.backup(folder)
+                    self.vault.backup(folder,keep=self.state['settings'].get('backup_retention',30))
                 self.status.set('Daily backup available · '+folder)
             except Exception as e: self.status.set('BACKUP PENDING · '+str(e))
         self._backup_after=self.after(60*60*1000,self.daily_backup)
@@ -453,7 +454,7 @@ class App(BulkImportUI,ServiceRevenueUI,CwipUI,TaxDepreciationUI,FixedAssetsUI,C
         return [{'account':row['debit_account'],'branch':row['branch'],'debit':row['amount'],'credit':0},
                 {'account':row['credit_account'],'branch':row['branch'],'debit':0,'credit':row['amount']}]
     def settings(self):
-        self.note('No app password. Windows protects the live vault. Backups currently require the same Windows account; portable recovery is pending.')
+        self.recovery_controls()
         bar=self.bar(); entity=self.field(bar,'Legal entity name',self.state['settings']['entity'],width=42); locked=self.field(bar,'Lock through (YYYY-MM-DD)',self.state['locked_through'],width=22)
         ttk.Label(self.content,text='Bengaluru banking holidays — comma-separated YYYY-MM-DD dates. Sundays and 2nd/4th Saturdays are built in.',style='Sub.TLabel',wraplength=900).pack(anchor='w',pady=10)
         holiday=tk.Text(self.content,height=3,bg=WHITE,font=('Segoe UI',10)); holiday.pack(fill='x'); holiday.insert('1.0',', '.join(self.state['holidays']))
@@ -477,19 +478,24 @@ class App(BulkImportUI,ServiceRevenueUI,CwipUI,TaxDepreciationUI,FixedAssetsUI,C
                 if not r['section'] or not 0<=float(r['rate'])<=100: raise ValueError('Tax rate must be between 0 and 100.')
                 date.fromisoformat(r['effective'])
             def action(s):
+                count=int(retention.get())
+                if not 1<=count<=3650:raise ValueError('Keep 1–3650 routine backups.')
+                s['settings']['backup_retention']=count
                 s['settings']['entity']=entity.get().strip(); s['locked_through']=lock; s['holidays']=sorted(set(holidays)); s['settings']['tax_rules']=taxrules
                 core.add_audit(s,'SETTINGS',{'entity':entity.get().strip(),'locked_through':lock,'holidays':holidays,'tax_rules':taxrules})
             self.commit(action); messagebox.showinfo('Saved','Settings saved locally.',parent=self)
+        retention=self.field(self.bar(),'Routine backups to retain (1–3650)',str(self.state['settings'].get('backup_retention',30)),width=12)
         bar=self.bar(); self.button(bar,'Save settings',save,True)
         def choose():
             folder=filedialog.askdirectory(title='Choose a folder on your external drive',parent=self)
             if folder:
+                self.vault.validate_backup_directory(folder)
                 def action(s):s['settings']['backup_dir']=folder; core.add_audit(s,'BACKUP_FOLDER',{'path':folder})
                 self.commit(action); self.show('Settings & backup')
         def backup():
             folder=self.state['settings']['backup_dir']
             if not folder:raise ValueError('Select your external backup folder first.')
-            messagebox.showinfo('Backup verified',str(self.vault.backup(folder)),parent=self)
+            messagebox.showinfo('Backup verified',str(self.vault.backup(folder,keep=self.state['settings'].get('backup_retention',30))),parent=self)
         self.button(bar,'Choose backup folder',choose); self.button(bar,'Back up now',backup)
         ttk.Label(self.content,text='External backup: '+(self.state['settings']['backup_dir'] or 'Not configured — choose your external drive'),wraplength=900).pack(anchor='w',pady=8)
         def restore():

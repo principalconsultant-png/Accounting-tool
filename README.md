@@ -1,10 +1,10 @@
 # ऋजु · Riju Books
 
-**Development 0.20.0-dev:** B18 Vaikom/project CWIP now has five category ledgers, optional revisioned budgets/milestones, reviewed capital versus hospital expenses, source-linked existing costs, retention holds/releases/payments and B09 TDS integration. Partial source allocations commission into B16 fixed assets without duplicating cost; depreciation starts on reviewed actual put-to-use. Ledger proofs and read-only Excel/PDF/JSON packs expose unallocated/manual differences and dated source/reversal history. See [CWIP and commissioning testing](TESTING_CWIP.md). Prior B17 tax depreciation and other development workflows remain available. Source is saved on `codex/accounting-development-20261030`; main/release remains separate. Vault format 15 preserves formats 1–14 through original-file external backups.
+**Development 0.23.0-dev — first three-module batch:** B10 source-linked service/package advances, earning, bills, collections, cancellation/refunds and Excel/PDF; B11 mapped CSV/XLSX journal/expense/petty-cash/opening imports with row review, duplicate guards and atomic approvals; B24 authenticated AES-GCM native books, automatic Windows unlocking, separately held portable recovery material and verified external-only backups/retention. See [service revenue](TESTING_SERVICE_REVENUE.md), [bulk import](TESTING_BULK_IMPORT.md), and [portable recovery](TESTING_PORTABLE_RECOVERY.md). B18 CWIP and previous accounting modules remain available. Source stays on `codex/accounting-development-20261030`; main/release is separate. Schema 17 preserves prior books through original-file external backups.
 
 **Version 0.5.0:** **Ledger A/c** directly below Overview; individual and full ledger books with opening/running/closing balances; branch/date filters and voucher drilldown; offline printing plus PDF/Excel/CSV handover packs. Trial balance includes opening, movement and closing columns. See [ledger testing instructions](TESTING_LEDGERS.md) and [the build tracker](BUILD_TRACKER.md). B01–B05 foundations remain available.
 
-Existing books are migrated in memory first. Before the first upgraded save, select your external-drive backup folder: the original-format vault is backed up and byte-verified. The published 0.5.0 build uses format version 2; the current development uses format 15. Keep the original backup because older executables cannot open newer-format books. Cross-computer DPAPI recovery remains pending.
+Existing books are migrated in memory first. Before the first upgraded save, select your external-drive backup folder: the original-format vault is backed up and byte-verified. The published 0.5.0 build uses format version 2; the current development uses schema 17 and the authenticated AES-GCM native envelope. Keep the original backup because older executables cannot open newer-format books. Legacy DPAPI originals still need the old Windows keys; new AES-GCM backups can be recovered with separately held recovery material. Perform the actual second-PC/drive drill before live use.
 
 An offline-first, single-user Windows bookkeeping application for one entity with three operating units: JP Nagar, Kammanahalli and Vaikom medical resort. Ivory, sage and pastel saffron interface. No cloud database, telemetry, external fonts, online AI calls or GPU dependency.
 
@@ -59,13 +59,13 @@ date,narration,amount,reference
 2026-04-02,UPI SETTLEMENT -AII125,11880,UTR123
 ```
 
-Bank imports currently support **positive incoming deposits only**, one bank ledger, and UPI/card clearing settlement suggestions. Default tolerance is one business day after NBD. Sundays and second/fourth Saturdays are excluded; enter the applicable Bengaluru bank holidays by year in Settings. A holiday calendar is not automatically downloaded. Suggested grouping searches up to 31 consecutive eligible vouchers and does not claim exhaustive subset matching.
+Development bank ingestion supports incoming/outgoing INR CSV/XLSX/OFX, multiple bank ledgers/units, statement proofs and reusable versioned mappings. Reviewed settlement/general matching and BRS are available. Sundays and second/fourth Saturdays are built in; authoritative year-specific holiday datasets still need validation. See the bank reconciliation and bank-template test guides.
 
 ## Backups and security
 
 Choose a folder on an external drive, then Back up now. The app also checks once after startup and hourly while running, creating a backup if no backup exists for that day. Disconnected drives produce a pending-backup status. Backups are byte-verified copies; restoration first saves a safety backup. Reports exported to CSV are unencrypted.
 
-**Current DPAPI backups require the original Windows account and its cryptographic keys. They are not a portable disaster-recovery solution.** A separately held recovery key and portable encrypted backup format are required before live rollout. There is no application password. Anyone with access to the unlocked Windows account can access the application. Local SHA-256 history is useful traceability, not statutory audit-trail certification or protection against an administrator rewriting all records.
+**New native books use AES-256-GCM with Windows-protected automatic unlocking.** Export the matching recovery material to a different separately held external device and verify a backup; it enables replacement-PC recovery without the old Windows keys. Legacy DPAPI backups remain dependent on the original Windows account. Normal backups stay on verified external media; routine retention is per book and preserves upgrade originals and safety copies. There is no application password. Anyone with access to the unlocked Windows account can access the application. Local SHA-256 history is useful traceability, not statutory audit-trail certification or protection against an administrator rewriting all records.
 
 ## Validation
 
@@ -79,13 +79,11 @@ Linux development can use `python run_riju.py --demo --data /tmp/riju-demo.json`
 
 ## Remaining before production
 
-- Confirm the GitHub Windows build and packaged self-test, then validate DPAPI and backup/restore on the target laptop; portable recovery and single-instance locking.
-- Accountant-approved examples covering hospital/resort revenue recognition, taxes, opening balances, account mapping, and year-end behavior. Local language-model interpretation is not implemented; the offline assistant is rule-based.
-- Full Schedule III statements/disclosures, direct/indirect cash flow, final statutory comparative statements/disclosures and the complete executive MIS/PDF pack. Movement trial balance, working comparatives and ledger printing/PDF exports are implemented.
-- GST/TDS calculations with applicability, thresholds, editable effective-dated rates, registration configuration and tax summaries. Present tax settings are reference values only, not an automated tax engine.
-- Full Companies Act schedules and income-tax block depreciation with asset additions/disposals and 180-day rules. Current asset screen only registers assets and illustrates SLM/WDV amounts; it does not post depreciation.
-- General bank reconciliation including withdrawals, cash deposits, multiple bank accounts, adjustments, OFX/Excel and authoritative holiday calendars.
-- Gmail OAuth and attachment downloading into the queue; no Gmail access or sending occurs. OAuth consent and credentials will be needed for that later integration.
-- Departmental budgets, package advance recognition automation, full asset/CWIP schedules, inventory cost controls, broader import duplicate detection. Customer-ready ledger delivery is now available from Ledger A/c. Entity/branch metadata and capacity fields are now editable.
-
-No cloud environment publication, remote push or client data import is performed by these instructions. Use the existing checkout in the isolated cloud task; do not create a worktree unless requested.
+- B08 GST extensions: partial/mixed RCM, notes/amendments, portal adapters, export/SEZ/mixed rates and broader utilisation/filing; confirm agreed legal scope.
+- B13 authoritative year-specific holiday datasets and client calendar validation.
+- B20 final statutory financial presentation, notes/disclosures, provisions and inter-branch eliminations; working statements/Excel/PDF already exist.
+- B22 packaged local-model interpretation and accuracy/hardware/licensing checks; current language drafts remain rule-based.
+- B23 broader accounting alerts and ledger-grounded offline questions/commentary.
+- B26 integrated monthly MIS and B27 complete executive pack/remaining export coverage.
+- B28 explicitly authorized read-only mailbox attachment review ingestion.
+- B25/B29 target-PC/client accounting, actual-source, recovery and performance acceptance, final traceability and separately authorized delivery/release. The first three-module batch does not claim that all remaining work is complete.

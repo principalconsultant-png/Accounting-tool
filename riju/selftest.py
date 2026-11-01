@@ -22,13 +22,14 @@ def run(output):
         s.cell(5,23,1500);s.cell(5,24,500);s.cell(5,25,500);s.cell(5,26,500);s.cell(5,27,0);s.cell(5,28,1500)
         raw=io.BytesIO();w.save(raw);w.close()
         with tempfile.TemporaryDirectory() as directory:
-            v=Vault(Path(directory)/'check.riju');state=v.load()
+            def test_vault(path):return Vault(path,test_backup_root=Path(directory))
+            v=test_vault(Path(directory)/'check.riju');state=v.load()
             q=stage_sales(state,raw.getvalue(),'synthetic.xlsx','JP');approve_sales(state,q['id'])
             v.save(state);loaded=v.load();core.verify_audit(loaded)
             if state!=loaded or len(loaded['vouchers'])!=1:raise ValueError('Vault round-trip mismatch')
             if sum(core.balances(loaded,'2026-06-30').values())!=0:raise ValueError('Unbalanced report')
             folder=Path(directory)/'external';folder.mkdir();dest=v.backup(folder)
-            if Vault(dest).load()!=loaded:raise ValueError('Backup restore mismatch')
+            if test_vault(dest).load()!=loaded:raise ValueError('Backup restore mismatch')
             foundation.save_entity(loaded,'Synthetic hospital',{})
             foundation.save_branch(loaded,'NEW',{'name':'Synthetic branch','beds':0})
             foundation.save_account(loaded,'1011','Synthetic bank','Asset','Cash and bank')
@@ -40,7 +41,7 @@ def run(output):
             from .storage import MAGIC,protect
             legacy=core.empty_state();legacy['version']=1
             for key in ('schema_revision','branches','account_details','financial_years','drafts','patient_control'):legacy.pop(key,None)
-            old=Vault(Path(directory)/'legacy.riju')
+            old=test_vault(Path(directory)/'legacy.riju')
             original=MAGIC+protect(json.dumps(legacy).encode());old.path.write_bytes(original)
             upgraded=old.load();upgraded['settings']['backup_dir']=str(folder);old.save(upgraded)
             if old.last_upgrade_backup.read_bytes()!=original:raise ValueError('Upgrade backup differs from original vault')
@@ -177,7 +178,7 @@ def run(output):
             cfresult=cash_flow.analyse(cfbook,'2026-04-01','2026-04-30')
             if not cfresult['ready'] or cfresult['totals']['Investing']!=-10000 or cfresult['totals']['Financing']!=30000:raise ValueError('Packaged cash-flow classification/proof failed')
             for kind in ('xlsx','pdf'):cash_flow.export(cfbook,'2026-04-01','2026-04-30','ALL',root/('cash-flow.'+kind),kind)
-            cfvault=Vault(root/'cash-flow.riju');cfvault.save(cfbook)
+            cfvault=test_vault(root/'cash-flow.riju');cfvault.save(cfbook)
             if cfvault.load()!=cfbook:raise ValueError('Packaged cash-flow policy persistence failed')
             result['cash_flow_passed']=True
             from . import bank_templates
@@ -186,7 +187,7 @@ def run(output):
             from . import reconciliation
             imported=reconciliation.import_statement(templatebook,bankraw,'bank.csv','1010','ALL','2026-04-01','2026-04-30','0','100',template_id=template['id'])
             if imported['mapping_template']['id']!=template['id'] or len(templatebook['bank_lines'])!=1 or templatebook['vouchers']:raise ValueError('Packaged saved bank layout/provenance failed')
-            templatevault=Vault(root/'bank-template.riju');templatevault.save(templatebook)
+            templatevault=test_vault(root/'bank-template.riju');templatevault.save(templatebook)
             if templatevault.load()!=templatebook:raise ValueError('Packaged saved bank layout persistence failed')
             result['bank_mapping_templates_passed']=True
             from . import fixed_assets
@@ -197,7 +198,7 @@ def run(output):
             for kind in ('xlsx','pdf'):fixed_assets.export(assetbook,'2026-04-01','2026-04-30','ALL',root/('fixed-assets.'+kind),kind)
             fixed_assets.dispose(assetbook,registered['id'],'2026-05-31','1050','1010','','','Synthetic disposal and separate tax review',True)
             if not fixed_assets.report(assetbook,'2026-04-01','2026-05-31')['ready']:raise ValueError('Packaged fixed-asset ledger/depreciation proof failed')
-            avault=Vault(root/'fixed-assets.riju');avault.save(assetbook)
+            avault=test_vault(root/'fixed-assets.riju');avault.save(assetbook)
             if avault.load()!=assetbook:raise ValueError('Packaged fixed-asset persistence failed')
             result['book_fixed_assets_passed']=True
             from . import tax_depreciation
@@ -210,7 +211,7 @@ def run(output):
             tax_depreciation.finalize(taxbook,2024,'Synthetic reviewed ended tax year',True)
             if tax_depreciation.calculate(taxbook,2025)['blocks'][0]['opening']!=131250:raise ValueError('Packaged tax carry-forward failed')
             for kind in ('xlsx','pdf'):tax_depreciation.export(taxbook,2024,'ALL',root/('income-tax-depreciation.'+kind),kind)
-            tvault=Vault(root/'tax-depreciation.riju');tvault.save(taxbook)
+            tvault=test_vault(root/'tax-depreciation.riju');tvault.save(taxbook)
             if tvault.load()!=taxbook:raise ValueError('Packaged tax depreciation persistence failed')
             result['tax_depreciation_passed']=True
             from . import cwip
@@ -228,7 +229,7 @@ def run(output):
             fixed_assets.post_depreciation(cwbook,'2026-05-31',branch='VK')
             if not fixed_assets.report(cwbook,'2026-04-01','2026-05-31','VK')['ready']:raise ValueError('Packaged commissioned depreciation proof failed')
             for kind in ('xlsx','pdf'):cwip.export(cwbook,'2026-04-01','2026-05-31','VK',root/('cwip.'+kind),kind)
-            cwvault=Vault(root/'cwip.riju');cwvault.save(cwbook)
+            cwvault=test_vault(root/'cwip.riju');cwvault.save(cwbook)
             if cwvault.load()!=cwbook:raise ValueError('Packaged CWIP persistence failed')
             result['cwip_commissioning_passed']=True
             from . import service_revenue
@@ -239,7 +240,7 @@ def run(output):
             service_revenue.post(servicebook,'Refund advance',dict(date='2026-04-03',reference='SELF-REFUND',branch='JP',source=advance['id'],amount='400',payments={'1010':'400'},basis='Synthetic actual cancellation refund',reviewed=True))
             if core.balances(servicebook,'2026-04-30')['2300'] or core.balances(servicebook,'2026-04-30')['4010']!=-60000:raise ValueError('Packaged revenue recognition/refund failed')
             for kind in ('xlsx','pdf'):service_revenue.export(servicebook,'2026-04-01','2026-04-30','JP',root/('service-revenue.'+kind),kind)
-            servicevault=Vault(root/'service-revenue.riju');servicevault.save(servicebook)
+            servicevault=test_vault(root/'service-revenue.riju');servicevault.save(servicebook)
             if servicevault.load()!=servicebook:raise ValueError('Packaged service source persistence failed')
             result['service_revenue_passed']=True
             from . import bulk_import
@@ -250,9 +251,22 @@ def run(output):
             bulk_import.approve(bulkbook,batch['id'])
             if core.balances(bulkbook,'2026-04-30')['4590']!=10000 or activity.report(bulkbook)['metrics']['import_rows_processed']!=1:raise ValueError('Packaged mapped import/source counts failed')
             for kind in ('xlsx','pdf'):bulk_import.export(bulkbook,batch['id'],root/('bulk-review.'+kind),kind)
-            bulkvault=Vault(root/'bulk.riju');bulkvault.save(bulkbook)
+            bulkvault=test_vault(root/'bulk.riju');bulkvault.save(bulkbook)
             if bulkvault.load()!=bulkbook:raise ValueError('Packaged mapped import persistence failed')
             result['bulk_import_review_passed']=True
+            from . import portable_storage
+            keyfolder=root/'separately-held-device';keyfolder.mkdir()
+            keypath=keyfolder/'recovery.json'
+            enrollment=v.export_recovery_key(keypath,folder)
+            portable_backup=v.backup(folder)
+            recovered,key_id,secret,checked=portable_storage.inspect(portable_backup.read_bytes(),keypath)
+            del secret
+            if not checked['passed'] or recovered!=loaded:raise ValueError('Packaged portable backup authentication/integrity failed')
+            replacement=test_vault(root/'replacement.riju')
+            replacement_state=replacement.recover_with_key(portable_backup,keypath,folder)
+            if replacement.load()!=replacement_state or replacement_state['vouchers']!=loaded['vouchers']:raise ValueError('Packaged replacement-vault rewrap/restore failed')
+            result['portable_encrypted_recovery_passed']=True
+
 
 
 
