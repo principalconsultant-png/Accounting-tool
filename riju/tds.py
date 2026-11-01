@@ -224,6 +224,9 @@ def _check(state,reversal=None):
                 if source_used[key]>capacity:raise ValueError('Source payable gross would be reused by backdated/future TDS records.')
             if active(state,r,on,net) and r.get('source_voucher') and net.get(r['source_voucher'],0)!=1:raise ValueError('Reverse/void the TDS treatment before reversing its source payable voucher.')
 
+    from . import cwip
+    cwip.check(state,reversal)
+
 
 def allocate(state,document_id,payment_id,row_index,amount,on):
     tax.day(on);n=minor(amount)

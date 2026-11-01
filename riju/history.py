@@ -131,7 +131,14 @@ def trace_voucher(state,voucher_id):
     tds_links=[copy.deepcopy(a) for a in state.get('tds_allocations',[]) if a['document_id'] in tds_ids or a['payment_id'] in tds_ids]
     tds_ids|={a[k] for a in tds_links for k in ('document_id','payment_id')}
     tds_context=[copy.deepcopy(r) for r in tds_records if r['id'] in tds_ids]
-    return dict(voucher=copy.deepcopy(v),gst_context=gst_context,rcm_context=rcm_context,tds_context=tds_context,tds_allocations=tds_links,original=next((copy.deepcopy(x) for x in state['vouchers'] if x['id']==v.get('reverses')),None),reversals=[copy.deepcopy(x) for x in state['vouchers'] if x.get('reverses')==voucher_id],source=copy.deepcopy(source),imports=imports,drafts=draft_links,matches=matches,events=events,coverage='Explicit source/draft links are shown where recorded. Older unlinked entries are not attributed by guessing.')
+    from . import cwip
+    projects=cwip.data(state)
+    cwip_costs={c['id'] for c in projects['costs'] if c['voucher'] in related}
+    linked_events=[e for e in projects['events'] if e['voucher'] in related]
+    cwip_costs|={i['cost'] for e in linked_events for i in e['items']}|{e['cost'] for e in linked_events if e.get('cost')}
+    cwip_costs|={r['cwip_cost'] for r in tds_context if r.get('cwip_cost')}
+    cwip_context=dict(costs=[copy.deepcopy(c) for c in projects['costs'] if c['id'] in cwip_costs],events=[copy.deepcopy(e) for e in projects['events'] if e in linked_events or e.get('cost') in cwip_costs or any(i['cost'] in cwip_costs for i in e['items'])])
+    return dict(cwip_context=cwip_context,voucher=copy.deepcopy(v),gst_context=gst_context,rcm_context=rcm_context,tds_context=tds_context,tds_allocations=tds_links,original=next((copy.deepcopy(x) for x in state['vouchers'] if x['id']==v.get('reverses')),None),reversals=[copy.deepcopy(x) for x in state['vouchers'] if x.get('reverses')==voucher_id],source=copy.deepcopy(source),imports=imports,drafts=draft_links,matches=matches,events=events,coverage='Explicit source/draft links are shown where recorded. Older unlinked entries are not attributed by guessing.')
 
 
 def integrity_report(state):
@@ -176,6 +183,10 @@ def integrity_report(state):
         for statement in state.get('bank_statements',[]):
             if statement['status']!='VOID' and any(i not in physical for i in statement['row_ids']):errors.append('Statement references a missing bank row: '+statement['id'])
     except (ValueError,KeyError,TypeError) as e:errors.append('Bank integrity: '+str(e))
+    try:
+        from . import cwip
+        cwip.check(state)
+    except (ValueError,KeyError,TypeError) as e:errors.append('CWIP integrity: '+str(e))
     checkpoints=[r for r in state['audit'] if r['action']=='STATE_CHECKPOINT']
     if checkpoints and state['audit'][-1]['action']=='STATE_CHECKPOINT':
         try:verify_saved_state(state)

@@ -70,7 +70,7 @@ def snapshot(state,mode,start,end,branch='ALL'):
     return pack
 
 
-def display_rows(pack):return [[ledgers.number(v,True) if i in pack['money_columns'] else str(v) for i,v in enumerate(row)] for row in pack['rows']]
+def display_rows(pack):return [['' if v is None else ledgers.number(v,True) if i in pack['money_columns'] else str(v) for i,v in enumerate(row)] for row in pack['rows']]
 
 
 def captions(pack):
@@ -94,7 +94,7 @@ def _worksheet(wb,pack,title):
     append(pack['columns']);header=ws.max_row
     for cell in ws[header]:cell.font=Font(bold=True,color='293B55');cell.fill=PatternFill('solid',fgColor='E3EEDF')
     for row in pack['rows']:
-        append([Decimal(v)/100 if i in pack['money_columns'] else v for i,v in enumerate(row)])
+        append([Decimal(v)/100 if i in pack['money_columns'] and v is not None else v for i,v in enumerate(row)])
         for col in pack['money_columns']:ws.cell(ws.max_row,col+1).number_format='#,##0.00;[Red](#,##0.00)'
         for cell in ws[ws.max_row]:cell.alignment=Alignment(wrap_text=True,vertical='top')
     for label,value in pack['controls'].items():append([label,Decimal(value)/100]);ws.cell(ws.max_row,2).number_format='#,##0.00'
@@ -175,7 +175,7 @@ def export_pdf(pack,path):
             story.extend([p(pack['note']),Spacer(1,10)])
             # Repeated column headings and wrapped paragraphs prevent clipped long narrations.
             weights=[4 if pack['columns'][i]=='Narration' else 2.5 if pack['columns'][i] in ('Ledger','Account') else 1.4 if i not in money else 1.3 for i in indices];widths=[doc.width*w/sum(weights) for w in weights]
-            data=[[p(pack['columns'][i]) for i in indices]]+[[p(ledgers.number(row[i],True) if i in money else row[i]) for i in indices] for row in pack['rows']]
+            data=[[p(pack['columns'][i]) for i in indices]]+[[p('' if row[i] is None else ledgers.number(row[i],True) if i in money else row[i]) for i in indices] for row in pack['rows']]
             table=LongTable(data,colWidths=widths,repeatRows=1,splitInRow=1);table.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#E3EEDF')),('VALIGN',(0,0),(-1,-1),'TOP'),('GRID',(0,0),(-1,-1),.25,colors.HexColor('#DCE2DC')),('BOTTOMPADDING',(0,0),(-1,-1),5)]));story.append(table)
         story.append(Spacer(1,10))
         for label,value in pack['controls'].items():story.append(p(label+': '+ledgers.number(value,True)))

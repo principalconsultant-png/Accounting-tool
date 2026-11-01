@@ -23,6 +23,7 @@ from .tds_ui import TdsUI
 from .cash_flow_ui import CashFlowUI
 from .fixed_assets_ui import FixedAssetsUI
 from .tax_depreciation_ui import TaxDepreciationUI
+from .cwip_ui import CwipUI
 from . import activity
 from . import foundation
 
@@ -31,7 +32,7 @@ BG='#FBF9F5'; WHITE='#FFFEFC'; INK='#293B55'; GREEN='#355D49'
 SAGE='#E3EEDF'; SAFFRON='#F9E5D1'; MUTED='#596878'
 SAFFRON_HOVER='#F2D5B5'; SAGE_HOVER='#D1E2CB'; BLUE='#E7EDF7'; BORDER='#DCE2DC'
 
-class App(TaxDepreciationUI,FixedAssetsUI,CashFlowUI,TdsUI,RcmUI,GstUI,TaxUI,HistoryUI,BankUI,OperationsUI,LedgerUI,FoundationUI,tk.Tk):
+class App(CwipUI,TaxDepreciationUI,FixedAssetsUI,CashFlowUI,TdsUI,RcmUI,GstUI,TaxUI,HistoryUI,BankUI,OperationsUI,LedgerUI,FoundationUI,tk.Tk):
     def __init__(self,vault):
         super().__init__()
         self.vault=vault
@@ -97,7 +98,7 @@ class App(TaxDepreciationUI,FixedAssetsUI,CashFlowUI,TdsUI,RcmUI,GstUI,TaxUI,His
         self.pages={'Overview':self.overview,'Ledger A/c':self.ledger_accounts,'Work volume':self.work_volume,'Journal studio':self.studio,'Sales receipt':self.sales_receipt,'FX receipts':self.fx_receipts,'Vouchers':self.vouchers,
                     'Chart of accounts':self.accounts,'Tax setup':self.taxes,'TDS accounting':self.tds_accounting,'GST accounting':self.gst_accounting,'GST reverse charge':self.reverse_charge,'Setup & periods':self.setup,'Saved drafts':self.saved_drafts,'Financial reports':self.reports,'Cash flow setup':self.cash_flow_setup,
                     'Import queue':self.imports,'Bank reconciliation':self.banking,
-                    'Assets & depreciation':self.assets,'Tax depreciation':self.tax_depreciation,'Settings & backup':self.settings,'Change history':self.history}
+                    'Assets & depreciation':self.assets,'Tax depreciation':self.tax_depreciation,'CWIP & commissioning':self.cwip_projects,'Settings & backup':self.settings,'Change history':self.history}
         self.nav_buttons={}
         for name in self.pages:
             b=ttk.Button(nav,text=name,style='Nav.TButton',command=lambda n=name:self.show(n))

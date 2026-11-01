@@ -757,3 +757,57 @@ class TaxDepreciationDesktopTests(unittest.TestCase):
                 with patch('riju.app.messagebox.showerror') as error:self.press(preview,'Approve tax working action');self.assertTrue(error.called)
                 self.assertFalse(td.data(app.state)['blocks']);self.assertFalse(app.state['vouchers'])
             finally:app.destroy()
+
+@unittest.skipUnless(os.environ.get('DISPLAY') or os.environ.get('RIJU_GUI_TEST'),'A graphical display is required')
+class CwipDesktopTests(unittest.TestCase):
+    walk=TaxDepreciationDesktopTests.walk
+    form=TaxDepreciationDesktopTests.form
+    fill=TaxDepreciationDesktopTests.fill
+    press=TaxDepreciationDesktopTests.press
+    reviewed=TaxDepreciationDesktopTests.reviewed
+    def approve(self,app,form):
+        self.reviewed(form);self.press(form,'Validate & preview CWIP');app.update();self.press(self.form(app),'Approve CWIP action');app.update()
+    def select_project(self,app):app.cwip_project_table.selection_set(app.cwip_project_table.get_children()[0])
+    def select_cost(self,app):app.cwip_cost_table.selection_set(app.cwip_cost_table.get_children()[0])
+    def test_project_plan_cost_retention_tds_commission_exports_and_reload(self):
+        import tkinter as tk
+        from riju.app import App
+        from riju import cwip, tax, fixed_assets as fa
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);vault=Vault(root/'demo.json',demo=True);app=App(vault)
+            try:
+                app.year.set('2026');app.cwip_report_end='2026-05-31';app.show('CWIP & commissioning');app.new_cwip_project();f=self.form(app)
+                for label,value in [('Unique project key','GUI-VK'),('Project name','Synthetic desktop construction'),('Project/source basis','Synthetic sources reviewed')]:self.fill(f,label,value)
+                self.approve(app,f);self.select_project(app);app.cwip_plan();f=self.form(app)
+                for label,value in [('Effective date','2026-04-01'),('Civil budget INR (blank unknown)','2000'),('Plan revision basis','Approved synthetic plan')]:self.fill(f,label,value)
+                text=next(w for w in self.walk(f) if isinstance(w,tk.Text));text.delete('1.0','end');text.insert('1.0','key,name,due,completed\nREADY,Certificate review,2026-05-01,2026-05-01\n');self.approve(app,f)
+                self.select_project(app);app.cwip_cost();f=self.form(app)
+                for label,value in [('Cost / source date','2026-04-01'),('Supplier/source reference','GUI-BILL'),('Supplier/payee reference','Synthetic builder'),('Gross cost INR','1000'),('Eligible capital INR','900'),('Retention to hold INR','100'),('Capitalization / expense review basis','Reviewed 900 capital and 100 operating cost')]:self.fill(f,label,value)
+                self.approve(app,f);self.assertTrue(app.cwip_report['ready']);self.select_cost(app);app.cwip_retention();f=self.form(app)
+                for label,value in [('Release / payment date','2026-04-20'),('Retention amount INR','40'),('Retention release / payment basis','Approved partial release')]:self.fill(f,label,value)
+                self.approve(app,f)
+                def setup(s):
+                    p=tax.save_party(s,dict(name='Synthetic builder',effective='2026-04-01',category='Company',pan='ABCDE1234F'))
+                    tax.save_rule(s,dict(family='TDS',key='GUI-CWIP',label='Synthetic contractor rule',effective='2026-04-01',section='194C',rate='10',treatment='Withholding',party_category='Company',annual_threshold='0',threshold_basis='Financial-year aggregate',applicability='Synthetic only',source='Synthetic test',reviewed=True));return p
+                app.commit(setup);app.show('CWIP & commissioning');self.select_cost(app);app.cwip_tds();f=self.form(app)
+                self.fill(f,'Deduction posting date','2026-04-02');self.fill(f,'Verified applicability / exception basis','Reviewed synthetic resident contractor applicability');self.approve(app,f)
+                self.select_cost(app);app.cwip_expense();f=self.form(app)
+                for label,value in [('Reclassification date','2026-04-25'),('Ineligible cost INR','100'),('Reclassification source basis','Reviewed start-up cost, not capital')]:self.fill(f,label,value)
+                self.approve(app,f);self.select_project(app);app.cwip_commission();f=self.form(app)
+                for label,value in [('Commissioning transfer date','2026-05-01'),('Actual put-to-use date','2026-05-16'),('Unique book asset reference','GUI-CWIP-PPE'),('Asset / component name','Synthetic commissioned component'),('Reviewed useful life months','12'),('Ready-for-use / capitalization certificate basis','Synthetic reviewed readiness certificate')]:self.fill(f,label,value)
+                self.approve(app,f);self.assertTrue(app.cwip_report['ready']);self.assertEqual(app.state['book_assets'][0]['cost'],80000)
+                for kind in ('xlsx','pdf'):
+                    with patch('riju.cwip_ui.filedialog.asksaveasfilename',return_value=str(root/('cwip.'+kind))):app.export_cwip(kind)
+                    self.assertTrue((root/('cwip.'+kind)).exists())
+            finally:app.destroy()
+            loaded=vault.load();self.assertTrue(cwip.report(loaded,'2026-04-01','2026-05-31')['ready']);self.assertEqual(loaded['book_assets'][0]['put_to_use'],'2026-05-16');self.assertEqual(fa.target(loaded['book_assets'][0],'2026-05-15'),0)
+    def test_cwip_changed_books_rejects_frozen_preview(self):
+        from riju.app import App
+        from riju import cwip, foundation
+        with tempfile.TemporaryDirectory() as d:
+            app=App(Vault(Path(d)/'demo.json',demo=True))
+            try:
+                app.show('CWIP & commissioning');app._cwip_preview('Synthetic stale preview',lambda s:cwip.save_project(s,'STALE','Synthetic','VK','Test',True));preview=self.form(app);app.commit(lambda s:foundation.save_entity(s,'Changed entity',{}))
+                with patch('riju.app.messagebox.showerror') as err:self.press(preview,'Approve CWIP action');self.assertTrue(err.called)
+                self.assertFalse(cwip.data(app.state)['projects']);self.assertFalse(app.state['vouchers'])
+            finally:app.destroy()

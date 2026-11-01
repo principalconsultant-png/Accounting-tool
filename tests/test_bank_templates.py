@@ -72,4 +72,4 @@ class BankTemplateTests(unittest.TestCase):
     def test_format_eleven_upgrade_backup_and_layout_roundtrip(self):
         with tempfile.TemporaryDirectory() as d:
             root=Path(d);ext=root/'external';ext.mkdir();old=core.empty_state();old['version']=11;old['schema_revision']=11;old.pop('bank_mapping_templates');history.checkpoint(old);path=root/'old.json';path.write_text(json.dumps(old),encoding='utf-8');raw=path.read_bytes();v=Vault(path,demo=True);self.s=v.load();self.s['settings']['backup_dir']=str(ext);self.save();v.save(self.s)
-            self.assertEqual(v.last_upgrade_backup.read_bytes(),raw);self.assertEqual(v.load(),self.s);self.assertEqual(self.s['version'],14)
+            self.assertEqual(v.last_upgrade_backup.read_bytes(),raw);self.assertEqual(v.load(),self.s);self.assertEqual(self.s['version'],15)

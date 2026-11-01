@@ -213,6 +213,25 @@ def run(output):
             tvault=Vault(root/'tax-depreciation.riju');tvault.save(taxbook)
             if tvault.load()!=taxbook:raise ValueError('Packaged tax depreciation persistence failed')
             result['tax_depreciation_passed']=True
+            from . import cwip
+            cwbook=core.empty_state()
+            project=cwip.save_project(cwbook,'PACKAGED-VK','Synthetic construction','VK','Synthetic reviewed project only',True)
+            cwip.save_plan(cwbook,project['id'],'2026-04-01',{'Civil':'2000'},[dict(key='READY',name='Synthetic certificate',due='2026-05-01',completed='2026-05-01')],'Synthetic budget and milestones',True)
+            cost=cwip.record_cost(cwbook,project['id'],dict(reference='PACKAGED-BILL',party='Synthetic contractor',date='2026-04-01',category='Civil',gross='1000',capital='900',retention='100',basis='Synthetic reviewed direct cost and operating expense',reviewed=True))
+            cparty=tax.save_party(cwbook,dict(name='Synthetic contractor',effective='2026-04-01',category='Company',pan='ABCDE1234F'))
+            tax.save_rule(cwbook,dict(family='TDS',key='PACKAGED-CWIP',label='Synthetic contractor rule',effective='2026-04-01',section='194C',rate='10',treatment='Withholding',party_category='Company',annual_threshold='0',threshold_basis='Financial-year aggregate',applicability='Synthetic only',source='Packaged test',reviewed=True))
+            deduction=cwip.deduct_tds(cwbook,cost['id'],dict(date='2026-04-02',rule_key='PACKAGED-CWIP',party_id=cparty['party_id'],base='1000',mode='Automatic',review_reason='Synthetic reviewed resident contractor',resident_reviewed=True,confirmed=True,narration='Synthetic withholding'))
+            cwip.settle_retention(cwbook,cost['id'],'2026-04-20','40','2000','Synthetic approved partial release',True)
+            commissioned=cwip.commission(cwbook,project['id'],'2026-05-01',{cost['id']:'900'},dict(reference='PACKAGED-CWIP-PPE',name='Synthetic commissioned component',months=12,residual='0',put_to_use='2026-05-16'),'Synthetic ready-for-use certificate',True)
+            registered=fixed_assets.asset(cwbook,commissioned['asset'])
+            if not cwip.report(cwbook,'2026-04-01','2026-05-31')['ready'] or cwip.retained(cwbook,cost)!=6000 or deduction['withheld']!=10000 or fixed_assets.target(registered,'2026-05-15')!=0:raise ValueError('Packaged CWIP/retention/TDS/commissioning proof failed')
+            fixed_assets.post_depreciation(cwbook,'2026-05-31',branch='VK')
+            if not fixed_assets.report(cwbook,'2026-04-01','2026-05-31','VK')['ready']:raise ValueError('Packaged commissioned depreciation proof failed')
+            for kind in ('xlsx','pdf'):cwip.export(cwbook,'2026-04-01','2026-05-31','VK',root/('cwip.'+kind),kind)
+            cwvault=Vault(root/'cwip.riju');cwvault.save(cwbook)
+            if cwvault.load()!=cwbook:raise ValueError('Packaged CWIP persistence failed')
+            result['cwip_commissioning_passed']=True
+
             result.update(passed=True,revenue_modes=len(MODES),posted_vouchers=len(loaded['vouchers']),windows_vault_backup_roundtrip=True)
     except Exception as error:
         result['error']=str(error)

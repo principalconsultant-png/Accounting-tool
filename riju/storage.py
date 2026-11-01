@@ -83,7 +83,7 @@ class Vault:
             if not raw.startswith(MAGIC): raise ValueError('Unknown vault format.')
             raw=protect(raw[len(MAGIC):],True)
         state=json.loads(raw)
-        if state.get('version') not in (1,2,3,4,5,6,7,8,9,10,11,12,13,14): raise ValueError('Unsupported vault version.')
+        if state.get('version') not in (1,2,3,4,5,6,7,8,9,10,11,12,13,14,15): raise ValueError('Unsupported vault version.')
         from .history import verify_saved_state
         verify_saved_state(state)
         before=json.dumps(state,sort_keys=True)
