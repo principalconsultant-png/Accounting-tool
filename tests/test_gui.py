@@ -859,24 +859,3 @@ class BulkImportDesktopTests(unittest.TestCase):
                     self.assertTrue((root/('bulk.'+kind)).exists())
             finally:app.destroy()
             self.assertEqual(vault.load()['queue'][0]['status'],'PROCESSED')
-
-@unittest.skipUnless(os.environ.get('DISPLAY') or os.environ.get('RIJU_GUI_TEST'),'A graphical display is required')
-class PortableRecoveryDesktopTests(unittest.TestCase):
-    def test_export_verify_restore_and_reload_without_password(self):
-        from riju.app import App
-        from riju import core,foundation,storage
-        from test_portable_recovery import protector
-        with tempfile.TemporaryDirectory() as d,patch('riju.storage.protect',protector('GUI-PC')):
-            root=Path(d);folder=root/'external';folder.mkdir();keys=root/'separate-key-device';keys.mkdir();key=keys/'recovery.json'
-            v=Vault(root/'live'/'books.riju',demo=True,test_backup_root=root);v.demo=False;s=v.load();s['settings']['backup_dir']=str(folder);v.save(s);app=App(v)
-            try:
-                app.show('Settings & backup')
-                with patch('riju.recovery_ui.filedialog.asksaveasfilename',return_value=str(key)),patch('riju.recovery_ui.messagebox.showinfo'):app.export_portable_key()
-                self.assertTrue(key.exists());self.assertEqual(app.state['settings']['recovery_key_id'],v._key_id)
-                source=v.backup(folder);before=source.read_bytes()
-                with patch('riju.recovery_ui.filedialog.askopenfilename',side_effect=[str(source),str(key)]),patch('riju.recovery_ui.messagebox.showinfo'):app.verify_portable_backup()
-                self.assertTrue(any(a['action']=='RECOVERY_DRILL_VERIFIED' for a in app.state['audit']))
-                app.commit(lambda s:foundation.save_entity(s,'Changed live entity',{}))
-                with patch('riju.recovery_ui.filedialog.askopenfilename',side_effect=[str(source),str(key)]),patch('riju.recovery_ui.messagebox.askyesno',return_value=True):app.restore_portable_backup()
-                self.assertNotEqual(app.state['settings']['entity'],'Changed live entity');self.assertEqual(source.read_bytes(),before);self.assertEqual(v.load(),app.state)
-            finally:app.destroy()

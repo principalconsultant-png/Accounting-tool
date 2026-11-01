@@ -58,7 +58,7 @@ class HistoryUI:
         from .storage import Vault
         backup=Vault(path,demo=self.vault.demo).load();report=h.integrity_report(backup)
         report['filename']=Path(path).name;report['entity']=backup['settings']['entity']
-        report['recovery']='This inspection did not restore or alter the active books. Restore through Settings & backup; keep the safety copy and verify the restored period/balances. Legacy DPAPI backups need the original Windows keys. AES-GCM backups can also be verified/recovered using separately held recovery material in Settings & backup.'
+        report['recovery']='This inspection did not restore or alter the active books. Restore through Settings & backup; keep the safety copy and verify the restored period/balances. DPAPI backups need the original Windows account keys.'
         self._history_dialog('Backup inspection',report)
 
     def trace_history_voucher(self):
@@ -80,16 +80,6 @@ class HistoryUI:
 def offer_integrity_recovery(vault,error,parent):
     """Restore only after source validation, explicit confirmation and a safety copy."""
     text=str(error)
-    if vault is not None and not vault.demo and any(word in text.lower() for word in ('unlocking failed','authentication','specified state','key not valid')):
-        if not messagebox.askyesno('Windows unlocking unavailable','Use a trusted encrypted backup and its separately held recovery material? The current file will be safety-copied before replacement.',parent=parent):return False
-        source=filedialog.askopenfilename(parent=parent,title='Trusted AES-GCM backup',filetypes=[('Encrypted books','*.riju')])
-        if not source:return False
-        key=filedialog.askopenfilename(parent=parent,title='Separately held recovery material',filetypes=[('Recovery material','*.json')])
-        if not key:return False
-        folder=filedialog.askdirectory(parent=parent,title='External drive for safety copy')
-        if not folder:return False
-        with vault.instance_lock():vault.recover_with_key(source,key,folder)
-        return True
     if vault is None or vault.last_digest is None or not any(word in text.lower() for word in ('integrity','history sequence','voucher records differ')):return False
     if not messagebox.askyesno('Books integrity check failed',text+'\n\nOpen recovery from a trusted external backup? The current file must first be copied to your selected external folder. Nothing is repaired or discarded automatically.',parent=parent):return False
     path=filedialog.askopenfilename(parent=parent,title='Select trusted backup',filetypes=[('Riju books','*.riju *.json')])

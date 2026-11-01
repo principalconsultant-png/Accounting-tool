@@ -64,3 +64,9 @@ class ServiceRevenueTests(unittest.TestCase):
     def test_b08_cannot_create_unlinked_notes_for_service_sources(self):
         b=self.post('Bill')
         self.bad(lambda:gst.post_note(self.s,dict(original_document_id=b['gst_document'],date='2026-04-02',document_type='Credit note',reference='X',confirmed=True)))
+    def test_earned_receipt_partial_refund_and_tax_proof(self):
+        r=self.post('Direct receipt',rule_key='TX',registration='29ABCDE1234F1Z5',place_of_supply='29',payments={'1010':'1180'})
+        refund=self.post('Refund earned receipt',source=r['id'],reference='REFUND',amount='590',payments={'1010':'590'})
+        self.assertEqual(core.balances(self.s,'2026-04-30')['4010'],-50000);self.assertFalse(any(gst.summary(self.s,'2026-04-01','2026-04-30')['unclassified'].values()))
+        self.bad(lambda:self.post('Refund earned receipt',source=r['id'],reference='OVER',amount='591',payments={'1010':'591'}));self.bad(lambda:core.reverse(self.s,r['voucher'],'2026-04-02'))
+        core.reverse(self.s,refund['voucher'],'2026-04-02');self.assertEqual(core.balances(self.s,'2026-04-30')['4010'],-100000)

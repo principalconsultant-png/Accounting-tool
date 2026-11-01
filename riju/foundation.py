@@ -83,7 +83,6 @@ def migrate(state):
     state.setdefault('fixed_asset_events',[])
     state.setdefault('asset_ledgers',{})
     state.setdefault('tax_depreciation',{k:[] for k in ('blocks','rules','additions','uses','disposals','claims','reviews','status_reviews')})
-    settings.setdefault('backup_retention',30)
     state.setdefault('cwip',{'projects':[], 'costs':[], 'events':[]})
     state.setdefault('service_revenue',[])
     state['version']=17

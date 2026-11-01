@@ -10,7 +10,7 @@ from datetime import datetime
 import uuid
 from . import core, foundation, gst, tax, fixed_assets as fa, history
 
-KINDS=('Advance','Direct receipt','Bill','Earn advance','Refund advance','Collect bill','Cancel bill','Refund bill')
+KINDS=('Advance','Direct receipt','Bill','Earn advance','Refund advance','Collect bill','Cancel bill','Refund bill','Refund earned receipt')
 
 
 def records(s):return s.get('service_revenue',[])
@@ -97,10 +97,10 @@ def post(s,kind,v):
     else:
         source=get(s,v.get('source',''))
         if source['branch']!=unit or on<source['date'] or not active(s,source,on):raise ValueError('Use the same branch and an active original source on/before this date.')
-        expected='Advance' if kind in ('Earn advance','Refund advance') else 'Bill'
+        expected='Advance' if kind in ('Earn advance','Refund advance') else 'Direct receipt' if kind=='Refund earned receipt' else 'Bill'
         if source['kind']!=expected:raise ValueError('This action requires an original '+expected+' source.')
         n=core.money(v.get('amount',''))
-        totals=_allocated(s,source,n,('Earn advance','Refund advance') if expected=='Advance' else ('Cancel bill',) if kind=='Cancel bill' else ('Collect bill',) if kind=='Collect bill' else ('Refund bill',),on)
+        totals=_allocated(s,source,n,('Earn advance','Refund advance') if expected=='Advance' else ('Refund earned receipt',) if kind=='Refund earned receipt' else ('Cancel bill',) if kind=='Cancel bill' else ('Collect bill',) if kind=='Collect bill' else ('Refund bill',),on)
         if kind in ('Collect bill','Refund bill'):totals=dict(base=n,cgst=0,sgst=0,igst=0,total=n)
         r.update(account=source['account'],rule=copy.deepcopy(source['rule']),registration=source['registration'],place_of_supply=source['place_of_supply'],totals=totals,package=source['package'])
         original=next((d for d in s['gst_documents'] if d['id']==source.get('gst_document')),None)
@@ -108,17 +108,17 @@ def post(s,kind,v):
             current=tax.resolve_rule(s,source['rule']['key'],on)
             if any(current[k]!=source['rule'][k] for k in ('rate','treatment','hsn_sac')):raise ValueError('Service tax treatment changed since the advance. Review/correct the advance tax before earning; no historical rate is silently replaced.')
             lines=[_line('2300',unit,totals['base'],True),_line(source['account'],unit,totals['base'],False)]
-        elif kind in ('Refund advance','Cancel bill'):
+        elif kind in ('Refund advance','Cancel bill','Refund earned receipt'):
             lines=[_line('2300' if expected=='Advance' else source['account'],unit,totals['base'],True)]
             lines.extend(_line(code,unit,totals[key],True) for code,key in zip(gst.OUTPUT,('cgst','sgst','igst')) if totals[key])
-            lines+=_payments(s,v.get('payments',{}),unit,n,False) if kind=='Refund advance' else [_line(s['patient_control'],unit,n,False)]
+            lines+=_payments(s,v.get('payments',{}),unit,n,False) if kind!='Cancel bill' else [_line(s['patient_control'],unit,n,False)]
         else:
             lines=_payments(s,v.get('payments',{}),unit,n,kind=='Collect bill')+[_line(s['patient_control'],unit,n,kind=='Refund bill')]
     r['lines']=lines;r['voucher']=core.post(s,on,kind+' '+ref+': '+basis,lines,metadata={'reference':ref})['id']
     records(s).append(r)
     has_tax=any(r['totals'][k] for k in ('cgst','sgst','igst'))
     if kind in ('Bill','Direct receipt') or kind=='Advance' and has_tax or kind=='Earn advance' and not original:_gst_record(s,r)
-    elif kind in ('Refund advance','Cancel bill') and original:_gst_record(s,r,original)
+    elif kind in ('Refund advance','Cancel bill','Refund earned receipt') and original:_gst_record(s,r,original)
     core.add_audit(s,'SERVICE_REVENUE_RECORDED',copy.deepcopy(r));return r
 
 
@@ -131,11 +131,11 @@ def check(s,reversal=None):
     if reversal:days.add(reversal[1])
     for on in sorted(days):
         for source in rs:
-            if source['kind'] not in ('Advance','Bill'):continue
+            if source['kind'] not in ('Advance','Bill','Direct receipt'):continue
             cs=children(s,source,on,reversal)
             if cs and not active(s,source,on,reversal):raise ValueError('Reverse dependent earning, refund, cancellation or collection before the source.')
             used=lambda kinds:sum(x['totals']['total'] for x in cs if x['kind'] in kinds)
-            n=source['totals']['total'];spent=used(('Earn advance','Refund advance')) if source['kind']=='Advance' else used(('Cancel bill',))
+            n=source['totals']['total'];spent=used(('Earn advance','Refund advance')) if source['kind']=='Advance' else used(('Refund earned receipt',)) if source['kind']=='Direct receipt' else used(('Cancel bill',))
             collected=used(('Collect bill',));refunded=used(('Refund bill',))
             if spent>n or collected>n or refunded>max(0,collected+spent-n):raise ValueError('Source capacity would be exceeded, including future allocations.')
             # Collections cannot be posted after a cancellation has reduced the unpaid amount.

@@ -30,7 +30,9 @@ collection modes, direct sales receipts and XLSX layouts remain available.
    and service recognition is blocked for review/correction rather than silently
    replacing historical rates. Return eligibility, tax-point changes and legal
    treatment must be checked by the accountant; original tax is never guessed.
-5. Select a bill and collect part/all through actual INR cash/bank/payment
+5. Select a direct earned receipt and use Refund earned receipt for an actual
+   reviewed service cancellation/refund; it reverses only the remaining original
+   service/tax components against actual payment evidence. Select a bill and collect part/all through actual INR cash/bank/payment
    clearing splits. This credits shared Patient A/C without recording revenue
    twice. Cancel part/all against original revenue/tax. If already paid,
    cancellation creates a source-backed credit; Refund bill pays only that
