@@ -925,3 +925,26 @@ class LanguageDesktopTests(unittest.TestCase):
                 with self.assertRaises(ValueError):app.prepare()
                 self.assertEqual(app.draft,[]);self.assertIn('TDS accounting',app.language_explanation.cget('text'))
             finally:app.destroy()
+
+@unittest.skipUnless(os.environ.get('DISPLAY') or os.environ.get('RIJU_GUI_TEST'),'A graphical display is required')
+class ChecksDesktopTests(unittest.TestCase):
+    def test_threshold_review_question_source_exports_and_no_post(self):
+        from riju.app import App
+        from riju import core
+        from tkinter import ttk
+        helper=TaxDepreciationDesktopTests()
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);app=App(Vault(root/'checks.json',demo=True))
+            try:
+                core.post(app.state,'2026-04-02','Rent',[dict(account='4530',branch='JP',debit=50000,credit=0),dict(account='1000',branch='JP',debit=0,credit=50000)])
+                app.year.set('2026');app.show('Checks & questions');app.check_policy();form=helper.form(app)
+                helper.fill(form,'Daily payee cash outflow review INR','200');helper.fill(form,'Reviewed thresholds and source basis','Synthetic source review');helper.reviewed(form);helper.press(form,'Save reviewed thresholds');app.update()
+                self.assertTrue(app.ck_table.get_children());app.ck_question.set('rent expense');app.ask_ledger();self.assertIn('500.00',app.ck_answer.cget('text'));self.assertEqual(len(app.state['vouchers']),1)
+                for kind in ('xlsx','pdf'):
+                    with patch('riju.checks_ui.filedialog.asksaveasfilename',return_value=str(root/('checks.'+kind))):app.export_checks(kind)
+                    with patch('riju.checks_ui.filedialog.asksaveasfilename',return_value=str(root/('answer.'+kind))):app.export_answer(kind)
+                    self.assertTrue((root/('checks.'+kind)).exists());self.assertTrue((root/('answer.'+kind)).exists())
+                app.ck_question.set('delete vouchers')
+                with self.assertRaises(ValueError):app.ask_ledger()
+                self.assertIsNone(app.ck_answer_packs);self.assertEqual(len(app.state['vouchers']),1)
+            finally:app.destroy()

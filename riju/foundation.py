@@ -91,6 +91,8 @@ def migrate(state):
     state.setdefault('gst_filing_reviews',[])
     state.setdefault('gst_portal_imports',[])
     state.setdefault('statement_policies',[])
+    state.setdefault('accounting_check_policies',[])
+    state.setdefault('accounting_check_reviews',[])
     state['version']=19
     state['accounts'].sort(key=lambda a:a['code'])
     add_audit(state,'SCHEMA_UPGRADED',{'to':SCHEMA})

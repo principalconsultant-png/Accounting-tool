@@ -1,5 +1,6 @@
 """Packaged executable readiness check; operates only in a disposable directory."""
 import io
+import copy
 import json
 import os
 from pathlib import Path
@@ -300,6 +301,15 @@ def run(output):
             except ValueError:pass
             else:raise ValueError('Packaged tax-language guard failed')
             result['offline_language_passed']=True
+            from . import accounting_checks
+            accounting_checks.save_policy(taxbook,dict(effective='2026-04-01',unusual_posting='10',basis='Synthetic review threshold',confirmed=True))
+            beforefacts=copy.deepcopy(taxbook)
+            checkresult=accounting_checks.run(taxbook,'2026-04-01','2027-03-31')
+            answer=accounting_checks.answer(taxbook,'profit','2026-04-01','2027-03-31')
+            if answer['amount']!=7400 or not checkresult['alerts'] or taxbook!=beforefacts:raise ValueError('Packaged ledger facts/checks failed')
+            questionpacks=[accounting_checks.snapshots(taxbook,'2026-04-01','2027-03-31'),*answer['packs']]
+            financial_reports.export_pack_xlsx(questionpacks,root/'checks-and-answer.xlsx');financial_reports.export_pdf(questionpacks,root/'checks-and-answer.pdf')
+            result['accounting_checks_questions_passed']=True
             result['offline_model_version']=local_model.VERSION;result['offline_model_digest']=local_model.digest();result['offline_language_100_drafts_seconds']=round(time.perf_counter()-langstarted,4)
 
 

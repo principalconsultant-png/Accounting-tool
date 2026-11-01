@@ -14,6 +14,7 @@ def interpret(state,text,selected_branch,selected_date):
     workflows=[(r'\b(gst|igst|cgst|sgst|cess|inclusive|tax|rcm)\b','GST accounting / GST reverse charge'),(r'\b(tds|withhold\w*|net of)\b','TDS accounting'),(r'\b(advance|refund|unearned|package|outstanding|on credit|credit sale)\b','Service revenue'),(r'\b(cwip|commission\w*|construction|retention)\b','CWIP & commissioning'),(r'\b(depreciation|disposal)\b','Assets & depreciation')]
     for pattern,page in workflows:
         if re.search(pattern,lower):raise ValueError('Open '+page+' to review source and deterministic posting rules. No tax, source allocation or special journal was guessed.')
+    if re.search(r'\b(insurance|stationery|vehicle|loan|donation|deposit|investment|inventory|stock)\b',lower):raise ValueError('This description includes a purpose outside the supported simple receipt/expense model. Review the actual accounts and source workflow manually.')
     if re.search(r'\b(dollars?|usd|eur|gbp|aed|forex)\b|[$€£]',lower):raise ValueError('Use FX receipts with the reviewed currency and exchange rate.')
     found=[]
     patterns=[(r'\b\d{4}-\d{2}-\d{2}\b','%Y-%m-%d'),(r'\b\d{1,2}/\d{1,2}/\d{4}\b','%d/%m/%Y'),(r'\b\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4}\b',None)]
@@ -92,7 +93,7 @@ def interpret(state,text,selected_branch,selected_date):
     intent=model['intent']
     predicted=state['revenue_mode_accounts'].get(intent.split(':',1)[1]) if intent and intent.startswith('service:') else intent
     if account is None:
-        if not predicted:raise ValueError('Account interpretation is uncertain. Which ledger and transaction purpose apply? Select manual lines; no draft was guessed.')
+        if not predicted or len(set(model['evidence'])-{'fee','fees','service','services','charge','charges','monthly','office','new','patient'})<2:raise ValueError('Account interpretation is uncertain. Which ledger and transaction purpose apply? Select manual lines; no draft was guessed.')
         account=predicted
     records={a['code']:a for a in state['accounts']}
     if account not in records or (received and records[account]['kind']!='Revenue') or (paid and records[account]['kind'] not in ('Expense','Asset')):raise ValueError('The payment direction and account interpretation disagree. Review the purpose and source.')
