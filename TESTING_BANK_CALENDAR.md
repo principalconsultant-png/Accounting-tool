@@ -1,0 +1,7 @@
+# B13 calendar acceptance
+
+Use disposable books on development branch only. Bank reconciliation → Business calendar: review/install BLR-2026-reviewed-v2 for actual bank class. Explain 2026-03-27: weekend plus amended Mahavir holiday results in March 31; March 31 itself is working. Install annual-v1 first to verify upgrade history; downgrade is blocked. Bengaluru excludes Kodagu-only September 3 and November 26. Sundays and second/fourth Saturdays close; ordinary first/third/fifth Saturdays open unless a holiday.
+
+PSB/RRB September 27 special opening must not apply to private banks. Manual closure overrides bundled opening; explicit working override overrides closure. Save tolerance 0/1 and source CSV without losing installation. Explain year rollover: unsupported year warning must show. Export Excel/PDF for selected year; inspect sources, numeric-free date rows, revision and warnings. Existing matches must keep original calendar/manual snapshot after update. Actual bank advice overrides suggestions through reviewed matching; no posting occurs on install/export.
+
+Sources: Canara annual 2026 https://www.canarabank.bank.in/documents/d/guest/holiday-list-2026 ; updated HDFC Karnataka https://www.hdfc.bank.in/bank-holiday-list ; Ministry of Finance PSB/RRB special opening https://www.pib.gov.in/PressReleasePage.aspx?PRID=2313778&lang=1&reg=3 . Moon-dependent notifications and actual client bank exceptions remain review items.

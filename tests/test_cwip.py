@@ -145,7 +145,7 @@ class CwipTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             root=Path(d);ext=root/'external';ext.mkdir();old=core.empty_state();old['version']=14;old['schema_revision']=14;old.pop('cwip');history.checkpoint(old);path=root/'old.json';path.write_text(json.dumps(old),encoding='utf-8');raw=path.read_bytes()
             v=Vault(path,demo=True);s=v.load();s['settings']['backup_dir']=str(ext);cwip.save_project(s,'P','Test','VK','Test',True);v.save(s)
-            self.assertEqual(s['version'],18);self.assertEqual(v.last_upgrade_backup.read_bytes(),raw);self.assertEqual(v.load(),s)
+            self.assertEqual(s['version'],19);self.assertEqual(v.last_upgrade_backup.read_bytes(),raw);self.assertEqual(v.load(),s)
 
     def test_existing_legacy_cost_retention_tds_link_without_duplicate_journals(self):
         # All three historical amounts already exist in a compound journal.

@@ -269,6 +269,12 @@ def run(output):
             gstvault=Vault(root/'completed-gst.riju');gstvault.save(completed_gst)
             if gstvault.load()!=completed_gst:raise ValueError('Packaged completed GST persistence failed')
             result['gst_extended_bookkeeping_passed']=True
+            from . import bank_calendar
+            bank_calendar.install(completed_gst,bank_calendar.REVISIONS[-1],'Synthetic packaged source review',confirmed=True)
+            if bank_calendar.next_day(completed_gst,'2026-03-27')['date']!='2026-03-31':raise ValueError('Packaged calendar amendment failed')
+            calendarpack=bank_calendar.snapshot(completed_gst,'2026-03-27','2026-04-03')
+            financial_reports.export_xlsx(calendarpack,root/'calendar.xlsx');financial_reports.export_pdf(calendarpack,root/'calendar.pdf')
+            result['bank_calendar_passed']=True
 
 
 

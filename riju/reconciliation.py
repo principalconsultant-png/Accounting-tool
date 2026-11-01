@@ -321,7 +321,7 @@ def _record_match(state,banks,books,kind='existing',posting=None,clearing=None):
     if any(b['id'] in state.get('bank_exceptions',{}) for b in banks):raise ValueError('Remove the bank-exception classification before matching this row.')
     edges=_greedy_edges(banks,books)
     prior_undos=[m.get('undo_date','') for m in state['matches'] if not active(m) and any(e['bank_id'] in {b['id'] for b in banks} for e in _edges(state,m))]
-    record=dict(id=str(uuid.uuid4()),effective_from=max(prior_undos,default=''),kind=kind,status='ACTIVE',bank_id=banks[0]['id'],bank_ids=[b['id'] for b in banks],bank_account=banks[0]['bank_account'],edges=edges,created_at=_now(),branches=sorted({b['branch'] for b in books}),vouchers=sorted({b['voucher'] for b in books}),posting=posting,clearing_allocations=clearing or [],policy=copy.deepcopy(state['settings'].get('bank_reconciliation',{})))
+    record=dict(id=str(uuid.uuid4()),effective_from=max(prior_undos,default=''),kind=kind,status='ACTIVE',bank_id=banks[0]['id'],bank_ids=[b['id'] for b in banks],bank_account=banks[0]['bank_account'],edges=edges,created_at=_now(),branches=sorted({b['branch'] for b in books}),vouchers=sorted({b['voucher'] for b in books}),posting=posting,clearing_allocations=clearing or [],policy=dict(copy.deepcopy(state['settings'].get('bank_reconciliation',{})),manual_holidays=copy.deepcopy(state['holidays'])))
     state['matches'].append(record);_status(state)
     core.add_audit(state,'BANK_MATCHED',copy.deepcopy(record))
     return record
@@ -354,14 +354,13 @@ def match_existing(state,bank_ids,book_keys,partial_minor=None):
 
 
 def business_day(state,d):
-    policy=state['settings'].get('bank_reconciliation',{})
-    return d.isoformat() in policy.get('working_days',[]) or core.is_business_day(d,state['holidays'])
+    from .bank_calendar import explain
+    return explain(state,d.isoformat())['working']
 
 
 def next_business_day(state,value):
-    d=date.fromisoformat(value)+timedelta(days=1)
-    while not business_day(state,d):d+=timedelta(days=1)
-    return d.isoformat()
+    from .bank_calendar import next_day
+    return next_day(state,value)['date']
 
 
 def _date_near(state,book_date,bank_date):
@@ -583,11 +582,12 @@ def set_policy(state,tolerance,use_value_date,holiday_csv='',working_days=''):
     working=[d.strip() for d in working_days.split(',') if d.strip()]
     for d in working:_day(d)
     old=copy.deepcopy(candidate['settings'].get('bank_reconciliation',{}))
-    policy=dict(tolerance=int(tolerance),use_value_date=bool(use_value_date),working_days=working,holiday_sources=old.get('holiday_sources',[])+sources)
+    policy=copy.deepcopy(old);policy.update(tolerance=int(tolerance),use_value_date=bool(use_value_date),working_days=working,holiday_sources=old.get('holiday_sources',[])+sources)
     candidate['settings']['bank_reconciliation']=policy;core.add_audit(candidate,'BANK_CALENDAR_UPDATED',{'old':old,'new':copy.deepcopy(policy),'holidays':candidate['holidays']});state.clear();state.update(candidate)
 
 
 def settlement_suggestions(state,bank_id,clearing_account):
+    from .bank_calendar import next_day
     row=next(_canonical(b) for b in state['bank_lines'] if b['id']==bank_id)
     banks,_=outstanding(state,row['bank_account']);row=next((b for b in banks if b['id']==bank_id),None)
     if not row or row['remaining']<=0:return []
@@ -604,7 +604,7 @@ def settlement_suggestions(state,bank_id,clearing_account):
         for j in range(i,min(i+200,len(eligible))):
             total+=eligible[j]['remaining'];fee=total-row['remaining']
             if total>0 and 0<=fee<=total//20 and (clearing_account!='1000' or fee==0):
-                out.append(dict(keys=[x['key'] for x in eligible[i:j+1]],gross=total,proposed_fee=fee,from_date=eligible[i]['date'],through=eligible[j]['date']))
+                out.append(dict(keys=[x['key'] for x in eligible[i:j+1]],gross=total,proposed_fee=fee,from_date=eligible[i]['date'],through=eligible[j]['date'],calendar=[next_day(state,x['date']) for x in eligible[i:j+1]]))
                 if len(out)>=20:return out
     return out
 

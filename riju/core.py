@@ -285,8 +285,9 @@ def settlement_matches(state, bank, branch, tolerance=1):
             total=0
             for j in range(i,min(i+31,len(eligible))):
                 v,amount=eligible[j]; total+=amount
-                expected=next_business_day(v['date'],state['holidays']); latest=expected
-                for _ in range(tolerance): latest=next_business_day(latest.isoformat(),state['holidays'])
+                from .bank_calendar import next_day
+                expected=date.fromisoformat(next_day(state,v['date'])['date']); latest=expected
+                for _ in range(tolerance): latest=date.fromisoformat(next_day(state,latest.isoformat())['date'])
                 if not expected.isoformat()<=bank['date']<=latest.isoformat(): continue
                 fee=total-bank['amount']
                 # Fee is a proposal, never an automatic journal. Limit noise to 5%.

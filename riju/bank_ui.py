@@ -237,7 +237,7 @@ class BankUI:
             proposed=proposals[0];table.selection_remove(*table.selection())
             for item,b in zip(table.get_children(),items):
                 if b['key'] in proposed['keys']:table.selection_add(item)
-            fees.set(ledgers.number(proposed['proposed_fee']));messagebox.showinfo('Suggestion only','Selected a possible batch. The proposed fee difference is not posted. Verify the provider advice, days, amounts and fee/GST before approval.',parent=dialog)
+            fees.set(ledgers.number(proposed['proposed_fee']));messagebox.showinfo('Suggestion only','Selected a possible batch. Verify provider advice, amounts and fee/GST before approval.\n'+ '\n'.join(x['date']+' | '+x['warning']+'\n'+'; '.join(d['date']+': '+d['reason'] for d in x['steps']) for x in proposed.get('calendar',[])),parent=dialog)
         def approve():
             keys=[items[table.index(i)]['key'] for i in table.selection()]
             account={'UPI':'1110','Card':'1120','Cash':'1000'}[channel.get()]
@@ -291,7 +291,26 @@ class BankUI:
         sid=self._required_statement();reason=simpledialog.askstring('Void unused import','Reason (bank rows shared with another statement are retained; matched rows must be undone first):',parent=self)
         if reason:self.commit(lambda s:r.void_statement(s,sid,reason));self.refresh_bank_tables()
     def _calendar_tab(self,parent):
+        from . import bank_calendar as cal,financial_reports as financial
         policy=self.state['settings'].get('bank_reconciliation',{})
+        box=ttk.Frame(parent);box.pack(fill='x')
+        revision=self.field(box,'Offline Bengaluru revision',cal.REVISIONS[-1],list(cal.REVISIONS),width=27)
+        bankclass=self.field(box,'Actual bank class','Other/private',['Other/private','Public sector/RRB'],width=20)
+        def install():
+            row=cal.dataset(revision.get())
+            if not messagebox.askyesno('Review calendar sources',row['note']+'\n\n'+'\n'.join(row['sources'])+'\n\nInstall for future suggestions? PSB/RRB includes the sourced 27-Sep-2026 special opening.',parent=self):return
+            reason=simpledialog.askstring('Calendar review','Source review / reason:',parent=self)
+            if reason:self.commit(lambda s:cal.install(s,revision.get(),reason,bankclass.get(),True));self.show('Bank reconciliation')
+        self.button(box,'Review & install calendar',install,True)
+        box=ttk.Frame(parent);box.pack(fill='x');day=self.field(box,'Explain next business day',self.dates()[1],width=14)
+        def explain():
+            result=cal.next_day(self.state,day.get());messagebox.showinfo('Next business day',result['date']+'\n'+'\n'.join(x['date']+': '+x['reason']+' | '+x['revision'] for x in result['steps'])+'\n'+result['warning'],parent=self)
+        self.button(box,'Explain NBD',explain)
+        def export(kind):
+            year=int(day.get()[:4]);pack=cal.snapshot(self.state,f'{year}-01-01',f'{year}-12-31')
+            path=filedialog.asksaveasfilename(parent=self,defaultextension='.'+kind,filetypes=[(kind.upper(),'*.'+kind)])
+            if path:(financial.export_xlsx if kind=='xlsx' else financial.export_pdf)(pack,path)
+        self.button(box,'Calendar Excel',lambda:export('xlsx'));self.button(box,'Calendar PDF',lambda:export('pdf'))
         top=ttk.Frame(parent);top.pack(fill='x');tol=self.field(top,'Business-day tolerance',str(policy.get('tolerance',1)),['0','1'],width=15)
         use=tk.BooleanVar(value=policy.get('use_value_date',False));ttk.Checkbutton(top,text='Use value date for matching suggestions',variable=use).pack(side='left',padx=15)
         top=ttk.Frame(parent);top.pack(fill='x');working=self.field(top,'Exceptional working dates (comma-separated YYYY-MM-DD)',', '.join(policy.get('working_days',[])),width=70)
