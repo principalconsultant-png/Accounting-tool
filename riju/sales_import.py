@@ -93,6 +93,9 @@ def stage_sales(state,raw,filename,branch,treatment_policy='earned',other_policy
     if any(q['digest']==digest and q.get('branch',branch)==branch for q in state['queue']):raise ValueError('This report is already in the queue for that branch.')
     from .foundation import branches
     rows,warnings=read_sales_xlsx(raw,branch,branches(state,active_only=True))
+    from .receipt_import import known,identity
+    existing=known(state)
+    if any(r.get('receipt') and identity(r) in existing for r in rows):raise ValueError('A receipt is already queued or posted in a standard/legacy sales report for this unit/fiscal year.')
     prior={r['key'] for q in state['queue'] if q.get('kind')=='daily_sales' for i,r in enumerate(q['rows']) if q.get('row_reviews',{}).get(str(i),{}).get('status')!='REJECTED'}
     if any(r['key'] in prior for r in rows):raise ValueError('A receipt in this report is already queued or posted for this branch. Review the earlier import.')
     if any(r['revenues']['treatment_receipt'] for r in rows) and treatment_policy=='review':

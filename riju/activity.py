@@ -72,7 +72,7 @@ def _import_links(state):
             if key not in used:records.append((v,s));used.add(key)
     assigned={v['id'] for v,s in records};unlinked=[]
     for q in state['queue']:
-        if q['status']!='PROCESSED' or q.get('kind')=='bulk':continue
+        if q['status']!='PROCESSED' or q.get('kind') in ('bulk','standard_sales'):continue
         kind='daily_sales' if q.get('kind')=='daily_sales' else 'journal_csv'
         if (kind,q['id']) in modern_docs:continue
         for n,r in enumerate(q['rows']):
@@ -122,7 +122,7 @@ def report(state,start=None,end=None,branch='ALL',basis='work'):
     metrics['legacy_rows_unlinked']=sum((branch=='ALL' or r.get('branch')==branch) and (start is None or basis=='work' or in_dates(r['date'])) for r in unlinked)
     stage_dates={}
     for a in state['audit']:
-        if a['action'] in ('SALES_REPORT_STAGED','BULK_IMPORT_STAGED'):stage_dates[a['payload']['id']]=india_day(a.get('timestamp'))
+        if a['action'] in ('SALES_REPORT_STAGED','BULK_IMPORT_STAGED','STANDARD_RECEIPTS_STAGED'):stage_dates[a['payload']['id']]=india_day(a.get('timestamp'))
         elif a['action']=='IMPORT_STAGED':stage_dates[a['payload']['digest'][:12]]=india_day(a.get('timestamp'))
     for q in state['queue']:
         if q['status']=='PENDING_REVIEW':

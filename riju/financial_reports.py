@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 from . import core,foundation,ledgers
 
-MODES=('Trial balance','Profit and loss','Balance sheet','Comparative P&L','Comparative balance sheet','Branch matrix','General ledger','Cash flow - direct','Cash flow - indirect')
+MODES=('Trial balance','Profit and loss','Balance sheet','Comparative P&L','Comparative balance sheet','Branch matrix','General ledger','Cash flow - direct','Cash flow - indirect','Cash flow - AP forecast')
 
 
 def previous_year(day):
@@ -22,7 +22,7 @@ def snapshot(state,mode,start,end,branch='ALL'):
     if date.fromisoformat(start).isoformat()!=start or date.fromisoformat(end).isoformat()!=end or start>end:raise ValueError('Choose a valid YYYY-MM-DD reporting period.')
     names=foundation.branches(state)
     if branch!='ALL' and branch not in names:raise ValueError('Select a valid branch.')
-    if mode in ('Cash flow - direct','Cash flow - indirect'):
+    if mode in ('Cash flow - direct','Cash flow - indirect','Cash flow - AP forecast'):
         from . import cash_flow
         return cash_flow.snapshot(state,mode,start,end,branch)
     effective='ALL' if mode=='Branch matrix' else branch

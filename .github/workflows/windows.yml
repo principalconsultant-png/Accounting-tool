@@ -25,6 +25,8 @@ jobs:
           if (-not $result.passed) { throw 'Packaged self-test did not pass.' }
           $hash = (Get-FileHash .\dist\RijuBooks.exe -Algorithm SHA256).Hash.ToLower()
           "$hash  RijuBooks.exe" | Set-Content .\dist\SHA256SUMS.txt
+      - name: Build user guide and standard sales templates
+        run: python scripts/build_user_manual.py --output dist/user-documents
       - uses: actions/upload-artifact@v4
         with:
           name: RijuBooks-Windows
@@ -32,6 +34,11 @@ jobs:
             dist/RijuBooks.exe
             dist/SHA256SUMS.txt
             packaged-selftest.json
+            dist/user-documents/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RijuBooks-Training-and-Templates
+          path: dist/user-documents/
       - name: Publish versioned Windows download
         if: github.ref == 'refs/heads/main'
         shell: pwsh

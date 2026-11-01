@@ -948,3 +948,42 @@ class ChecksDesktopTests(unittest.TestCase):
                 with self.assertRaises(ValueError):app.ask_ledger()
                 self.assertIsNone(app.ck_answer_packs);self.assertEqual(len(app.state['vouchers']),1)
             finally:app.destroy()
+
+@unittest.skipUnless(os.environ.get('DISPLAY') or os.environ.get('RIJU_GUI_TEST'),'A graphical display is required')
+class ApReceiptDesktopTests(unittest.TestCase):
+    def test_ap_invoice_due_extension_payment_and_forecast_exports(self):
+        from riju.app import App
+        from riju import ap
+        from tkinter import ttk
+        helper=TaxDepreciationDesktopTests()
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);app=App(Vault(root/'ap.json',demo=True))
+            try:
+                ap.save_vendor(app.state,dict(name='Desktop supplier',credit_days='0'));app.show('AP Vendor Invoices');app.ap_on.set('2026-11-01');app.refresh_ap();app.ap_enter();form=helper.form(app)
+                for label,value in [('Vendor invoice number','DESK-1'),('Invoice date','2026-11-01'),('Invoice received date','2026-11-01'),('Accrual accounting date','2026-11-01'),('Credit period calendar days','0'),('Net amount payable to vendor INR','1000'),('Source / tax / accounting review basis','Synthetic reviewed source')]:helper.fill(form,label,value)
+                helper.reviewed(form);helper.press(form,'Preview invoice accrual');app.update();helper.press(helper.form(app),'Approve AP action');app.update();self.assertEqual(len(app.state['vouchers']),1);self.assertIn('DUE',app.ap_table.item(app.ap_table.get_children()[0])['values'][7]);self.assertIn('AP PAYMENT DUE',app.ap_reminder.cget('text'))
+                key=app.ap_table.get_children()[0];app.ap_table.selection_set(key);app.ap_extend();form=helper.form(app);helper.fill(form,'Extension effective date','2026-11-01');helper.fill(form,'New scheduled payment date','2026-11-10');helper.fill(form,'Vendor agreement / extension reason','Agreed extension');helper.reviewed(form);helper.press(form,'Preview payment extension');app.update();helper.press(helper.form(app),'Approve AP action');app.update();self.assertEqual(len(app.state['vouchers']),1)
+                for kind in ('xlsx','pdf'):
+                    with patch('riju.ap_ui.filedialog.asksaveasfilename',return_value=str(root/('ap.'+kind))):app.export_ap(kind)
+                    with patch('riju.ap_ui.filedialog.asksaveasfilename',return_value=str(root/('forecast.'+kind))):app.export_ap_forecast(kind)
+                    self.assertTrue((root/('ap.'+kind)).exists());self.assertTrue((root/('forecast.'+kind)).exists())
+                app.ap_table.selection_set(key);app.ap_payment();form=helper.form(app);helper.fill(form,'Actual payment date','2026-11-01');helper.fill(form,'Actual payment reference','ACT-1');helper.fill(form,'Payment evidence / approval basis','Synthetic bank evidence');helper.reviewed(form);helper.press(form,'Preview payment journal');app.update();helper.press(helper.form(app),'Approve AP action');app.update();self.assertEqual(len(app.state['vouchers']),2);self.assertEqual(ap.register(app.state,'2026-11-01')[0]['status'],'Paid')
+            finally:app.destroy()
+    def test_import_button_template_and_batch_approval(self):
+        from riju.app import App
+        from test_receipt_import import raw,row
+        from tkinter import ttk
+        helper=TaxDepreciationDesktopTests()
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);app=App(Vault(root/'sales.json',demo=True))
+            try:
+                app.show('Sales receipt');self.assertTrue(any(isinstance(w,ttk.Button) and w.cget('text')=='Import sales receipt report' for w in helper.walk(app.content)))
+                for kind in ('xlsx','csv'):
+                    with patch('riju.receipt_import_ui.filedialog.asksaveasfilename',return_value=str(root/('template.'+kind))),patch('riju.receipt_import_ui.messagebox.showinfo'):app.sales_report_template(kind)
+                    self.assertTrue((root/('template.'+kind)).exists())
+                source=root/'source.csv';source.write_bytes(raw([row(),row(receipt_no='R2')]))
+                with patch('riju.receipt_import_ui.filedialog.askopenfilename',return_value=str(source)):app.import_sales_report()
+                form=helper.form(app);helper.reviewed(form)
+                with patch('riju.receipt_import_ui.simpledialog.askstring',return_value='Reviewed source report, earned income and payment totals'):helper.press(form,'Approve all valid rows')
+                helper.press(form,'Preview batch journals');app.update();helper.press(helper.form(app),'Approve sales batch');app.update();self.assertEqual(len(app.state['vouchers']),2);self.assertEqual(app.state['queue'][0]['status'],'PROCESSED')
+            finally:app.destroy()

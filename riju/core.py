@@ -159,6 +159,8 @@ def post(state, day, narration, lines, opening=False, reverses=None, metadata=No
         validate_revenue_reversal(state,reverses,day)
         from .cwip import validate_reversal as validate_cwip_reversal
         validate_cwip_reversal(state,reverses,day)
+        from .ap import validate_reversal as validate_ap_reversal
+        validate_ap_reversal(state,reverses,day)
         original=next((v for v in state['vouchers'] if v['id']==reverses),None)
         if original is None:raise ValueError('Original voucher not found.')
         if original.get('fx') and fx is None:raise ValueError('An FX reversal must preserve its original currency link.')

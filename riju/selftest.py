@@ -310,6 +310,31 @@ def run(output):
             questionpacks=[accounting_checks.snapshots(taxbook,'2026-04-01','2027-03-31'),*answer['packs']]
             financial_reports.export_pack_xlsx(questionpacks,root/'checks-and-answer.xlsx');financial_reports.export_pdf(questionpacks,root/'checks-and-answer.pdf')
             result['accounting_checks_questions_passed']=True
+            from . import ap,receipt_import
+            import csv
+            apbook=core.empty_state();supplier=ap.save_vendor(apbook,dict(name='Synthetic packaged vendor',credit_days='30'))
+            apinvoice=ap.enter_invoice(apbook,dict(vendor=supplier['id'],branch='JP',reference='PACK-AP-1',invoice_date='2026-04-02',received_date='2026-04-03',accounting_date='2026-04-03',credit_days='30',due_basis='Receipt date',amount='1000',payable='2000',allocations=[dict(account='4590',amount='1000')],tax_treatment='No separate GST/TDS; reviewed',reviewed=True,basis='Synthetic reviewed source'))
+            ap.extend(apbook,apinvoice['id'],'2026-04-30','2026-05-20','Synthetic vendor agreement',True)
+            appayment=ap.pay(apbook,dict(date='2026-05-03',reference='PACK-AP-PAY',bank_account='1010',items=[dict(invoice=apinvoice['id'],amount='400')],basis='Synthetic payment evidence',reviewed=True))
+            if ap.position(apbook,apinvoice)['remaining']!=60000 or ap.forecast(apbook,'2026-05-04','2026-05-04','2026-05-31')[0]['amount']!=-60000:raise ValueError('Packaged AP payment/forecast failed')
+            appacks=ap.snapshots(apbook,'2026-04-01','2026-05-31')+[ap.forecast_snapshot(apbook,'2026-05-04','2026-05-04','2026-05-31')]
+            financial_reports.export_pack_xlsx(appacks,root/'vendor-ap.xlsx');financial_reports.export_pdf(appacks,root/'vendor-ap.pdf')
+            apvault=Vault(root/'ap.riju');apvault.save(apbook)
+            if apvault.load()!=apbook:raise ValueError('Packaged AP persistence failed')
+            core.reverse(apbook,appayment['voucher'],'2026-05-05')
+            if ap.position(apbook,apinvoice)['remaining']!=100000:raise ValueError('Packaged AP reversal failed')
+            result['vendor_ap_passed']=True
+            receiptbook=core.empty_state();csvbuffer=io.StringIO();writer=csv.DictWriter(csvbuffer,fieldnames=receipt_import.HEADERS);writer.writeheader()
+            for i in range(100):
+                r=dict.fromkeys(receipt_import.HEADERS,'');r.update(receipt_date='2026-04-02',branch='JP',receipt_no='PACK-R-'+str(i),record_type='earned',tax_mode='no_separate_tax',consultation='100',cash='40',upi='60',total='100');writer.writerow(r)
+            receiptbatch=receipt_import.stage(receiptbook,csvbuffer.getvalue().encode(),'packaged-receipts.csv');receipt_import.review(receiptbook,receiptbatch['id'],list(range(100)),True,'Synthetic receipt/tax/payment review',True);receipt_import.post(receiptbook,receiptbatch['id'])
+            if len(receiptbook['vouchers'])!=100 or core.balances(receiptbook,'2026-04-30')['4000']!=-1000000:raise ValueError('Packaged standard receipt batch failed')
+            for suffix in ('xlsx','csv'):receipt_import.template(root/('receipt-template.'+suffix))
+            receiptpack=receipt_import.snapshot(receiptbook,receiptbatch['id']);financial_reports.export_xlsx(receiptpack,root/'receipt-review.xlsx');financial_reports.export_pdf(receiptpack,root/'receipt-review.pdf')
+            receiptvault=Vault(root/'receipts.riju');receiptvault.save(receiptbook)
+            if receiptvault.load()!=receiptbook:raise ValueError('Packaged standard receipts persistence failed')
+            result['standard_receipt_import_passed']=True
+
             result['offline_model_version']=local_model.VERSION;result['offline_model_digest']=local_model.digest();result['offline_language_100_drafts_seconds']=round(time.perf_counter()-langstarted,4)
 
 

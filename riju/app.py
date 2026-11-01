@@ -27,6 +27,8 @@ from .cwip_ui import CwipUI
 from .service_revenue_ui import ServiceRevenueUI
 from .bulk_import_ui import BulkImportUI
 from .gst_completion_ui import GstCompletionUI
+from .receipt_import_ui import ReceiptImportUI
+from .ap_ui import ApUI
 from .checks_ui import ChecksUI
 from .statements_ui import StatementsUI
 from . import activity
@@ -37,7 +39,7 @@ BG='#FBF9F5'; WHITE='#FFFEFC'; INK='#293B55'; GREEN='#355D49'
 SAGE='#E3EEDF'; SAFFRON='#F9E5D1'; MUTED='#596878'
 SAFFRON_HOVER='#F2D5B5'; SAGE_HOVER='#D1E2CB'; BLUE='#E7EDF7'; BORDER='#DCE2DC'
 
-class App(ChecksUI,StatementsUI,GstCompletionUI,BulkImportUI,ServiceRevenueUI,CwipUI,TaxDepreciationUI,FixedAssetsUI,CashFlowUI,TdsUI,RcmUI,GstUI,TaxUI,HistoryUI,BankUI,OperationsUI,LedgerUI,FoundationUI,tk.Tk):
+class App(ReceiptImportUI,ApUI,ChecksUI,StatementsUI,GstCompletionUI,BulkImportUI,ServiceRevenueUI,CwipUI,TaxDepreciationUI,FixedAssetsUI,CashFlowUI,TdsUI,RcmUI,GstUI,TaxUI,HistoryUI,BankUI,OperationsUI,LedgerUI,FoundationUI,tk.Tk):
     def __init__(self,vault):
         super().__init__()
         self.vault=vault
@@ -100,7 +102,7 @@ class App(ChecksUI,StatementsUI,GstCompletionUI,BulkImportUI,ServiceRevenueUI,Cw
         nav=ttk.Frame(self.nav_canvas,padding=(12,14));nav_window=self.nav_canvas.create_window((0,0),window=nav,anchor='nw')
         nav.bind('<Configure>',lambda e:self.nav_canvas.configure(scrollregion=self.nav_canvas.bbox('all')))
         self.nav_canvas.bind('<Configure>',lambda e:self.nav_canvas.itemconfigure(nav_window,width=e.width))
-        self.pages={'Overview':self.overview,'Ledger A/c':self.ledger_accounts,'Work volume':self.work_volume,'Journal studio':self.studio,'Sales receipt':self.sales_receipt,'Service revenue':self.service_revenue,'FX receipts':self.fx_receipts,'Vouchers':self.vouchers,
+        self.pages={'Overview':self.overview,'Ledger A/c':self.ledger_accounts,'Work volume':self.work_volume,'Journal studio':self.studio,'Sales receipt':self.sales_receipt,'AP Vendor Invoices':self.ap_invoices,'Service revenue':self.service_revenue,'FX receipts':self.fx_receipts,'Vouchers':self.vouchers,
                     'Chart of accounts':self.accounts,'Tax setup':self.taxes,'TDS accounting':self.tds_accounting,'GST accounting':self.gst_accounting,'GST cash & filing':self.gst_cash_filing,'GST reverse charge':self.reverse_charge,'Setup & periods':self.setup,'Saved drafts':self.saved_drafts,'Financial reports':self.reports,'Statement review':self.statement_page,'Checks & questions':self.accounting_check_page,'Cash flow setup':self.cash_flow_setup,
                     'Import queue':self.imports,'Bulk import review':self.bulk_imports,'Bank reconciliation':self.banking,
                     'Assets & depreciation':self.assets,'Tax depreciation':self.tax_depreciation,'CWIP & commissioning':self.cwip_projects,'Settings & backup':self.settings,'Change history':self.history}
@@ -129,9 +131,16 @@ class App(ChecksUI,StatementsUI,GstCompletionUI,BulkImportUI,ServiceRevenueUI,Cw
                 self.nav_canvas.yview_scroll(-1 if event.delta>0 else 1,'units')
         self.bind_all('<MouseWheel>',wheel)
 
+        self.ap_reminder=ttk.Button(workspace,text='',command=lambda:self.show('AP Vendor Invoices'));self.ap_reminder.grid(row=2,column=0,sticky='ew')
+        self.update_ap_reminder()
         self.current='Overview'; self.show(self.current)
         self._backup_after=self.after(1500,self.daily_backup)
     def destroy(self):
+        reminder=getattr(self,'_ap_reminder_after',None)
+        if reminder:
+            try:self.after_cancel(reminder)
+            except tk.TclError:pass
+            self._ap_reminder_after=None
         token=getattr(self,'_backup_after',None)
         if token:
             try:self.after_cancel(token)
@@ -307,6 +316,7 @@ class App(ChecksUI,StatementsUI,GstCompletionUI,BulkImportUI,ServiceRevenueUI,Cw
     def sales_receipt(self):
         from .revenue import MODES, receipt_lines
         self.note('Split a receipt across any of the 15 hospital collection categories and cash, card, UPI or other. Treatment payments received are earned revenue; Other source remains in clearing. No GST split is inferred.')
+        uploads=self.bar();self.button(uploads,'Import sales receipt report',self.import_sales_report,True);self.button(uploads,'Excel receipt template',lambda:self.sales_report_template('xlsx'));self.button(uploads,'CSV receipt template',lambda:self.sales_report_template('csv'));self.button(uploads,'Review sales report imports',self.review_sales_reports)
         top=self.bar(); day=self.field(top,'Date',date.today().isoformat(),width=13)
         unit=self.field(top,'Operating unit',self.branch.get() if self.unit()!='ALL' else next(iter(self.branches.values())),list(self.branches.values()),width=22)
         narration=self.field(top,'Receipt / narration','Daily sales receipt',width=36)
@@ -417,6 +427,7 @@ class App(ChecksUI,StatementsUI,GstCompletionUI,BulkImportUI,ServiceRevenueUI,Cw
             return self.state['queue'][t.index(t.selection()[0])]
         def review():
             q=selected()
+            if q.get('kind')=='standard_sales':self.receipt_import_review(q['id']);return
             if q.get('kind')=='bulk':self.show('Bulk import review');return
             dialog=tk.Toplevel(self); dialog.title('Review '+q['filename']); dialog.geometry('1050x600')
             if q.get('kind')=='daily_sales':
@@ -434,6 +445,7 @@ class App(ChecksUI,StatementsUI,GstCompletionUI,BulkImportUI,ServiceRevenueUI,Cw
                 self.table(('Date','Narration','Branch','Debit account','Credit account','Amount'),[(r['date'],r['narration'],r['branch'],r['debit_account'],r['credit_account'],core.rupees(r['amount'])) for r in q['rows']],parent=dialog)
         def approve():
             q=selected()
+            if q.get('kind')=='standard_sales':self.receipt_import_review(q['id']);return
             if q['status']!='PENDING_REVIEW': raise ValueError('Only pending files can be posted.')
             if not messagebox.askyesno('Approve import',f'Have you reviewed all {len(q["rows"])} rows? Post them together?',parent=self): return
             def action(s):

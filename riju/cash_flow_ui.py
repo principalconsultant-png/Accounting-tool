@@ -11,7 +11,7 @@ from . import cash_flow as cf,core,history
 class CashFlowUI:
     def cash_flow_setup(self):
         self.note('Cash-flow statements use a report-wide reviewed cash/equivalent definition and account classifications. Default mappings are proposals. Review actual cash-equivalent/overdraft, interest and tax policies; mixed transactions remain draft until classified. Financial reports also includes both methods and their Excel/PDF handover sections.')
-        bar=self.bar();self.button(bar,'New / revised policy',self.new_cash_flow_policy,True);self.button(bar,'Review voucher allocation',self.review_cash_flow_voucher)
+        bar=self.bar();self.button(bar,'New / revised policy',self.new_cash_flow_policy,True);self.button(bar,'Review voucher allocation',self.review_cash_flow_voucher);self.button(bar,'AP payment forecast',lambda:self.show('AP Vendor Invoices'))
         for kind in ('xlsx','pdf','json'):self.button(bar,'Export '+('Excel' if kind=='xlsx' else kind.upper()),lambda kind=kind:self.export_cash_flow(kind))
         result=cf.analyse(self.state,*self.dates(),self.unit());self.cash_flow_result=result
         ttk.Label(self.content,text=('Reviewed — proofs passed' if result['ready'] else 'DRAFT — review required')+' | Policy: '+(result['policy']['id'] or 'Default proposals')+' | Cash ledgers: '+', '.join(result['policy']['cash_accounts']),wraplength=1000).pack(anchor='w',pady=10)

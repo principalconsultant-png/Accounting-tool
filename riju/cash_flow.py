@@ -8,7 +8,7 @@ from pathlib import Path
 from . import core,foundation,gst,tax
 
 CATEGORIES=('Operating','Investing','Financing','Exchange effects','Review')
-DIRECT='Cash flow - direct';INDIRECT='Cash flow - indirect'
+DIRECT='Cash flow - direct';INDIRECT='Cash flow - indirect';FORECAST='Cash flow - AP forecast'
 
 
 def defaults(state):
@@ -136,6 +136,8 @@ def analyse(state,start,end,branch='ALL'):
         if not reviewed and len({l['branch'] for l in root['lines']})==1:
             unit=root['lines'][0]['branch']
             reviewed=next((a for a in reversed(state.get('cash_flow_allocations',[])) if a['policy_id']==p['id'] and a['voucher_id']==root_id and a['branch'] in ('ALL',unit)),None)
+        from . import ap
+        apflows=ap.payment_flows(state,root_id,p,branch,sign)
         if reviewed:
             local=[dict(a,amount=a['amount']*sign) for a in reviewed['lines']]
             if sum(a['amount'] for a in local)!=delta:reasons.append('Saved allocation no longer agrees with this cash definition.')
@@ -144,6 +146,7 @@ def analyse(state,start,end,branch='ALL'):
             packet=root['fx'];effect=(packet['gross_inr_minor']-packet['inr_minor'])*sign;fee=-packet['fees_inr_minor']*sign
             if effect:local.append(dict(category='Exchange effects',amount=effect,label='Exchange effect on conversion of held currency'))
             if fee:local.append(dict(category=p['mapping'].get('4560','Review'),amount=fee,label='Conversion fees'))
+        elif apflows is not None:local=apflows
         elif any((l['branch'],l['account']) in mixed_controls for l in lines if l['account'] not in cash):reasons.append('Shared control carries investing/financing items; review actual settlement nature.')
         elif delta and not v.get('closing'):
             categories={p['mapping'].get(c,'Review') for c in others}
@@ -169,6 +172,9 @@ def analyse(state,start,end,branch='ALL'):
 
 
 def snapshot(state,mode,start,end,branch='ALL'):
+    if mode==FORECAST:
+        from . import ap
+        pack=ap.forecast_snapshot(state,start,start,end,branch);pack['mode']=FORECAST;return pack
     result=analyse(state,start,end,branch);rows=[]
     if mode==DIRECT:
         for category in CATEGORIES:
@@ -226,8 +232,11 @@ def export(state,start,end,branch,path,kind):
     from . import financial_reports
     packs=[snapshot(state,mode,start,end,branch) for mode in (DIRECT,INDIRECT)]+[support_snapshot(state,start,end,branch),noncash_snapshot(state,start,end,branch),policy_snapshot(state,start,end,branch)]
     if branch=='ALL':packs.append(branch_snapshot(state,start,end))
+    from . import ap
+    forecastend=(datetime.fromisoformat(end).date()+timedelta(days=90)).isoformat()
+    packs.append(ap.forecast_snapshot(state,end,end,forecastend,branch))
     for p in packs:p['prepared']=packs[0]['prepared']
     if kind=='xlsx':financial_reports.export_pack_xlsx(packs,path)
     elif kind=='pdf':financial_reports.export_pdf(packs,path)
-    elif kind=='json':Path(path).write_text(json.dumps(packs[0]['cash_flow'],ensure_ascii=False,indent=2),encoding='utf-8')
+    elif kind=='json':Path(path).write_text(json.dumps(dict(packs[0]['cash_flow'],ap_forecast=dict(asof=end,start=end,end=forecastend,rows=ap.forecast(state,end,end,forecastend,branch))),ensure_ascii=False,indent=2),encoding='utf-8')
     else:raise ValueError('Choose Excel, PDF or JSON.')

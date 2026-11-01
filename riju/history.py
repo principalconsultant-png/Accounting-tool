@@ -20,6 +20,10 @@ def fingerprints(state):
 def verify_saved_state(state):
     """Called before migration; older books honestly have no state checkpoint."""
     core.verify_audit(state)
+    try:
+        from . import ap
+        ap.check(state)
+    except (ValueError,KeyError,TypeError) as e:errors.append('AP integrity: '+str(e))
     checkpoints=[r for r in state['audit'] if r['action']=='STATE_CHECKPOINT']
     if not checkpoints:return False
     latest=checkpoints[-1]
@@ -138,7 +142,10 @@ def trace_voucher(state,voucher_id):
     cwip_costs|={i['cost'] for e in linked_events for i in e['items']}|{e['cost'] for e in linked_events if e.get('cost')}
     cwip_costs|={r['cwip_cost'] for r in tds_context if r.get('cwip_cost')}
     cwip_context=dict(costs=[copy.deepcopy(c) for c in projects['costs'] if c['id'] in cwip_costs],events=[copy.deepcopy(e) for e in projects['events'] if e in linked_events or e.get('cost') in cwip_costs or any(i['cost'] in cwip_costs for i in e['items'])])
-    return dict(cwip_context=cwip_context,voucher=copy.deepcopy(v),gst_context=gst_context,rcm_context=rcm_context,tds_context=tds_context,tds_allocations=tds_links,original=next((copy.deepcopy(x) for x in state['vouchers'] if x['id']==v.get('reverses')),None),reversals=[copy.deepcopy(x) for x in state['vouchers'] if x.get('reverses')==voucher_id],source=copy.deepcopy(source),imports=imports,drafts=draft_links,matches=matches,events=events,coverage='Explicit source/draft links are shown where recorded. Older unlinked entries are not attributed by guessing.')
+    from . import ap
+    apinvoices=[r for r in ap.data(state)['invoices'] if r['voucher'] in related or any(p['voucher'] in related and any(i['invoice']==r['id'] for i in p['items']) for p in ap.data(state)['payments'])]
+    ap_context=dict(invoices=copy.deepcopy(apinvoices),payments=[copy.deepcopy(p) for p in ap.data(state)['payments'] if p['voucher'] in related or any(i['invoice'] in {r['id'] for r in apinvoices} for i in p['items'])])
+    return dict(ap_context=ap_context,cwip_context=cwip_context,voucher=copy.deepcopy(v),gst_context=gst_context,rcm_context=rcm_context,tds_context=tds_context,tds_allocations=tds_links,original=next((copy.deepcopy(x) for x in state['vouchers'] if x['id']==v.get('reverses')),None),reversals=[copy.deepcopy(x) for x in state['vouchers'] if x.get('reverses')==voucher_id],source=copy.deepcopy(source),imports=imports,drafts=draft_links,matches=matches,events=events,coverage='Explicit source/draft links are shown where recorded. Older unlinked entries are not attributed by guessing.')
 
 
 def integrity_report(state):
@@ -187,6 +194,10 @@ def integrity_report(state):
         from . import cwip
         cwip.check(state)
     except (ValueError,KeyError,TypeError) as e:errors.append('CWIP integrity: '+str(e))
+    try:
+        from . import ap
+        ap.check(state)
+    except (ValueError,KeyError,TypeError) as e:errors.append('AP integrity: '+str(e))
     checkpoints=[r for r in state['audit'] if r['action']=='STATE_CHECKPOINT']
     if checkpoints and state['audit'][-1]['action']=='STATE_CHECKPOINT':
         try:verify_saved_state(state)

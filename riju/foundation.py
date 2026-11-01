@@ -4,7 +4,7 @@ import re
 import uuid
 from datetime import date
 
-SCHEMA = 19
+SCHEMA = 20
 KINDS = {'Asset':(1000,1999),'Liability':(2000,2999),'Equity':(3000,3999),
          'Revenue':(4000,4499),'Expense':(4500,4999)}
 GROUPS = {
@@ -42,7 +42,7 @@ def migrate(state):
     """Idempotent in-memory migration; the vault backs up before persisting it."""
     from .core import add_audit,BRANCHES
     if state.get('schema_revision',1)>SCHEMA:raise ValueError('These books need a newer version of Riju Books.')
-    if state.get('schema_revision',1)==SCHEMA and state.get('version')==19:return state
+    if state.get('schema_revision',1)==SCHEMA and state.get('version')==20:return state
     settings=state['settings']
     settings.setdefault('departments',['Pharmacy','Therapy rooms','Inpatient diet kitchen','Outpatient consultations','Central administration'])
     state.setdefault('branches',{code:{'name':name,'city':'','state':'','state_code':'','gstin':'',
@@ -93,7 +93,8 @@ def migrate(state):
     state.setdefault('statement_policies',[])
     state.setdefault('accounting_check_policies',[])
     state.setdefault('accounting_check_reviews',[])
-    state['version']=19
+    state.setdefault('ap',dict(vendors=[],invoices=[],payments=[],schedules=[]))
+    state['version']=20
     state['accounts'].sort(key=lambda a:a['code'])
     add_audit(state,'SCHEMA_UPGRADED',{'to':SCHEMA})
     return state
@@ -198,6 +199,7 @@ def delete_account(state,code):
     if any(code in [*p['ledgers'].values(),p['retention']] for p in state.get('cwip',{}).get('projects',[])):raise ValueError('Retain historical project ledgers.')
     if any(code in mapping.values() for mapping in state.get('gst_cash_ledgers',{}).values()):raise ValueError('Retain historical GST cash controls.')
     if any(code in p['mappings'] for p in state.get('statement_policies',[])):raise ValueError('Retain historical statement classification ledgers.')
+    if any(r['payable']==code for r in state.get('ap',{}).get('invoices',[])) or any(p['bank_account']==code for p in state.get('ap',{}).get('payments',[])):raise ValueError('Retain historical AP source ledgers.')
     item=next(a for a in state['accounts'] if a['code']==code)
     state['accounts'].remove(item);state['account_details'].pop(code,None)
     add_audit(state,'LEDGER_DELETED',{'account':item,'details':details})
