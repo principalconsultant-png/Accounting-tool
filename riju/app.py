@@ -244,6 +244,7 @@ class App(StatementsUI,GstCompletionUI,BulkImportUI,ServiceRevenueUI,CwipUI,TaxD
         self.drafttable=self.table(('Account','Ledger','Operating unit','Department','Debit','Credit'),[],height=5)
         bottom=self.bar(); self.balance_label=ttk.Label(bottom,text='No draft prepared'); self.balance_label.pack(side='left',expand=True,anchor='w')
         self.button(bottom,'Review & post voucher',self.post_draft,True)
+        self.language_explanation=ttk.Label(self.content,text='Offline model: statistical intent classification plus deterministic validation. No internet, model download or automatic posting.',wraplength=1050);self.language_explanation.pack(anchor='w')
     def refresh_draft(self):
         self.drafttable.delete(*self.drafttable.get_children())
         for l in self.draft: self.drafttable.insert('','end',values=(l['account'],self.account_name(l['account']),self.branches[l['branch']],l.get('cost_center',''),core.rupees(l['debit']),core.rupees(l['credit'])))
@@ -251,8 +252,14 @@ class App(StatementsUI,GstCompletionUI,BulkImportUI,ServiceRevenueUI,CwipUI,TaxD
         self.balance_label.configure(text=f'Debits {core.rupees(dr)}   ·   Credits {core.rupees(cr)}   ·   Difference {core.rupees(dr-cr)}')
     def prepare(self):
         text=self.narration.get('1.0','end').strip(); branch=self.branch_names[self.jbranch.get()]
-        lines=core.parse_transaction(text,branch,self.jdate.get(),self.state)
-        self.draft=lines; self.refresh_draft()
+        from . import offline_language
+        try:result=offline_language.interpret(self.state,text,branch,self.jdate.get())
+        except ValueError as error:
+            self.draft=[];self.refresh_draft();self.language_explanation.configure(text=str(error));raise
+        self.jdate.set(result['date']);self.jbranch.set(self.branches[result['branch']]);
+        if result['party']:self.jpayee.set(result['party'])
+        if result['reference']:self.jreference.set(result['reference'])
+        self.draft=result['lines'];self.language_explanation.configure(text=result['explanation']);self.refresh_draft()
     def edit_line(self):
         if not self.drafttable.selection():raise ValueError('Select a journal line to edit.')
         self.add_line(self.drafttable.index(self.drafttable.selection()[0]))

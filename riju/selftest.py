@@ -290,6 +290,17 @@ def run(output):
             if statements.tax_estimate(taxbook,taxvalues)['delta']:raise ValueError('Packaged incremental tax provision duplicated')
             financial_reports.export_xlsx(statements.tax_pack(taxbook,taxpreview),root/'tax-provision.xlsx');financial_reports.export_pdf(statements.tax_pack(taxbook,taxpreview),root/'tax-provision.pdf')
             result['statement_presentation_passed']=True
+            from . import offline_language,local_model
+            import time
+            langstarted=time.perf_counter()
+            for _ in range(100):
+                interpretation=offline_language.interpret(core.empty_state(),'Settled monthly premises rental INR5000 by NEFT at Kammanahalli on 18 June 2026','JP','2026-04-01')
+            if interpretation['account']!='4530' or interpretation['branch']!='KM' or interpretation['date']!='2026-06-18':raise ValueError('Packaged offline interpretation failed')
+            try:offline_language.interpret(core.empty_state(),'Paid INR500 rent net of TDS by bank','JP','2026-04-01')
+            except ValueError:pass
+            else:raise ValueError('Packaged tax-language guard failed')
+            result['offline_language_passed']=True
+            result['offline_model_version']=local_model.VERSION;result['offline_model_digest']=local_model.digest();result['offline_language_100_drafts_seconds']=round(time.perf_counter()-langstarted,4)
 
 
 

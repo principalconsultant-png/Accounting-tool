@@ -910,3 +910,18 @@ class StatementDesktopTests(unittest.TestCase):
                     self.assertTrue((root/('statements.'+kind)).exists())
                 self.assertFalse(app.state['vouchers'])
             finally:app.destroy()
+
+@unittest.skipUnless(os.environ.get('DISPLAY') or os.environ.get('RIJU_GUI_TEST'),'A graphical display is required')
+class LanguageDesktopTests(unittest.TestCase):
+    def test_offline_entities_review_and_refusal_clears_previous_draft(self):
+        from riju.app import App
+        with tempfile.TemporaryDirectory() as d:
+            app=App(Vault(Path(d)/'language.json',demo=True))
+            try:
+                app.show('Journal studio');app.narration.insert('1.0','Settled monthly premises rental INR5000 to ABC Estates for lease by NEFT at Kammanahalli on 18 June 2026 ref RENT-26');app.prepare()
+                self.assertEqual((app.jdate.get(),app.jbranch.get(),app.jpayee.get(),app.jreference.get()),('2026-06-18','Kammanahalli','ABC Estates','RENT-26'));self.assertEqual(app.draft[0]['account'],'4530');self.assertFalse(app.state['vouchers'])
+                self.assertIn('statistical topic',app.language_explanation.cget('text'))
+                app.narration.delete('1.0','end');app.narration.insert('1.0','Paid INR500 rent net of TDS by bank')
+                with self.assertRaises(ValueError):app.prepare()
+                self.assertEqual(app.draft,[]);self.assertIn('TDS accounting',app.language_explanation.cget('text'))
+            finally:app.destroy()
