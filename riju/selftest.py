@@ -253,6 +253,23 @@ def run(output):
             bulkvault=Vault(root/'bulk.riju');bulkvault.save(bulkbook)
             if bulkvault.load()!=bulkbook:raise ValueError('Packaged mapped import persistence failed')
             result['bulk_import_review_passed']=True
+            from . import gst_extensions,gst_payments,gst_portal
+            completed_gst=core.empty_state()
+            for key,rate,treatment in [('PACK-G18','18','Taxable'),('PACK-GEX','0','Exempt')]:tax.save_rule(completed_gst,dict(family='GST',key=key,label=key,effective='2026-04-01',rate=rate,treatment=treatment,source='Packaged synthetic source',applicability='Invented tests only',reviewed=True))
+            gst_extensions.post_invoice(completed_gst,dict(kind='Sale',date='2026-04-02',branch='JP',registration='29ABCDE1234F1Z5',place_of_supply='29',reference='SELF-MIXED',counter_account='1010',narration='Synthetic mixed invoice',confirmed=True,items=[dict(account='4000',rule_key='PACK-G18',amount='100',itc='Not applicable'),dict(account='4010',rule_key='PACK-GEX',amount='50',itc='Not applicable')]))
+            context=dict(date='2026-04-03',branch='JP',registration='29ABCDE1234F1Z5',narration='Synthetic actual portal source',confirmed=True,eligibility_reviewed=True,cgst='9',sgst='9')
+            gst_payments.post(completed_gst,'Deposit',dict(context,reference='SELF-NORMAL-CASH',bank_account='1010'))
+            gst_payments.post(completed_gst,'Cash utilisation',dict(context,reference='SELF-NORMAL-USE'))
+            purchase=rcm.post(completed_gst,'Purchase',dict(context,reference='SELF-RCM-PARTIAL',rule_key='PACK-G18',rcm_basis='Synthetic reviewed RCM',supplier_name='Synthetic supplier',supplier_gstin='29ZZZZZ1234Z1Z5',supplier_state='29',place_of_supply='29',amount='100',account='4590',counter_account='2000',claim_expected=True,eligible_percent='50'))
+            rcm.post(completed_gst,'Deposit',dict(context,reference='SELF-RCM-DEPOSIT',bank_account='1010'))
+            rcm.post(completed_gst,'Discharge',dict(context,reference='SELF-RCM-PART-USE',purchase_id=purchase['id'],cgst='4.5',sgst='4.5'))
+            rcm.post(completed_gst,'Claim',dict(context,reference='SELF-RCM-PART-CLAIM',purchase_id=purchase['id'],cgst='4.5',sgst='4.5'))
+            if gst_payments.position(completed_gst,'29ABCDE1234F1Z5','JP','2026-04-30')['due']['cgst'] or any(gst.summary(completed_gst,'2026-04-01','2026-04-30')['unclassified'].values()):raise ValueError('Packaged mixed GST/actual cash/partial RCM proof failed')
+            for kind in ('xlsx','pdf'):gst_extensions.export(completed_gst,'2026-04-01','2026-04-30','JP',root/('completed-gst.'+kind),kind)
+            gstvault=Vault(root/'completed-gst.riju');gstvault.save(completed_gst)
+            if gstvault.load()!=completed_gst:raise ValueError('Packaged completed GST persistence failed')
+            result['gst_extended_bookkeeping_passed']=True
+
 
 
 

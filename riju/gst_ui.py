@@ -9,9 +9,11 @@ from . import gst,tax,history,core
 
 class GstUI:
     def gst_accounting(self):
-        self.note('Reviewed domestic forward-charge GST invoices. Preview before posting; eligible ITC is your explicit assessment. Place of supply is entered, not inferred from a customer address. Exact journal reversals appear in dated summaries. Linked credit/debit notes retain the original tax treatment. RCM and export/SEZ workflows still require separate manual review.')
+        self.note('Reviewed domestic forward-charge GST invoices. Preview before posting; eligible ITC is your explicit assessment. Place of supply is entered, not inferred from a customer address. Exact journal reversals appear in dated summaries. Linked credit/debit notes retain the original tax treatment. Use source-line entry for mixed rates and reviewed export/SEZ. GST cash & filing records actual cash/credit and portal preparation separately.')
         bar=self.bar();self.button(bar,'New GST invoice',self.new_gst_invoice,True);self.button(bar,'Credit / debit note',self.new_gst_note);self.button(bar,'Export working summary',self.export_gst_summary)
         self.button(bar,'Import normalized 2B',self.import_gst_2b);self.button(bar,'2B CSV template',self.gst_2b_template)
+        bar=self.bar();self.button(bar,'Mixed-rate / export / SEZ invoice',self.new_multiline_gst);self.button(bar,'Source-line credit / debit note',lambda:self.new_multiline_gst(True))
+        for kind in ('xlsx','pdf'):self.button(bar,'Export GST '+kind.upper(),lambda k=kind:self.export_gst_pack(k))
         start,end=self.dates();report=gst.summary(self.state,start,end,self.unit());self.gst_report=report
         self.table(('Working summary','INR'),[(k.replace('_',' ').capitalize(),core.rupees(n)) for k,n in report['totals'].items()]+[('Net GST ledger movement (not payment due)',core.rupees(report['net_movement']))],height=7)
         self.table(('Tax ledger','Actual movement INR','Unclassified/manual movement INR'),[(c,core.rupees(report['ledger_movements'][c]),core.rupees(report['unclassified'][c])) for c in gst.INPUT+gst.OUTPUT],height=4)
@@ -40,10 +42,10 @@ class GstUI:
             # Preview uses the real posting validators on a disposable copy.
             import copy
             core.post(copy.deepcopy(self.state),doc['date'],doc['narration'],doc['lines'])
-            approved.clear();approved.update(values=data,doc=doc)
+            approved.clear();approved.update(values=data,doc=doc,fingerprint=history.fingerprints(self.state))
             preview.configure(state='normal');preview.delete('1.0','end');preview.insert('1.0',json.dumps(doc,ensure_ascii=False,indent=2));preview.configure(state='disabled')
         def post():
-            if not approved or approved['values']!=values():raise ValueError('Prepare a fresh preview after changing any fields.')
+            if not approved or approved['values']!=values() or approved['fingerprint']!=history.fingerprints(self.state):raise ValueError('Prepare a fresh preview after changing any fields.')
             if messagebox.askyesno('Approve GST journal','Have you checked the invoice, rule applicability, place of supply, tax rounding and purchase ITC? This posts the displayed double-entry journal.',parent=win):
                 self.commit(lambda s:gst.post(s,dict(approved['values'],confirmed=True)));win.destroy();self.show('GST accounting')
         bar=ttk.Frame(body);bar.pack(fill='x');self.button(bar,'Prepare journal preview',prepare,True);self.button(bar,'Approve & post',post)
@@ -118,16 +120,17 @@ class GstUI:
         specs=[('original','Original invoice',next(iter(choices)),list(choices)),('date','Note date',datetime.now(history.INDIA).date().isoformat(),None),('document_type','Note type','Credit note',['Credit note','Debit note']),('reference','Unique note reference','',None),('amount','Adjustment base INR (excludes GST)','',None),('counter_account','Refund / balance-adjustment ledger','',None),('narration','Reason / narration','',None)]
         win,body,fields=self._tax_form('Review GST credit / debit note',specs)
         ttk.Label(body,text='Credit notes reduce the original invoice; debit notes increase it. Select the actual bank refund ledger only when money is being refunded; otherwise use the correct receivable/payable/advance control. The original branch, registration, tax treatment and ITC assessment are retained. Verify legal time limits and the actual note; commercial-only adjustments need manual review.',wraplength=1000).pack(anchor='w',pady=12)
+        repay=tk.BooleanVar(value=False);ttk.Checkbutton(body,text='Reviewed: convert already-used purchase ITC reversal to tax payable for repayment',variable=repay).pack(anchor='w')
         text=tk.Text(body,height=16,wrap='word',font=('Consolas',10));text.pack(fill='both',expand=True);reviewed={}
         def values():
-            data={k:v.get().strip() for k,v in fields.items()};data['original_document_id']=choices[data.pop('original')];return data
+            data={k:v.get().strip() for k,v in fields.items()};data['original_document_id']=choices[data.pop('original')];data.update(repay_used_itc=repay.get(),repayment_basis=data['narration']);return data
         def preview():
             data=values();doc=gst.plan_note(self.state,data)
             import copy
             core.post(copy.deepcopy(self.state),doc['date'],doc['narration'],doc['lines'])
-            reviewed.clear();reviewed.update(values=data);text.configure(state='normal');text.delete('1.0','end');text.insert('1.0',json.dumps(doc,ensure_ascii=False,indent=2));text.configure(state='disabled')
+            reviewed.clear();reviewed.update(values=data,fingerprint=history.fingerprints(self.state));text.configure(state='normal');text.delete('1.0','end');text.insert('1.0',json.dumps(doc,ensure_ascii=False,indent=2));text.configure(state='disabled')
         def post():
-            if not reviewed or reviewed['values']!=values():raise ValueError('Prepare a fresh note preview after changing any fields.')
+            if not reviewed or reviewed['values']!=values() or reviewed['fingerprint']!=history.fingerprints(self.state):raise ValueError('Prepare a fresh note preview after changing any fields.')
             if messagebox.askyesno('Approve GST note','Have you reviewed the original invoice, note amounts, tax treatment and actual refund/balance adjustment?',parent=win):
                 self.commit(lambda s:gst.post_note(s,dict(reviewed['values'],confirmed=True)));win.destroy();self.show('GST accounting')
         bar=ttk.Frame(body);bar.pack(fill='x');self.button(bar,'Prepare note preview',preview,True);self.button(bar,'Approve & post note',post)

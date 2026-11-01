@@ -26,7 +26,7 @@ Statuses: COMPLETE = the stated narrow deliverable exists; PARTIAL = some functi
 | B05 | Journal engine and review workflow | PARTIAL | Compound receipts/payments/transfers, accruals, adjustments, refunds, advances and reversals; reference/payee/bank/tax metadata; draft edit/save/review; integer-paise balance checks and branch separation on every posting path. | FR-1, FR-2; release scope |
 | B06 | Basic history and integrity controls | IMPLEMENTED IN DRAFT; ACCEPTANCE PENDING | Human-readable user/time/action and before/after records for relevant changes; trace drafts/imports to vouchers and reversals; integrity checks and recovery; controlled demo reset excluded from live books by default. No statutory certification claim. | FR-1.6, FR-13, AC-08/09; certification deferred |
 | B07 | Tax configuration and applicability | IMPLEMENTED IN DRAFT; ACCEPTANCE PENDING | Editable, effective-dated GST/TDS rates, sections, thresholds, party categories, exemption/taxability, HSN/SAC and GSTIN/state validation; preserve historical treatments; verify applicable rules for each year. Existing tax settings are reference values only. | FR-11; editable tax clarification |
-| B08 | GST accounting and summaries | PARTIAL — DOMESTIC WORKFLOW IMPLEMENTED IN DRAFT | Reviewed intra/inter-state splits, taxable/exempt services, eligible/ineligible ITC, inclusive/exclusive amounts and rounding; tax journals; output/input/net-tax summaries and GSTR-2B import/matching. | FR-11, FR-8.3 |
+| B08 | GST accounting and summaries | FUNCTIONAL BOOKKEEPING BUILD; CLIENT ACCEPTANCE PENDING | Reviewed intra/inter-state splits, taxable/exempt services, eligible/ineligible ITC, inclusive/exclusive amounts and rounding; tax journals; output/input/net-tax summaries and GSTR-2B import/matching. | FR-11, FR-8.3 |
 | B09 | TDS accounting and payment tracking | FUNCTIONAL BUILD AND WINDOWS VERIFIED; CLIENT ACCEPTANCE PENDING | 194J/194C/194I applicability and cumulative thresholds, payee category, reviewed deduction journals, payable/challan reconciliation, and section summaries using B07 rules. | FR-9.2, FR-10.3, FR-8.3 |
 | B10 | Hospital and resort revenue accounting | FUNCTIONAL BUILD AND WINDOWS VERIFIED; CLIENT ACCEPTANCE PENDING | Retain all 15 modes and compound payments; complete package advance/earned-service recognition, cancellations/refunds, explicit outstanding-bill settlements where needed, resort/package revenue and correct service tax treatment; no ageing module required. | Ind AS 115, FR-1; revenue clarification |
 | B11 | Bulk import and review queue | FUNCTIONAL BUILD AND WINDOWS VERIFIED; CLIENT ACCEPTANCE PENDING | Extend existing journal CSV/daily-sales XLSX support to expenses/petty cash and opening batches; templates/mapping, source metadata, validation, row-level review/rejection, edited-file duplicate checks and atomic approval; consistent controls for every branch/year. | 4.4, FR-12; bulk-upload clarification |
@@ -375,3 +375,52 @@ passed native regression, PyInstaller and packaged executable self-test in
 [run 41288498782](https://github.com/principalconsultant-png/Accounting-tool/actions/runs/41288498782).
 The active B10 workflow also gains source-bounded refunds of earned direct
 receipts; its final batch regression will cover original tax and reversal proof.
+
+
+## User-directed completion order
+
+1 November 2026 (IST): finish B08, B10 and B11 first, then B13, B20, B22 and B23 in
+that order. This replaces the interim third-item selection. B24 new encryption/
+recovery and B28 remain deferred by user; no new encryption changes are active.
+
+## B08 extended bookkeeping functional delivery — 0.24.0-dev
+
+Added one-voucher mixed-rate/eligibility invoice sources, per-line original-rate
+credit/debit capacities, reviewed export/SEZ LUT/paid-IGST treatments and immutable
+source evidence. Summaries classify each source line once. Used purchase ITC can
+be explicitly reversed to a reviewed repayment liability rather than silently
+creating available credit. Tax/RCM cash funding, actual utilisation, refunds and
+component transfers remain distinct. Effective-dated reviewed credit-order
+policies and source-linked initial tax/cash openings support earlier periods.
+Registration/unit source isolation, actual book balances, original reference
+reuse guards and future/reversal capacities apply atomically.
+
+RCM supports partial component discharges/claims, mixed eligible percentages,
+eligibility changes, explicit ITC reversals, original-rate credit/debit notes and
+actual restoration/refund of overpaid cash. GST input proof follows actual source
+claims/reversals. Strict supported portal GSTR-2B b2b/cdnr JSON normalization routes
+forward and RCM sources separately, preserves availability and verified note
+parents, and exact RCM source matching never posts/claims. Unsupported nonempty
+portal sections/cess/ambiguous parents fail closed for reviewed normalization;
+actual client portal variants remain source acceptance. Normalized CSV/XLSX is
+retained. This does not claim every government portal/return schema is supported.
+
+Offline ended-month preparation snapshots, manual acknowledgement references and
+source-change/stale detection support the bookkeeper's filing process. No actual
+portal submission/verification or statutory certification is performed. Branch-wide
+shared tax-control proof and registration-specific source positions stay explicit.
+Unclassified tax/RCM/cash differences block reviewed preparation. Source facts,
+actual legal eligibility/time limits and commercial-only amendments still require
+accountant review, rather than being guessed by the application.
+
+Frozen desktop review and Excel/PDF packs cover source lines, tax/RCM ledger
+proofs, partial/overpaid positions, cash/credit/source history, portal reconciliation
+and filing review history. Schema 18 preserves earlier books with original-file
+external backup; existing Windows DPAPI/demo storage is unchanged. See
+TESTING_GST_COMPLETION.md. Local regression: 441 tests ran, 440 passed with one
+Windows-only DPAPI skip, including 22 GST-completion backend cases and a mixed
+invoice/cash/reconciliation/Excel/PDF/reload desktop flow. Packaged logic passed
+with disposable identity stubs; native Windows verification follows the push.
+B08's agreed bookkeeping build criteria are implemented; actual legal/source/
+portal-layout and target-PC acceptance remain separate. Next is B13 only after
+recording the B08 native result. B10/B11 already have native successful builds.

@@ -143,8 +143,12 @@ def post(state, day, narration, lines, opening=False, reverses=None, metadata=No
     if reverses:
         from .gst import validate_reversal as validate_gst_reversal
         validate_gst_reversal(state,reverses,day)
+        from .gst_extensions import check_lines
+        check_lines(state,reversal=(reverses,day))
         from .rcm import validate_reversal as validate_rcm_reversal
         validate_rcm_reversal(state,reverses,day)
+        from .gst_payments import check as check_gst_payments
+        check_gst_payments(state,reversal=(reverses,day))
         from .tds import validate_reversal as validate_tds_reversal
         validate_tds_reversal(state,reverses,day)
         from .fixed_assets import validate_reversal as validate_asset_reversal

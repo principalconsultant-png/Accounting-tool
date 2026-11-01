@@ -4,7 +4,7 @@ import re
 import uuid
 from datetime import date
 
-SCHEMA = 17
+SCHEMA = 18
 KINDS = {'Asset':(1000,1999),'Liability':(2000,2999),'Equity':(3000,3999),
          'Revenue':(4000,4499),'Expense':(4500,4999)}
 GROUPS = {
@@ -42,7 +42,7 @@ def migrate(state):
     """Idempotent in-memory migration; the vault backs up before persisting it."""
     from .core import add_audit,BRANCHES
     if state.get('schema_revision',1)>SCHEMA:raise ValueError('These books need a newer version of Riju Books.')
-    if state.get('schema_revision',1)==SCHEMA and state.get('version')==17:return state
+    if state.get('schema_revision',1)==SCHEMA and state.get('version')==18:return state
     settings=state['settings']
     settings.setdefault('departments',['Pharmacy','Therapy rooms','Inpatient diet kitchen','Outpatient consultations','Central administration'])
     state.setdefault('branches',{code:{'name':name,'city':'','state':'','state_code':'','gstin':'',
@@ -85,7 +85,12 @@ def migrate(state):
     state.setdefault('tax_depreciation',{k:[] for k in ('blocks','rules','additions','uses','disposals','claims','reviews','status_reviews')})
     state.setdefault('cwip',{'projects':[], 'costs':[], 'events':[]})
     state.setdefault('service_revenue',[])
-    state['version']=17
+    state.setdefault('gst_utilisation_policies',[])
+    state.setdefault('gst_actions',[])
+    state.setdefault('gst_cash_ledgers',{})
+    state.setdefault('gst_filing_reviews',[])
+    state.setdefault('gst_portal_imports',[])
+    state['version']=18
     state['accounts'].sort(key=lambda a:a['code'])
     add_audit(state,'SCHEMA_UPGRADED',{'to':SCHEMA})
     return state
@@ -165,6 +170,7 @@ def save_account(state,code,name,kind,group,cash_flow='Review',active=True,descr
     for p in state.get('cwip',{}).get('projects',[]):
         required='CWIP' if code in p['ledgers'].values() else 'Retention' if code==p['retention'] else None
         if required and group!=required:raise ValueError('Retain the historical CWIP project ledger group: '+required)
+    if any(code in mapping.values() for mapping in state.get('gst_cash_ledgers',{}).values()) and (group!='Other assets' or not active):raise ValueError('Retain the active GST electronic-cash control ledger.')
     old={'account':copy.deepcopy(existing),'details':copy.deepcopy(state['account_details'].get(code))}
     item={'code':code,'name':name.strip(),'kind':kind}
     if existing:state['accounts'].remove(existing)
@@ -187,6 +193,7 @@ def delete_account(state,code):
     if code in state.get('asset_ledgers',{}).values():raise ValueError('Retain the historical disposal control ledger.')
     if any(code in (a['ppe'],a['accum'],a['expense']) for a in state.get('book_assets',[])):raise ValueError('A historical book asset references this ledger; retain its inactive master.')
     if any(code in [*p['ledgers'].values(),p['retention']] for p in state.get('cwip',{}).get('projects',[])):raise ValueError('Retain historical project ledgers.')
+    if any(code in mapping.values() for mapping in state.get('gst_cash_ledgers',{}).values()):raise ValueError('Retain historical GST cash controls.')
     item=next(a for a in state['accounts'] if a['code']==code)
     state['accounts'].remove(item);state['account_details'].pop(code,None)
     add_audit(state,'LEDGER_DELETED',{'account':item,'details':details})

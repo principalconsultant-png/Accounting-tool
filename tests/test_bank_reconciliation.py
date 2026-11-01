@@ -191,7 +191,7 @@ class BankTests(unittest.TestCase):
         for key in ('bank_statements','bank_exceptions'):self.s.pop(key)
         self.s['settings'].pop('bank_reconciliation')
         foundation.migrate(self.s)
-        self.assertEqual(self.s['version'],17)
+        self.assertEqual(self.s['version'],18)
         for key in ('vouchers','accounts','fx_rates','foreign_accounts','fx_ledgers'):
             self.assertEqual(self.s[key],before[key])
         core.verify_audit(self.s)

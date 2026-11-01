@@ -41,7 +41,13 @@ def plan(state,values):
     if type(values.get('inclusive',False))!=bool:raise ValueError('Choose inclusive or exclusive explicitly.')
     rule=tax.resolve_rule(state,values.get('rule_key',''),on)
     if rule['family']!='GST' or not rule['reviewed']:raise ValueError('Select a reviewed GST rule effective on the invoice date.')
-    if rule['treatment']=='Zero rated':raise ValueError('Export/SEZ zero-rated documents require a separately reviewed workflow. Use a manual reviewed journal for now.')
+    supply=values.get('supply_type','Domestic')
+    if supply not in ('Domestic','Export under LUT','Export with IGST','SEZ under LUT','SEZ with IGST'):raise ValueError('Choose a reviewed domestic/export/SEZ supply type.')
+    if supply!='Domestic':
+        if kind!='Sale' or values.get('export_reviewed') is not True or not str(values.get('export_basis','')).strip():raise ValueError('Review export/SEZ supply eligibility and supporting LUT/payment/authorized-operation evidence.')
+        if ('under LUT' in supply and rule['treatment']!='Zero rated') or ('with IGST' in supply and rule['treatment']!='Taxable'):raise ValueError('LUT supplies require a zero-rated rule; paid-IGST supplies require the reviewed taxable rule.')
+        if supply.startswith('Export') and (not re.fullmatch('[A-Z]{2}',values.get('country','')) or values.get('country')=='IN'):raise ValueError('Enter the actual non-India destination country code.')
+    elif rule['treatment']=='Zero rated':raise ValueError('Select the explicitly reviewed export/SEZ workflow for zero-rated supplies.')
     if rule['party_category']!='Any':raise ValueError('Party-specific applicability requires a separate reviewed workflow; use a general GST rule only when verified appropriate.')
     origin=_gstin(values.get('registration',''));unit=state['branches'][branch]
     if unit.get('gstin') and unit['gstin']!=origin:raise ValueError('The GSTIN differs from the configured branch registration.')
@@ -49,9 +55,10 @@ def plan(state,values):
     configured=state['settings'].get('registration',{}).get('gstin','')
     if not unit.get('gstin') and configured and configured!=origin:raise ValueError('Configure the branch GSTIN before using a registration different from the entity GSTIN.')
     pos=str(values.get('place_of_supply','')).strip()
-    if not re.fullmatch(r'\d{2}',pos) or not 1<=int(pos)<=38:raise ValueError('Enter the reviewed Indian place-of-supply state code.')
+    if (not re.fullmatch(r'\d{2}',pos) or not 1<=int(pos)<=38) and not (supply.startswith('Export') and pos=='96'):raise ValueError('Enter the reviewed Indian place-of-supply state code.')
     supplier=_gstin(values.get('counterparty_gstin',''),True);reference=str(values.get('reference','')).strip()
     if not reference:raise ValueError('Enter the invoice/reference number.')
+    if supply.startswith('SEZ') and not supplier:raise ValueError('SEZ supplies require the recipient GSTIN and authorized-operation review.')
     if supplier==origin:raise ValueError('Self-invoices and transfers within the same GST registration require separate review.')
     account=values.get('account');counter=values.get('counter_account');accounts={a['code']:a for a in state['accounts']}
     if account not in accounts or counter not in accounts or account==counter:raise ValueError('Select distinct valid revenue/cost and payment/control ledgers.')
@@ -67,7 +74,7 @@ def plan(state,values):
     if kind=='Sale' and itc!='Not applicable':raise ValueError('ITC choice applies only to purchases.')
     if kind=='Purchase' and itc=='Eligible' and (not supplier or rule['treatment']!='Taxable'):raise ValueError('Eligible ITC requires a supplier GSTIN and a taxable purchase; no eligibility is inferred.')
     if kind=='Purchase' and rule['treatment']=='Taxable' and not supplier:raise ValueError('A taxable purchase needs the supplier GSTIN from its tax invoice. RCM/unregistered-supplier cases require separate review.')
-    intra=(supplier[:2]==pos) if kind=='Purchase' and supplier else origin[:2]==pos
+    intra=False if supply!='Domestic' else (supplier[:2]==pos) if kind=='Purchase' and supplier else origin[:2]==pos
     if kind=='Purchase' and itc=='Eligible' and intra and pos!=origin[:2]:raise ValueError('Intra-state tax charged outside this registration state needs separate eligibility review; select ineligible or correct the invoice.')
     totals=split(rule,values.get('amount',''),values.get('inclusive',False),intra)
     narration=str(values.get('narration','')).strip()
@@ -85,14 +92,17 @@ def plan(state,values):
         if eligible:
             for code,key in zip(INPUT,('cgst','sgst','igst')):add(code,totals[key],True)
         add(counter,totals['total'],False)
-    return dict(id=str(uuid.uuid4()),kind=kind,date=on,branch=branch,registration=origin,place_of_supply=pos,counterparty_gstin=supplier,reference=reference,rule=rule,account=account,counter_account=counter,inclusive=values.get('inclusive',False),itc=itc,narration=narration,totals=totals,lines=lines,rounding='Half-up to paise; an odd split paise is allocated to SGST. Review against the actual invoice before posting.')
+    return dict(supply_type=supply,export_basis=str(values.get('export_basis','')).strip(),country=values.get('country',''),id=str(uuid.uuid4()),kind=kind,date=on,branch=branch,registration=origin,place_of_supply=pos,counterparty_gstin=supplier,reference=reference,rule=rule,account=account,counter_account=counter,inclusive=values.get('inclusive',False),itc=itc,narration=narration,totals=totals,lines=lines,rounding='Half-up to paise; an odd split paise is allocated to SGST. Review against the actual invoice before posting.')
 
 
 def post(state,values):
     if values.get('confirmed') is not True:raise ValueError('Review the invoice, place of supply, tax rounding and ITC eligibility before approval.')
     candidate=copy.deepcopy(state);doc=plan(candidate,values)
     v=core.post(candidate,doc['date'],doc['narration'],doc['lines'],metadata={'type':'Receipt' if doc['kind']=='Sale' else 'Payment','reference':doc['reference']})
-    doc['voucher_id']=v['id'];candidate['gst_documents'].append(doc);core.add_audit(candidate,'GST_DOCUMENT_POSTED',copy.deepcopy(doc))
+    doc['voucher_id']=v['id'];candidate['gst_documents'].append(doc)
+    from .gst_payments import check
+    check(candidate)
+    core.add_audit(candidate,'GST_DOCUMENT_POSTED',copy.deepcopy(doc))
     state.clear();state.update(candidate);return copy.deepcopy(doc)
 
 
@@ -123,16 +133,25 @@ def summary(state,start,through,branch='ALL'):
     rows=register(state,start,through,branch);totals={k:0 for k in ('sales_base','purchases_base','ineligible_tax','input_cgst','input_sgst','input_igst','output_cgst','output_sgst','output_igst')}
     classified={code:0 for code in INPUT+OUTPUT};turnover={}
     for d in rows:
-        t=d['totals'];sale=d['kind']=='Sale';totals['sales_base' if sale else 'purchases_base']+=t['base']
-        key=(d['registration'],d['kind'],d['rule']['treatment']);turnover[key]=turnover.get(key,0)+t['base']
-        if not sale and d['itc']=='Ineligible':totals['ineligible_tax']+=t['cgst']+t['sgst']+t['igst'];continue
-        for code,part in zip(OUTPUT if sale else INPUT,('cgst','sgst','igst')):
-            totals[('output_' if sale else 'input_')+part]+=t[part];classified[code]+=t[part]
+        sale=d['kind']=='Sale'
+        items=d.get('line_items') or [dict(totals=d['totals'],rule=d['rule'],itc=d['itc'])]
+        for item in items:
+            t={k:n*d['sign'] for k,n in item['totals'].items()} if d.get('line_items') else item['totals']
+            totals['sales_base' if sale else 'purchases_base']+=t['base'];key=(d['registration'],d['kind'],item['rule']['treatment']);turnover[key]=turnover.get(key,0)+t['base']
+            if not sale and item['itc']=='Ineligible':totals['ineligible_tax']+=t['cgst']+t['sgst']+t['igst'];continue
+            for code,part in zip(OUTPUT if sale else INPUT,('cgst','sgst','igst')):totals[('output_' if sale else 'input_')+part]+=t[part];classified[code]+=t[part]
     from . import rcm
     for record in rcm.movements(state,start,through,branch):
-        if record['stage']=='Claim':
-            for code,part in zip(INPUT,('cgst','sgst','igst')):
-                amount=record['amounts'][part]*record['sign'];totals['input_'+part]+=amount;classified[code]+=amount
+        for code,part in zip(INPUT,('cgst','sgst','igst')):
+            amount=sum(l['debit']-l['credit'] for l in record['lines'] if l['account']==code)*record['sign'];totals['input_'+part]+=amount;classified[code]+=amount
+    from . import gst_payments
+    for action in gst_payments.actions(state):
+        if action['kind']=='Register opening' or action['date']>through or branch not in ('ALL',action['branch']):continue
+        # Journal-date movements include exact dated reversal chains.
+        roots=_roots(state);factor=sum(sign for v in state['vouchers'] if start<=v['date']<=through for root,sign in [roots[v['id']]] if root==action['voucher_id'])
+        for code in INPUT+OUTPUT:
+            n=sum((l['debit']-l['credit'])*(1 if code in INPUT else -1) for l in action['lines'] if l['account']==code)*factor;classified[code]+=n
+            if action['kind']=='ITC reclassification' and code in INPUT:totals['input_'+('cgst','sgst','igst')[INPUT.index(code)]]+=n
     actual={code:0 for code in INPUT+OUTPUT};opening={code:0 for code in actual}
     for v in state['vouchers']:
         for l in v['lines']:
@@ -335,6 +354,10 @@ def plan_note(state,values):
     original=next((d for d in state['gst_documents'] if d['id']==values.get('original_document_id')),None)
     if original is None or original.get('original_document_id'):raise ValueError('Select an original GST invoice; notes must link directly to it.')
     if original.get('service_revenue_id'):raise ValueError('Use Service revenue to cancel/refund this source so service and collection capacity remain linked.')
+    if original.get('line_items'):
+        from .gst_extensions import plan_note
+        from .gst_payments import apply_used_itc_repayment
+        return apply_used_itc_repayment(state,plan_note(state,values),values)
     on=tax.day(values.get('date',''));note_type=values.get('document_type')
     if on<original['date'] or note_type not in ('Credit note','Debit note'):raise ValueError('Choose a credit/debit note dated on or after the original invoice.')
     roots=_roots(state);original_net=sum(sign for v in state['vouchers'] if v['date']<=on for root,sign in [roots[v['id']]] if root==original['voucher_id'])
@@ -363,14 +386,23 @@ def plan_note(state,values):
         for code,key in zip(OUTPUT if sale else INPUT,('cgst','sgst','igst')):add(code,totals[key],(not sale) if sign>0 else sale)
     add(counter,totals['total'],sale if sign>0 else not sale)
     result=copy.deepcopy(original);result.update(id=str(uuid.uuid4()),original_document_id=original['id'],original_voucher_id=original['voucher_id'],original_reference=original['reference'],document_type=note_type,document_sign=sign,date=on,reference=reference,counter_account=counter,narration=narration,totals=totals,lines=lines,inclusive=False,rounding='Original rate/treatment retained. Full credit releases exact remaining tax paise; compare with the actual note. GST time-limit, commercial-only adjustments and return eligibility require separate review.')
-    result.pop('voucher_id',None);return result
+    result.pop('voucher_id',None)
+    from .gst_payments import apply_used_itc_repayment
+    return apply_used_itc_repayment(state,result,values)
 
 
 def post_note(state,values):
     if values.get('confirmed') is not True:raise ValueError('Review the note, original invoice, refund/control ledger and tax treatment before approval.')
     candidate=copy.deepcopy(state);note=plan_note(candidate,values)
     voucher=core.post(candidate,note['date'],note['narration'],note['lines'],metadata={'type':'Adjustment','reference':note['reference']})
-    note['voucher_id']=voucher['id'];candidate['gst_documents'].append(note);core.add_audit(candidate,'GST_NOTE_POSTED',copy.deepcopy(note))
+    note['voucher_id']=voucher['id'];candidate['gst_documents'].append(note)
+    if note.get('used_itc_repayment'):
+        repayment=note['used_itc_repayment'];candidate['gst_actions'].append(dict(id=str(uuid.uuid4()),date=note['date'],kind='ITC reversal payable',registration=note['registration'],branch=note['branch'],reference=note['reference']+' / used ITC repayment',voucher_id=note['voucher_id'],source_document_id=note['id'],narration=repayment['basis'],lines=repayment['lines']))
+    from .gst_extensions import check_lines
+    check_lines(candidate)
+    from .gst_payments import check
+    check(candidate)
+    core.add_audit(candidate,'GST_NOTE_POSTED',copy.deepcopy(note))
     state.clear();state.update(candidate);return copy.deepcopy(note)
 
 

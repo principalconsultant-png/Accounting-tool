@@ -125,7 +125,7 @@ class TdsTests(unittest.TestCase):
             root=Path(d);ext=root/'external';ext.mkdir();old=copy.deepcopy(self.s);old['version']=9;old['schema_revision']=9
             for key in ('tds_records','tds_allocations','tds_challan_details','tds_ledgers'):old.pop(key)
             history.checkpoint(old);p=root/'old.json';p.write_text(json.dumps(old));raw=p.read_bytes();v=Vault(p,demo=True);new=v.load();new['settings']['backup_dir']=str(ext);v.save(new)
-            self.assertEqual(v.last_upgrade_backup.read_bytes(),raw);self.assertEqual(new['version'],17);self.assertEqual(new['tax_config'],old['tax_config']);self.assertEqual(v.load(),new)
+            self.assertEqual(v.last_upgrade_backup.read_bytes(),raw);self.assertEqual(new['version'],18);self.assertEqual(new['tax_config'],old['tax_config']);self.assertEqual(v.load(),new)
 
     def test_automatic_catchup_uses_recorded_under_deduction_target(self):
         self.expense(mode='Reviewed manual',manual_tax='0',manual_target='60',review_reason='Verified liability recorded before deduction')

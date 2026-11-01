@@ -852,10 +852,42 @@ class BulkImportDesktopTests(unittest.TestCase):
                 raw=b'date,reference,branch,narration,debit_account,credit_account,amount,journal_id\n2026-04-01,GUI-BULK,JP,Synthetic,4590,2000,100,\n'
                 app.commit(lambda s:bulk.stage(s,raw,'gui.csv','Expense'));app.show('Bulk import review');app.bulk_batches.selection_set(app.bulk_batches.get_children()[0]);app.open_bulk_rows();app.bulk_rows.selection_set(app.bulk_rows.get_children()[0])
                 with patch('riju.bulk_import_ui.simpledialog.askstring',return_value='Reviewed synthetic source'):app.review_bulk_row(True)
-                app.post_bulk();app.update();helper=TaxDepreciationDesktopTests();helper.press(helper.form(app),'Approve service action');app.update();self.assertEqual(len(app.state['vouchers']),1)
+                app.post_bulk();app.update();helper=TaxDepreciationDesktopTests();helper.press(helper.form(app),'Approve bulk import');app.update();self.assertEqual(len(app.state['vouchers']),1)
                 app.bulk_batches.selection_set(app.bulk_batches.get_children()[0])
                 for kind in ('xlsx','pdf'):
                     with patch('riju.bulk_import_ui.filedialog.asksaveasfilename',return_value=str(root/('bulk.'+kind))):app.export_bulk(kind)
                     self.assertTrue((root/('bulk.'+kind)).exists())
             finally:app.destroy()
             self.assertEqual(vault.load()['queue'][0]['status'],'PROCESSED')
+
+@unittest.skipUnless(os.environ.get('DISPLAY') or os.environ.get('RIJU_GUI_TEST'),'A graphical display is required')
+class GstCompletionDesktopTests(unittest.TestCase):
+    walk=TaxDepreciationDesktopTests.walk
+    form=TaxDepreciationDesktopTests.form
+    fill=TaxDepreciationDesktopTests.fill
+    press=TaxDepreciationDesktopTests.press
+    reviewed=TaxDepreciationDesktopTests.reviewed
+    def test_mixed_source_cash_use_exports_and_reload(self):
+        import tkinter as tk
+        import json
+        from riju.app import App
+        from riju import tax,gst,gst_payments as pay
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);v=Vault(root/'gst.json',demo=True);app=App(v)
+            try:
+                for key,rate,treatment in [('GUI-TAX','18','Taxable'),('GUI-EX','0','Exempt')]:app.commit(lambda s,key=key,rate=rate,treatment=treatment:tax.save_rule(s,dict(family='GST',key=key,label=key,effective='2026-04-01',rate=rate,treatment=treatment,applicability='Synthetic',source='Test',reviewed=True)))
+                app.year.set('2026');app.show('GST accounting');app.new_multiline_gst();f=self.form(app)
+                for k,val in [('Document date','2026-04-02'),('Unique source reference','GUI-MIXED'),('Reviewed source / statutory note basis','Reviewed synthetic invoice'),('Supplying/receiving GSTIN','29ABCDE1234F1Z5'),('Reviewed place of supply state (96 export)','29')]:self.fill(f,k,val)
+                text=next(w for w in self.walk(f) if isinstance(w,tk.Text));text.delete('1.0','end');text.insert('1.0',json.dumps([dict(account='4000',rule_key='GUI-TAX',amount='100',itc='Not applicable'),dict(account='4010',rule_key='GUI-EX',amount='50',itc='Not applicable')]))
+                self.reviewed(f);self.press(f,'Preview GST source lines');app.update();self.press(self.form(app),'Approve GST action');app.update();self.assertEqual(app.state['gst_documents'][0]['totals']['total'],16800)
+                app.show('GST cash & filing');app.gst_cash_action('Deposit');f=self.form(app)
+                for k,val in [('Actual action date','2026-04-03'),('GST registration','29ABCDE1234F1Z5'),('Actual challan/utilisation/source reference','GUI-CIN'),('Reviewed source / eligibility / portal evidence','Synthetic bank deposit'),('CGST actual amount INR','9'),('SGST actual amount INR','9')]:self.fill(f,k,val)
+                self.reviewed(f);self.press(f,'Preview GST action');app.update();self.press(self.form(app),'Approve GST action');app.update()
+                app.gst_cash_action('Cash utilisation');f=self.form(app)
+                for k,val in [('Actual action date','2026-04-04'),('GST registration','29ABCDE1234F1Z5'),('Actual challan/utilisation/source reference','GUI-USE'),('Reviewed source / eligibility / portal evidence','Synthetic actual cash use'),('CGST actual amount INR','9'),('SGST actual amount INR','9')]:self.fill(f,k,val)
+                self.reviewed(f);self.press(f,'Preview GST action');app.update();self.press(self.form(app),'Approve GST action');app.update();self.assertEqual(pay.position(app.state,'29ABCDE1234F1Z5','JP','2026-04-30')['due']['cgst'],0)
+                for kind in ('xlsx','pdf'):
+                    with patch('riju.gst_completion_ui.filedialog.asksaveasfilename',return_value=str(root/('gst.'+kind))):app.export_gst_pack(kind)
+                    self.assertTrue((root/('gst.'+kind)).exists())
+            finally:app.destroy()
+            loaded=v.load();self.assertFalse(any(gst.summary(loaded,'2026-04-01','2026-04-30')['unclassified'].values()))
