@@ -131,6 +131,22 @@ class Vault:
         shutil.copy2(self.path,dest)
         if dest.read_bytes()!=self.path.read_bytes(): raise IOError('Backup verification failed.')
         return dest
+    def start_clean_books(self,backup_directory,confirmation):
+        """Replace the active book only after preserving its verified original bytes."""
+        if confirmation!='START CLEAN BOOKS':raise ValueError('Type START CLEAN BOOKS exactly to confirm clearing all entered data and custom setup.')
+        with file_lock(str(self.path)+'.write.lock'):
+            if not self.path.is_file():raise ValueError('No saved active book exists to reset. The application already starts with empty books.')
+            digest=hashlib.sha256(self.path.read_bytes()).hexdigest()
+            if digest!=self.last_digest:raise ValueError('Vault changed in another instance. Reopen before starting clean books.')
+            # Reject corrupt/unverified input; never overwrite evidence while resetting.
+            Vault(self.path,demo=self.demo).load()
+            safety_copy=self.backup(backup_directory)
+            fresh=empty_state();fresh['settings']['backup_dir']=str(backup_directory)
+            from .core import add_audit
+            add_audit(fresh,'CLEAN_BOOKS_STARTED',{'previous_book_sha256':digest,'verified_backup_filename':safety_copy.name,'scope':'All entered transactions, imports, drafts and custom setup cleared; starter defaults and backup location retained. No external credit/billing service is accessed.'})
+            self._save(fresh)
+        return fresh,safety_copy
+
     def restore(self,path,backup_directory):
         source=Vault(path,demo=self.demo)
         restored=source.load()

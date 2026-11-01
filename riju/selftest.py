@@ -334,6 +334,11 @@ def run(output):
             receiptvault=Vault(root/'receipts.riju');receiptvault.save(receiptbook)
             if receiptvault.load()!=receiptbook:raise ValueError('Packaged standard receipts persistence failed')
             result['standard_receipt_import_passed']=True
+            resetvault=Vault(root/'reset.riju');resetstate=core.empty_state();core.post(resetstate,'2026-04-01','Synthetic test entry to clear',[dict(account='1000',branch='JP',debit=10000,credit=0),dict(account='4000',branch='JP',debit=0,credit=10000)]);resetvault.save(resetstate)
+            resetoriginal=resetvault.path.read_bytes();resetfolder=root/'reset-backup';resetfolder.mkdir();clean,resetbackup=resetvault.start_clean_books(resetfolder,'START CLEAN BOOKS')
+            if clean['vouchers'] or resetbackup.read_bytes()!=resetoriginal or resetvault.load()!=clean or len(Vault(resetbackup).load()['vouchers'])!=1:raise ValueError('Packaged verified clean-books reset failed')
+            result['verified_clean_books_reset_passed']=True
+
 
             result['offline_model_version']=local_model.VERSION;result['offline_model_digest']=local_model.digest();result['offline_language_100_drafts_seconds']=round(time.perf_counter()-langstarted,4)
 

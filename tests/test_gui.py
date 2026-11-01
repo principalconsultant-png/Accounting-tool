@@ -987,3 +987,18 @@ class ApReceiptDesktopTests(unittest.TestCase):
                 with patch('riju.receipt_import_ui.simpledialog.askstring',return_value='Reviewed source report, earned income and payment totals'):helper.press(form,'Approve all valid rows')
                 helper.press(form,'Preview batch journals');app.update();helper.press(helper.form(app),'Approve sales batch');app.update();self.assertEqual(len(app.state['vouchers']),2);self.assertEqual(app.state['queue'][0]['status'],'PROCESSED')
             finally:app.destroy()
+
+@unittest.skipUnless(os.environ.get('DISPLAY') or os.environ.get('RIJU_GUI_TEST'),'A graphical display is required')
+class CleanBooksDesktopTests(unittest.TestCase):
+    def test_only_explicit_backup_confirmed_reset_clears_local_book(self):
+        from riju.app import App
+        from test_clean_books import CleanBookTests
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);folder=root/'backup';folder.mkdir();v,s=CleanBookTests().source(root/'book.json');app=App(Vault(v.path,demo=True))
+            try:
+                self.assertEqual(len(app.state['vouchers']),1);app.show('Settings & backup')
+                with patch('riju.app.messagebox.askyesno',return_value=False):app.start_clean_books()
+                self.assertEqual(len(app.state['vouchers']),1)
+                with patch('riju.app.messagebox.askyesno',return_value=True),patch('riju.app.filedialog.askdirectory',return_value=str(folder)),patch('riju.app.simpledialog.askstring',return_value='START CLEAN BOOKS'),patch('riju.app.messagebox.showinfo'):app.start_clean_books()
+                self.assertFalse(app.state['vouchers']);self.assertFalse(app.state['ap']['vendors']);self.assertEqual(app.current,'Overview');self.assertEqual(app.branch.get(),'All operating units');self.assertFalse(Vault(v.path,demo=True).load()['vouchers']);self.assertTrue(list(folder.iterdir()))
+            finally:app.destroy()

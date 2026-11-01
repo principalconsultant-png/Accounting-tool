@@ -23,7 +23,7 @@ def verify_saved_state(state):
     try:
         from . import ap
         ap.check(state)
-    except (ValueError,KeyError,TypeError) as e:errors.append('AP integrity: '+str(e))
+    except (ValueError,KeyError,TypeError) as e:raise ValueError('AP integrity: '+str(e)) from e
     checkpoints=[r for r in state['audit'] if r['action']=='STATE_CHECKPOINT']
     if not checkpoints:return False
     latest=checkpoints[-1]

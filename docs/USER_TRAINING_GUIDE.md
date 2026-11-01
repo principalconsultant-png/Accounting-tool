@@ -1,6 +1,6 @@
 # Riju Books — Bookkeeping Training and User Guide
 
-Development version 0.29.0-dev | 1 November 2026 | Windows | INR
+Development version 0.29.1-dev | 1 November 2026 | Windows | INR
 
 Audience: a new bookkeeper, an accountant reviewing the work, and the person delivering the books to the hospital. This guide explains both the workflow and the bookkeeping behind it. Use the matching development executable; screen names refer to that version. Dates shown in examples are practice dates, not instructions to post into live books.
 
@@ -18,13 +18,15 @@ Posting always requires review. Previewing, uploading, changing a schedule or ex
 
 1. Download the RijuBooks-Windows ZIP supplied for the matching build and extract all files. Do not run the application from inside the ZIP.
 2. Find RijuBooks.exe, normally under dist in the extracted bundle. The application does not require the end user to install Python.
-3. Read packaged-selftest.json: version should be 0.29.0-dev and passed should be true. The included checksum file identifies the executable supplied by the build.
+3. Read packaged-selftest.json: version should be 0.29.1-dev and passed should be true. The included checksum file identifies the executable supplied by the build.
 4. Use a disposable training book first. Do not practise by adding sample invoices to the live hospital book. Your administrator can start a demo copy with `RijuBooks.exe --demo --data training.json`; the JSON training file is not protected for live use.
 5. For normal Windows use, the default book is under `%LOCALAPPDATA%\RijuBooks\books.riju`. Keep the same Windows user/profile for that book.
 6. In Settings & backup choose the external backup folder. Confirm the device is connected and a backup is actually created.
 7. When an upgrade banner appears, configure the external backup first. The original-format book must be retained before the upgraded file is saved. Older executables cannot open format 20 books.
 
 The existing Windows DPAPI storage remains in this build. New portable encryption/recovery and mailbox ingestion were deferred. There is no new password/recovery-key setup. A copy of a DPAPI file by itself is not a proven replacement-computer recovery method; keep the original Windows profile and follow the existing recovery arrangement. Do not discard the original book/profile when testing a newer executable.
+
+To remove all practice entries from your own Windows book, open Settings & backup and select Start clean books — clear all test data. Review the counts, select a separate backup folder and type START CLEAN BOOKS exactly. The original saved book is byte-verified into that backup before the active book is replaced. If backup or save fails, do not assume a reset occurred. This clears all entered transactions, imports, drafts, AP vendors/invoices/payments and custom setup; no accounting balances are carried forward. The starter chart/branches and chosen backup location remain. Use Restore backup to recover the original book under the existing Windows account. Merely replacing the executable does not erase locally saved entries, and the application never clears a book automatically on launch. ChatGPT/API credits are separate; the reset does not access billing or API accounts. Standard ChatGPT usage terms still apply to work requested in this chat.
 
 ## 3. Bookkeeping essentials for a new user
 

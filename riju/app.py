@@ -512,6 +512,22 @@ class App(ReceiptImportUI,ApUI,ChecksUI,StatementsUI,GstCompletionUI,BulkImportU
             if not folder:raise ValueError('Configure the external backup folder first.')
             self.state=self.vault.restore(path,folder);self.refresh_masters();self.show('Overview')
         self.button(self.bar(),'Restore backup',restore)
+        ttk.Label(self.content,text='Start clean books removes every entered transaction/import/draft and custom setup from this active book, returning to starter defaults. A verified separate backup is mandatory. ChatGPT/API credits are outside Riju Books; this action does not call any billing/API service.',wraplength=950).pack(anchor='w',pady=10)
+        self.button(self.bar(),'Start clean books — clear all test data',self.start_clean_books)
+
+    def start_clean_books(self):
+        if not self.vault.path.is_file():
+            messagebox.showinfo('Already empty','There is no saved book to clear. This book already starts empty.',parent=self);return
+        counts='Posted vouchers: '+str(len(self.state['vouchers']))+'; import batches: '+str(len(self.state['queue']))+'; saved drafts: '+str(len(self.state['drafts']))
+        if not messagebox.askyesno('Start clean books — preview',counts+'\n\nAll entered records and custom masters/settings in the active book will be cleared, including AP vendors/invoices/payments, tax/project/asset records and bank imports. Starter chart and branches remain. No accounting balances are carried forward. A verified backup will be kept first.\n\nContinue to choose the backup location?',parent=self):return
+        folder=filedialog.askdirectory(title='Choose a separate backup folder before clearing test data',initialdir=self.state['settings'].get('backup_dir') or None,parent=self)
+        if not folder:return
+        confirmation=simpledialog.askstring('Confirm clean start','Type START CLEAN BOOKS exactly. This clears the active book only after its original file is backed up and verified:',parent=self)
+        if confirmation is None:return
+        fresh,backup=self.vault.start_clean_books(folder,confirmation)
+        self.state=fresh;self.branch.set('All operating units');self.refresh_masters();self.update_ap_reminder();self.show('Overview')
+        messagebox.showinfo('Clean books ready','All test entries and custom setup are cleared from the active book. Starter accounts and branches are ready.\n\nVerified original backup: '+str(backup)+'\n\nYour ChatGPT/API account was not accessed. Use Settings & backup → Restore backup if you need the old book.',parent=self)
+
 
 def main():
     parser=argparse.ArgumentParser(description='Riju Books offline Windows accounting')
