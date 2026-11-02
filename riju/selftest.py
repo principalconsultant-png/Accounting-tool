@@ -370,6 +370,10 @@ def run(output):
             bulkvault=Vault(root/'ap-bulk.riju');bulkvault.save(bulkbook)
             if bulkvault.load()!=bulkbook:raise ValueError('Packaged AP bulk persistence failed')
             result['ap_bulk_invoice_import_passed']=True
+            diagnosticbook=copy.deepcopy(bulkbook)
+            diagnosticraw=ap_bulk.row_display(diagnosticbook,dict(source_row=2,raw=dict(vendor_name='Synthetic unmatched supplier',reference='DIAG-01',invoice_date='2026-04-01',received_date='2026-04-01',accounting_date='2026-04-01',branch='JP',amount='16547',payable='2000',cost_account='1100'),validation='INVALID',review='PENDING',error='Vendor name mismatch',reason=''))
+            if diagnosticraw['amount']!=1654700 or diagnosticraw['invoice_date']!='2026-04-01':raise ValueError('Packaged invalid-row source display lost source values')
+            result['ap_bulk_validation_diagnostics_passed']=True
 
 
             resetvault=Vault(root/'reset.riju');resetstate=core.empty_state();core.post(resetstate,'2026-04-01','Synthetic test entry to clear',[dict(account='1000',branch='JP',debit=10000,credit=0),dict(account='4000',branch='JP',debit=0,credit=10000)]);resetvault.save(resetstate)

@@ -1,6 +1,6 @@
 # Yathartha — Bookkeeping Training and User Guide
 
-Development version 0.32.0-dev | Guide updated 2 November 2026 | Windows | INR
+Development version 0.32.1-dev | Guide updated 2 November 2026 | Windows | INR
 
 Audience: a new bookkeeper, an accountant reviewing the work, and the person delivering the books to the hospital. This guide explains both the workflow and the bookkeeping behind it. Use the matching development executable; screen names refer to that version. Dates shown in examples are practice dates, not instructions to post into live books.
 
@@ -20,7 +20,7 @@ Posting always requires review. Previewing, uploading, changing a schedule or ex
 
 1. Download the RijuBooks-Windows ZIP supplied for the matching build and extract all files. Do not run the application from inside the ZIP.
 2. Find Yathartha.exe, normally under dist in the extracted bundle. The application does not require the end user to install Python.
-3. Read packaged-selftest.json: version should be 0.32.0-dev and passed should be true. The included checksum file identifies the executable supplied by the build.
+3. Read packaged-selftest.json: version should be 0.32.1-dev and passed should be true. The included checksum file identifies the executable supplied by the build.
 4. Use a disposable training book first. Do not practise by adding sample invoices to the live hospital book. Your administrator can start a demo copy with `Yathartha.exe --demo --data training.json`; the JSON training file is not protected for live use.
 5. For normal Windows use, the default book is under `%LOCALAPPDATA%\RijuBooks\books.riju`. Keep the same Windows user/profile for that book.
 6. In Settings & backup choose the external backup folder. Confirm the device is connected and a backup is actually created.
@@ -516,6 +516,12 @@ The XLSX pre-fills Receipt date and 2000 for 1,000 input rows. Those defaults al
 
 Duplicate checks cover already registered/manual/cancelled invoices, repeated rows and other queued AP files using the same vendor and invoice fiscal year. A renamed file cannot force a second copy. Registering an existing source must fit its unregistered payable capacity. Never upload the same invoice as a new accrual if it was already posted elsewhere; link the original unpaid voucher once.
 
+
+### Reading and correcting bulk invoice validation errors
+
+Invalid rows are highlighted red and duplicates amber. Source row number, vendor, invoice, Validation and Reason / correction are the first columns, followed by the original payable amount. A summary above the table lists affected Excel/source rows. The first flagged row is selected automatically; its full reason remains above the table even when you scroll horizontally. Select Show flagged rows only to focus on corrections. Double-click or View selected invoice shows all original fields under readable labels and the full reason. Review Excel/PDF includes a separate validation reason column. An early vendor error no longer hides the entered dates, unit, ledger and amount; invalid amount text is displayed as entered rather than a misleading zero.
+
+For example, if Synthetic Pharme Supplier is entered while Vendor master contains Synthetic Pharma Supplier, the app suggests the closest saved name but never substitutes it automatically. Check the invoice first. If it is a source typo, cancel the unused pending batch, correct the workbook and upload the corrected file. Revalidate only checks stored source rows; it does not reread a file edited outside the tool. If the source genuinely names a missing supplier, add that vendor in Vendor master and revalidate the pending batch. Revalidation clears approvals but retains explicit rejections. Never create a second vendor to bypass a spelling error or approve a duplicate without checking the original invoice. No upload or error review posts a journal.
 
 ## 28. T-form balance sheet and client report logos
 

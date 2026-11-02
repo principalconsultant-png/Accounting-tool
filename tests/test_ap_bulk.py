@@ -78,3 +78,14 @@ class ApBulkTests(unittest.TestCase):
 
     def test_existing_source_cannot_refer_to_simulated_new_row_voucher(self):
         q=self.stage([invoice(reference='REAL-NEW'),invoice(reference='GUESS-LINK',existing_voucher='VCH-2026-00001',cost_account='')]);self.assertEqual([r['validation'] for r in q['rows']],['VALID','INVALID']);self.assertIn('actual books',q['rows'][1]['error']);self.assertFalse(self.s['vouchers'])
+
+    def test_vendor_spelling_reason_suggestion_and_original_fields_survive_failure(self):
+        ap.save_vendor(self.s,dict(name='Synthetic Pharma Supplier',credit_days='30'))
+        q=self.stage([invoice(vendor_name='Synthetic Pharme Supplier',reference='TYPO-01',amount='16547')]);r=q['rows'][0]
+        self.assertEqual(r['validation'],'INVALID');self.assertIn('Synthetic Pharme Supplier',r['error']);self.assertIn('Synthetic Pharma Supplier',r['error']);self.assertIn('cancel the unused batch',r['error'])
+        d=b.row_display(self.s,r);self.assertEqual(d['invoice_date'],'2026-04-01');self.assertEqual(d['amount'],1654700);self.assertEqual(d['branch'],'JP');self.assertIn('1100 Medicine inventory',d['cost']);self.assertIn('row(s) 2',b.issue_summary(q));self.assertEqual(len(self.s['ap']['vendors']),2);self.assertFalse(self.s['vouchers'])
+        pack=b.snapshot(self.s,q['id']);self.assertEqual(pack['rows'][0][4],r['error']);self.assertEqual(pack['rows'][0][7],1654700)
+
+    def test_invalid_amount_keeps_original_text_without_zero_and_summary_is_bounded(self):
+        rows=[invoice(vendor_name='Unknown supplier '+str(i),reference='ISSUE-'+str(i),amount='bad-amount') for i in range(10)]
+        q=self.stage(rows);d=b.row_display(self.s,q['rows'][0]);self.assertIsNone(d['amount']);self.assertEqual(d['amount_text'],'bad-amount');self.assertIn('additional issue types',b.issue_summary(q));self.assertEqual(len(b.issue_summary(q).splitlines()),4)

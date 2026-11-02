@@ -1027,3 +1027,21 @@ class ApBulkDesktopTests(unittest.TestCase):
                 with patch('riju.ap_bulk_ui.simpledialog.askstring',return_value='Vendor/source/accounting review complete'):helper.press(form,'Approve all valid invoices')
                 helper.press(form,'Preview invoice journals');app.update();preview=helper.form(app);table=next(w for w in helper.walk(preview) if isinstance(w,ttk.Treeview));self.assertTrue(any('Medicine inventory' in table.item(k)['values'] for k in table.get_children()));helper.press(preview,'Approve AP action');app.update();self.assertEqual(len(app.state['ap']['invoices']),1);self.assertEqual(len(app.state['vouchers']),1);self.assertEqual(app.state['queue'][0]['status'],'PROCESSED')
             finally:app.destroy()
+
+    def test_flagged_reasons_visible_original_fields_and_source_detail(self):
+        from riju.app import App
+        from riju import ap,ap_bulk
+        from test_ap_bulk import raw,invoice
+        from tkinter import ttk,Text
+        helper=TaxDepreciationDesktopTests()
+        with tempfile.TemporaryDirectory() as d:
+            app=App(Vault(Path(d)/'book.json',demo=True))
+            try:
+                ap.save_vendor(app.state,dict(name='Bulk training vendor',credit_days='45'))
+                q=app.commit(lambda s:ap_bulk.stage(s,raw([invoice(vendor_name='Bulk trainng vendor',amount='16547'),invoice(),invoice()]),'synthetic-diagnostics.csv'));app.ap_bulk_review(q['id']);app.update();form=helper.form(app)
+                table=next(w for w in helper.walk(form) if isinstance(w,ttk.Treeview));self.assertEqual(table['columns'][:5],('Row','Vendor','Invoice','Validation','Reason / correction'))
+                row=table.item('0');values=dict(zip(table['columns'],row['values']));self.assertIn('INVALID',row['tags']);self.assertEqual(values['Invoice date'],'2026-04-01');self.assertIn('16,547.00',values['Payable INR']);self.assertIn('Bulk training vendor',values['Reason / correction']);self.assertEqual(table.selection(),('0',))
+                labels=[w.cget('text') for w in helper.walk(form) if isinstance(w,ttk.Label)];self.assertTrue(any('Excel/source row(s) 2' in text for text in labels));self.assertTrue(any('INVALID:' in text and 'Bulk trainng vendor' in text for text in labels))
+                helper.press(form,'View selected invoice');app.update();detail=helper.form(app);text=next(w for w in helper.walk(detail) if isinstance(w,Text)).get('1.0','end');self.assertIn('Reason / correction:',text);self.assertIn('Vendor Name: Bulk trainng vendor',text);detail.destroy()
+                self.assertFalse(app.state['vouchers'])
+            finally:app.destroy()

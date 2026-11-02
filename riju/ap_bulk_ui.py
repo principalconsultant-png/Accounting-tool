@@ -30,24 +30,36 @@ class ApBulkUI:
     def ap_bulk_review(self,key):
         q=bulk.batch(self.state,key);win=tk.Toplevel(self);win.title('Review AP bulk invoices — '+q['filename']);win.geometry('1200x760');win.transient(self)
         status=ttk.Label(win,text='',wraplength=1150);status.pack(anchor='w');flagged=tk.BooleanVar(value=False)
-        table=self.table(('Row','Vendor','Invoice','Unit','Invoice date','Received','Accrual date','Credit days','Credit starts','Due date','Scheduled','Payable INR','AP ledger','Cost / existing source','Validation','Decision'),[],parent=win,height=10);table.configure(selectmode='extended')
-        detail=ttk.Label(win,text='Select a row for its error/review evidence; View selected invoice shows all original/resolved fields.',wraplength=1150);detail.pack(anchor='w')
+        issues=ttk.Label(win,text=bulk.issue_summary(q),wraplength=1150,foreground='#9C261B',padding=6);issues.pack(anchor='w',fill='x')
+        detail=ttk.Label(win,text='Select a row to see its validation reason here. Double-click for the complete invoice.',wraplength=1150,padding=6);detail.pack(anchor='w',fill='x')
+        columns=('Row','Vendor','Invoice','Validation','Reason / correction','Payable INR','Unit','Invoice date','Received','Accrual date','Credit days','Credit starts','Due date','Scheduled','AP ledger','Cost / existing source','Decision')
+        table=self.table(columns,[],parent=win,height=10);table.configure(selectmode='extended')
+        for col,width in [('Row',55),('Vendor',180),('Invoice',150),('Validation',100),('Reason / correction',450),('Payable INR',120)]:table.column(col,width=width,minwidth=width,stretch=False)
+        table.tag_configure('INVALID',background='#FCE8E6',foreground='#8B1A12');table.tag_configure('DUPLICATE',background='#FFF1CB',foreground='#754600')
         confirmed=tk.BooleanVar(value=False)
         def refresh():
-            q=bulk.batch(self.state,key);table.delete(*table.get_children());counts={k:sum(r['validation']==k for r in q['rows']) for k in ('VALID','INVALID','DUPLICATE')};approved=sum(r.get('amount',0) for r in q['rows'] if r['review']=='APPROVED');total=sum(r.get('amount',0) for r in q['rows'] if r['validation']=='VALID')
+            previous=table.selection();q=bulk.batch(self.state,key);table.delete(*table.get_children());counts={k:sum(r['validation']==k for r in q['rows']) for k in ('VALID','INVALID','DUPLICATE')};approved=sum(r.get('amount',0) for r in q['rows'] if r['review']=='APPROVED');total=sum(r.get('amount',0) for r in q['rows'] if r['validation']=='VALID')
             status.configure(text=q['status']+' | '+str(len(q['rows']))+' invoices | '+str(counts)+' | Valid source '+core.rupees(total)+' | Approved '+core.rupees(approved)+' | Ignored default-only rows '+str(q['ignored_placeholders'])+'\n'+'\n'.join(q['warnings']))
-            names={a['code']:a['name'] for a in self.state['accounts']}
+            issues.configure(text=bulk.issue_summary(q))
             for i,r in enumerate(q['rows']):
                 if flagged.get() and r['validation']=='VALID':continue
-                v=r.get('values',{});cost=next((a['account'] for a in v.get('allocations',[])),v.get('existing_voucher',''));payable=v.get('payable','')
-                table.insert('','end',iid=str(i),values=(r['source_row'],r.get('vendor_name',r['raw'].get('vendor_name','')),r.get('reference',r['raw'].get('reference','')),r.get('branch',''),v.get('invoice_date',''),v.get('received_date',''),r.get('date',''),v.get('credit_days',''),v.get('due_basis',''),r.get('due_date',''),r.get('payment_date',''),core.rupees(r.get('amount',0)),payable+' '+names.get(payable,''),cost+' '+names.get(cost,''),r['validation'],r['review']))
+                d=bulk.row_display(self.state,r)
+                table.insert('','end',iid=str(i),tags=(r['validation'],),values=(d['source_row'],d['vendor'],d['reference'],d['validation'],d['error'] or 'Source checks passed',d['amount_text'],d['branch'],d['invoice_date'],d['received_date'],d['accounting_date'],d['credit_days'],d['due_basis'],d['due_date'],d['payment_date'],d['payable'],d['cost'],d['decision']))
+            visible=table.get_children();target=next((i for i in previous if i in visible),None) or next((i for i in visible if q['rows'][int(i)]['validation']!='VALID'),None) or next(iter(visible),None)
+            if target is not None:table.selection_set(target);table.see(target);selected()
         def selected(event=None):
             if table.selection():
-                r=bulk.batch(self.state,key)['rows'][int(table.selection()[0])];detail.configure(text=r['error']+' | '+r['reason']+' | Invoice accounting basis: '+r['raw'].get('basis',''))
+                r=bulk.batch(self.state,key)['rows'][int(table.selection()[0])];d=bulk.row_display(self.state,r)
+                detail.configure(text='Excel/source row '+str(d['source_row'])+' | '+d['vendor']+' | Invoice '+d['reference']+' | '+d['amount_text']+'\n'+d['validation']+': '+(d['error'] or 'Source checks passed')+'\nReview reason: '+(d['reason'] or 'Pending')+' | Accounting basis: '+r['raw'].get('basis',''),foreground='#9C261B' if d['validation']!='VALID' else '#154C8A')
         table.bind('<<TreeviewSelect>>',selected);filters=ttk.Frame(win);filters.pack(fill='x');ttk.Checkbutton(filters,text='Show flagged rows only',variable=flagged,command=refresh).pack(side='left')
         def viewrow():
             if not table.selection():raise ValueError('Select a source invoice.')
-            r=bulk.batch(self.state,key)['rows'][int(table.selection()[0])];view=tk.Toplevel(win);view.title('Invoice source details');view.geometry('950x600');text=tk.Text(view,wrap='word');text.pack(fill='both',expand=True);text.insert('1.0',json.dumps(r,ensure_ascii=False,indent=2));text.configure(state='disabled')
+            r=bulk.batch(self.state,key)['rows'][int(table.selection()[0])];d=bulk.row_display(self.state,r);view=tk.Toplevel(win);view.title('Invoice source details — row '+str(r['source_row']));view.geometry('950x650');text=tk.Text(view,wrap='word');text.pack(fill='both',expand=True)
+            lines=['Excel/source row: '+str(r['source_row']), 'Validation: '+r['validation'],'Reason / correction: '+(r['error'] or 'Source checks passed'),'Review decision: '+r['review'],'Review reason: '+r['reason'],'','Original invoice fields:']
+            lines += [heading+': '+str(r['raw'].get(field,'')) for field,heading in zip(bulk.FIELDS,bulk.HEADERS)]
+            lines += ['','Resolved values / posting trace:',json.dumps(r.get('values',{}),ensure_ascii=False,indent=2),'Voucher: '+r.get('voucher','')]
+            text.insert('1.0','\n'.join(lines));text.tag_configure('error',foreground='#9C261B',background='#FCE8E6');text.tag_add('error','2.0','4.0');text.configure(state='disabled')
+        table.bind('<Double-1>',lambda event:self.guarded(viewrow))
         self.button(filters,'View selected invoice',viewrow)
         ttk.Checkbutton(win,text='I reviewed vendor/source, period, cost/asset account and net payable/tax. New simple accruals need no separate GST/TDS; existing source links were verified.',variable=confirmed).pack(anchor='w')
         def review(approved,allrows=False):

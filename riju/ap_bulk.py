@@ -1,6 +1,7 @@
 """Source-preserving reviewed vendor-invoice CSV/XLSX batch registration."""
 import copy
 import csv
+import difflib
 from datetime import date,datetime
 from decimal import Decimal,InvalidOperation
 import hashlib
@@ -34,7 +35,11 @@ def canonical(s,raw):
     if raw.get('_extra_values'):raise ValueError('Source row contains extra values beyond the standard headings; correct the source row before approval.')
     if any(str(v).startswith('=') for v in raw.values()):raise ValueError('Use literal source values, not spreadsheet formulas.')
     candidates=[v for v in ap.data(s)['vendors'] if ap.norm(raw['vendor_name']) in {ap.norm(n) for n in [v['name'],*v.get('previous_names',[])]}]
-    if len(candidates)!=1:raise ValueError('Vendor Name must match one saved vendor. Add/correct it in Vendor master, then Revalidate this batch.')
+    if len(candidates)!=1:
+        names={ap.norm(v['name']):v['name'] for v in ap.data(s)['vendors'] if v.get('active',True)}
+        matches=difflib.get_close_matches(ap.norm(raw['vendor_name']),names,n=3,cutoff=0.65)
+        hint=' Closest saved name(s): '+', '.join(names[n] for n in matches)+'.' if matches else ''
+        raise ValueError('Vendor Name "'+raw['vendor_name']+'" must match one saved vendor.'+hint+' For a source typo, cancel the unused batch and upload the corrected file. For a genuine missing vendor, add it in Vendor master and revalidate. Suggestions are not matched automatically.')
     vendor=candidates[0]
     if not vendor.get('active',True):raise ValueError('Vendor is inactive; review Vendor master, then revalidate.')
     values={key:_string(raw.get(key,'')) for key in FIELDS};values['vendor']=vendor['id'];values.pop('vendor_name')
@@ -170,13 +175,32 @@ def post(s,key):
     return result
 
 
+def row_display(s,r):
+    """Keep entered values visible even when canonical validation stops early."""
+    raw=r['raw'];v=r.get('values',{});names={a['code']:a['name'] for a in s['accounts']}
+    value=lambda k:v.get(k,raw.get(k,''))
+    payable=value('payable');cost=next((i['account'] for i in v.get('allocations',[])),raw.get('cost_account','')) or value('existing_voucher')
+    try:amount=ap.positive(raw.get('amount',''))
+    except ValueError:amount=None
+    return dict(source_row=r['source_row'],vendor=r.get('vendor_name',raw.get('vendor_name','')),reference=value('reference'),branch=value('branch'),invoice_date=value('invoice_date'),received_date=value('received_date'),accounting_date=value('accounting_date'),credit_days=value('credit_days'),due_basis=value('due_basis'),due_date=r.get('due_date',''),payment_date=r.get('payment_date',value('payment_date')),amount=amount,amount_text=core.rupees(amount) if amount is not None else raw.get('amount',''),payable=(payable+' '+names.get(payable,'')).strip(),cost=(cost+' '+names.get(cost,'')).strip(),validation=r['validation'],decision=r['review'],error=r['error'],reason=r['reason'])
+
+
+def issue_summary(q):
+    groups={}
+    for r in q['rows']:
+        if r['validation']!='VALID':groups.setdefault(r['error'],[]).append(str(r['source_row']))
+    lines=['Excel/source row(s) '+', '.join(rows[:12])+(' and '+str(len(rows)-12)+' more' if len(rows)>12 else '')+': '+error for error,rows in list(groups.items())[:3]]
+    if len(groups)>3:lines.append(str(len(groups)-3)+' additional issue types. Use Show flagged rows only and select a row for the full reason.')
+    return '\n'.join(lines) or 'No validation errors. Review the source/accounting basis before approval.'
+
+
 def snapshot(s,key):
     q=batch(s,key);dates=[r['date'] for r in q['rows'] if r.get('date')];start=min(dates or ['1900-01-01']);end=max(dates or [start]);p=reports.snapshot(s,'Trial balance',start,end)
     rows=[]
     for r in q['rows']:
-        v=r.get('values',{});cost=next((i['account'] for i in v.get('allocations',[])),v.get('existing_voucher',''));name=next((a['name'] for a in s['accounts'] if a['code']==cost),'Existing source' if v.get('existing_voucher') else '')
-        rows.append([r['source_row'],r.get('vendor_name',r['raw'].get('vendor_name','')),r.get('reference',r['raw'].get('reference','')),r.get('branch',''),r.get('date',''),r.get('amount',0),v.get('payable',''),cost+' '+name,r['validation'],r['review'],r['error']+' '+r['reason'],r.get('voucher','')])
-    p.update(mode='AP bulk invoice review',columns=['Source row','Vendor','Invoice','Unit','Accrual date','Payable INR','AP ledger','Cost ledger / existing source','Validation','Decision','Error / reason','Voucher'],money_columns=[5],rows=rows,controls={},note=q['filename']+' | '+q['status']+' | SHA256 '+q['digest']+'. Upload/review does not post. Approved invoices create the same accrual or existing-source link as Enter invoice; no automatic payment. Rejected rows remain in history.');return p
+        d=row_display(s,r)
+        rows.append([d['source_row'],d['vendor'],d['reference'],d['validation'],d['error'],d['branch'],d['accounting_date'],d['amount'],d['payable'],d['cost'],d['decision'],d['reason'],r.get('voucher','')])
+    p.update(mode='AP bulk invoice review',columns=['Source row','Vendor','Invoice','Validation','Validation reason / correction','Unit','Accrual date','Payable INR','AP ledger','Cost ledger / existing source','Decision','Review reason','Voucher'],money_columns=[7],rows=rows,controls={},note=q['filename']+' | '+q['status']+' | SHA256 '+q['digest']+'. Upload/review does not post. Approved invoices create the same accrual or existing-source link as Enter invoice; no automatic payment. Rejected rows remain in history.');return p
 
 
 def template(path,state=None):
