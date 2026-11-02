@@ -334,6 +334,17 @@ def run(output):
             receiptvault=Vault(root/'receipts.riju');receiptvault.save(receiptbook)
             if receiptvault.load()!=receiptbook:raise ValueError('Packaged standard receipts persistence failed')
             result['standard_receipt_import_passed']=True
+            from .journal_preview import with_account_names
+            from .date_picker import date_mode
+            uxbuffer=io.StringIO();writer=csv.DictWriter(uxbuffer,fieldnames=receipt_import.HEADERS);writer.writeheader()
+            uxrow=dict.fromkeys(receipt_import.HEADERS,'');uxrow.update(receipt_date='2026-04-02',branch='JP',receipt_no='PACK-REJECT-DUPLICATE',record_type='earned',tax_mode='no_separate_tax',consultation='100',cash='100',total='100');writer.writerow(uxrow);writer.writerow(uxrow)
+            uxbatch=receipt_import.stage(receiptbook,uxbuffer.getvalue().encode(),'reject-duplicate.csv');receipt_import.review(receiptbook,uxbatch['id'],[1],False,'Duplicate excluded without approving posting',False);receipt_import.review(receiptbook,uxbatch['id'],[0],True,'Reviewed valid source',True)
+            if receipt_import.post(receiptbook,uxbatch['id'])!=1:raise ValueError('Packaged duplicate rejection fix failed')
+            if with_account_names(receiptbook,{'account':'4000'})['account_name']!='OPD consultation revenue' or date_mode('Scheduled payment date')!='day':raise ValueError('Packaged journal names/calendar detection failed')
+            ap.save_vendor(apbook,dict(name='Updated packaged vendor',credit_days='45',active=True),supplier['id']);apvault.save(apbook)
+            if apvault.load()['ap']['vendors'][0]['credit_days']!=45 or ap.invoice(apbook,apinvoice['id'])['vendor_name']!='Synthetic packaged vendor':raise ValueError('Packaged vendor edit/history failed')
+            result['calendar_vendor_duplicate_preview_fixes_passed']=True
+
             resetvault=Vault(root/'reset.riju');resetstate=core.empty_state();core.post(resetstate,'2026-04-01','Synthetic test entry to clear',[dict(account='1000',branch='JP',debit=10000,credit=0),dict(account='4000',branch='JP',debit=0,credit=10000)]);resetvault.save(resetstate)
             resetoriginal=resetvault.path.read_bytes();resetfolder=root/'reset-backup';resetfolder.mkdir();clean,resetbackup=resetvault.start_clean_books(resetfolder,'START CLEAN BOOKS')
             if clean['vouchers'] or resetbackup.read_bytes()!=resetoriginal or resetvault.load()!=clean or len(Vault(resetbackup).load()['vouchers'])!=1:raise ValueError('Packaged verified clean-books reset failed')

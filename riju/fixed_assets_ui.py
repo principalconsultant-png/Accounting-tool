@@ -1,4 +1,6 @@
 """Reviewed fixed assets, SLM previews, disposal/transfer and customer packs."""
+from .journal_preview import with_account_names
+from .date_picker import ask_date
 import copy
 import json
 from datetime import datetime
@@ -44,7 +46,7 @@ class FixedAssetsUI:
         ttk.Label(win,text='Review the source, scope, period and complete journal below. Approval saves this exact action only while the books remain unchanged.',wraplength=950,padding=10).pack(anchor='w')
         text=tk.Text(win,wrap='word',height=25);scroll=ttk.Scrollbar(win,command=text.yview);text.configure(yscrollcommand=scroll.set);scroll.pack(side='right',fill='y');text.pack(fill='both',expand=True)
         source_ids={result.get(k) for k in ('voucher','cost_voucher','accum_voucher')} if isinstance(result,dict) else set()
-        text.insert('1.0',json.dumps(dict(result=result,linked_source_journals=[v for v in before['vouchers'] if v['id'] in source_ids],new_journals=temp['vouchers'][len(before['vouchers']):]),ensure_ascii=False,indent=2));text.configure(state='disabled')
+        text.insert('1.0',json.dumps(with_account_names(temp,dict(result=result,linked_source_journals=[v for v in before['vouchers'] if v['id'] in source_ids],new_journals=temp['vouchers'][len(before['vouchers']):])),ensure_ascii=False,indent=2));text.configure(state='disabled')
         def approve():
             if self.state!=before:raise ValueError('Books changed after this preview. Close it and prepare a fresh preview.')
             def persist(candidate):
@@ -114,7 +116,7 @@ class FixedAssetsUI:
     def reverse_asset_journal(self):
         if not self.asset_events_table.selection():raise ValueError('Select an asset journal in the event table.')
         e=self.asset_event_rows[self.asset_events_table.selection()[0]];roots=fa.gst._roots(self.state);chain=[v for v in self.state['vouchers'] if roots[v['id']][0]==e['voucher']];source=chain[-1]
-        on=simpledialog.askstring('Reverse asset journal','Exact reversal date (YYYY-MM-DD):',initialvalue=max(self.asset_to.get(),source['date']),parent=self)
+        on=ask_date('Reverse asset journal','Exact reversal date (YYYY-MM-DD):',initialvalue=max(self.asset_to.get(),source['date']),parent=self)
         if on:self._asset_preview('Review exact asset reversal',lambda s:core.reverse(s,source['id'],on))
 
     def export_assets(self,kind):

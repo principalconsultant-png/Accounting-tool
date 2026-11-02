@@ -5,6 +5,7 @@ from datetime import date
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
+from .date_picker import today as ui_today
 from . import core, foundation as f
 
 
@@ -17,7 +18,7 @@ class FoundationUI:
         self.branch_names={'All operating units':'ALL',**{v:k for k,v in self.branches.items()}}
         self.branch_select.configure(values=list(self.branch_names))
         if self.branch.get() not in self.branch_names:self.branch.set('All operating units')
-        years={date.today().year,core.financial_year(date.today().isoformat()),*map(int,self.state['financial_years'])}
+        years={ui_today().year,core.financial_year(ui_today().isoformat()),*map(int,self.state['financial_years'])}
         years.update(core.financial_year(v['date']) for v in self.state['vouchers'])
         self.year_select.configure(values=sorted(years,reverse=True))
 

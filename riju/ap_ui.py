@@ -1,4 +1,5 @@
 """Vendor AP register, due-date processing, source review and forecast."""
+from .date_picker import ask_date
 from datetime import date,timedelta,datetime
 import tkinter as tk
 from tkinter import ttk,filedialog,simpledialog,messagebox
@@ -8,7 +9,7 @@ class ApUI:
     def ap_invoices(self):
         self.note('Register vendor invoices once: accrual debits cost/asset and credits Trade payables on the accounting date. Actual payment debits payable and credits the chosen cash/bank. Payment schedules affect forecast only; this tool does not send money to a bank.')
         bar=self.bar();self.ap_on=self.field(bar,'As at',datetime.now(history.INDIA).date().isoformat(),width=12)
-        self.button(bar,'Refresh AP',self.refresh_ap,True);self.button(bar,'Add vendor',self.ap_vendor);self.button(bar,'Enter invoice',self.ap_enter)
+        self.button(bar,'Refresh AP',self.refresh_ap,True);self.button(bar,'Add vendor',self.ap_vendor);self.button(bar,'Vendor master',lambda:self.show('Vendor master'));self.button(bar,'Enter invoice',self.ap_enter)
         bar=self.bar();self.button(bar,'Mark selected invoices paid',self.ap_payment,True);self.button(bar,'Extend payment date',self.ap_extend);self.button(bar,'Reverse selected payment',self.ap_reverse_payment);self.button(bar,'Cancel selected invoice',self.ap_cancel_invoice)
         self.ap_summary=ttk.Label(self.content,text='',wraplength=1050);self.ap_summary.pack(anchor='w')
         self.ap_table=self.table(('Vendor','Invoice','Unit','Received','Contractual due','Scheduled payment','Outstanding INR','Status','Accrual voucher'),[],height=9);self.ap_table.configure(selectmode='extended')
@@ -27,12 +28,24 @@ class ApUI:
         keys=list(self.ap_table.selection())
         if not keys or one and len(keys)!=1:raise ValueError('Select '+('one invoice.' if one else 'one or more invoices.'))
         return keys
-    def ap_vendor(self):
-        win,body,fields=self._tax_form('Add AP vendor',[('name','Vendor legal/source name','',None),('credit_days','Default credit period calendar days','30',None),('reference','Optional vendor code / source reference','',None)])
-        def save():self.commit(lambda s:ap.save_vendor(s,{k:v.get().strip() for k,v in fields.items()}));win.destroy();self.show('AP Vendor Invoices')
+    def vendor_master(self):
+        self.note('Saved AP vendors. Edit name, credit days, reference or active status here. Vendor ID remains stable. Posted invoices retain their original vendor/source snapshot and credit terms; edits apply to new invoices.')
+        bar=self.bar();self.button(bar,'Add vendor',self.ap_vendor,True);self.button(bar,'Edit selected vendor',self.ap_edit_vendor)
+        self.vendor_table=self.table(('Vendor ID','Vendor name','Default credit days','Reference','Active'),[],height=12)
+        for v in ap.data(self.state)['vendors']:self.vendor_table.insert('','end',iid=v['id'],values=(v['id'],v['name'],v['credit_days'],v['reference'],'Yes' if v.get('active',True) else 'No'))
+        self.vendor_table.bind('<Double-1>',lambda e:self.guarded(self.ap_edit_vendor))
+    def ap_edit_vendor(self):
+        if not self.vendor_table.selection():raise ValueError('Select a vendor in Vendor master to edit.')
+        self.ap_vendor(self.vendor_table.selection()[0])
+    def ap_vendor(self,key=None):
+        old=ap.vendor(self.state,key) if key else {};page='Vendor master' if self.current=='Vendor master' else 'AP Vendor Invoices'
+        win,body,fields=self._tax_form('Edit AP vendor' if key else 'Add AP vendor',[('name','Vendor legal/source name',old.get('name',''),None),('credit_days','Default credit period calendar days',str(old.get('credit_days',30)),None),('reference','Optional vendor code / source reference',old.get('reference',''),None)])
+        active=tk.BooleanVar(value=old.get('active',True));ttk.Checkbutton(body,text='Active vendor (inactive vendors remain in history)',variable=active).pack(anchor='w')
+        def save():
+            values={k:v.get().strip() for k,v in fields.items()};values['active']=active.get();self.commit(lambda s:ap.save_vendor(s,values,key));win.destroy();self.show(page)
         self.button(body,'Save vendor',save,True)
     def ap_enter(self):
-        vendors={v['name']+' · '+v['id'][:8]:v['id'] for v in ap.data(self.state)['vendors']}
+        vendors={v['name']+' · '+v['id'][:8]:v['id'] for v in ap.data(self.state)['vendors'] if v.get('active',True)}
         if not vendors:raise ValueError('Add a vendor first.')
         on=self.ap_on.get();chosen=next(iter(vendors));supplier=ap.vendor(self.state,vendors[chosen]);unit=self.unit() if self.unit()!='ALL' else 'JP'
         specs=[('vendor','Vendor',chosen,list(vendors)),('reference','Vendor invoice number','',None),('invoice_date','Invoice date',on,None),('received_date','Invoice received date',on,None),('accounting_date','Accrual accounting date',on,None),('credit_days','Credit period calendar days',str(supplier['credit_days']),None),('due_basis','Credit period starts at','Receipt date',['Receipt date','Invoice date']),('payment_date','Scheduled payment date (blank = due)','',None),('branch','Operating unit',unit,list(self.branches)),('amount','Net amount payable to vendor INR','',None),('payable','Trade payables ledger','2000',None),('cost_account','New accrual: cost/asset ledger','4590',None),('existing_voucher','Existing GST/TDS/CWIP accrual voucher (optional)','',None),('basis','Source / tax / accounting review basis','',None)]
@@ -64,10 +77,10 @@ class ApUI:
         self.button(body,'Preview payment extension',preview,True)
     def ap_reverse_payment(self):
         if not self.ap_payments.selection():raise ValueError('Select a payment in the payment-history table.')
-        p=next(p for p in ap.data(self.state)['payments'] if p['id']==self.ap_payments.selection()[0]);on=simpledialog.askstring('Reverse AP payment','Actual correction/reversal date YYYY-MM-DD:',initialvalue=self.ap_on.get(),parent=self)
+        p=next(p for p in ap.data(self.state)['payments'] if p['id']==self.ap_payments.selection()[0]);on=ask_date('Reverse AP payment','Actual correction/reversal date YYYY-MM-DD:',initialvalue=self.ap_on.get(),parent=self)
         if on:self._service_preview('Review AP payment reversal',lambda s:core.reverse(s,p['voucher'],on),page='AP Vendor Invoices')
     def ap_cancel_invoice(self):
-        r=self.ap_rows[self.ap_selected(True)[0]];on=simpledialog.askstring('Cancel AP invoice','Actual cancellation accounting date YYYY-MM-DD. Reverse dependent payments first. Linked GST/TDS/CWIP sources retain their own reversal guards:',initialvalue=self.ap_on.get(),parent=self)
+        r=self.ap_rows[self.ap_selected(True)[0]];on=ask_date('Cancel AP invoice','Actual cancellation accounting date YYYY-MM-DD. Reverse dependent payments first. Linked GST/TDS/CWIP sources retain their own reversal guards:',initialvalue=self.ap_on.get(),parent=self)
         if on:
             reason=simpledialog.askstring('Invoice cancellation evidence','Source reason for cancelling this invoice accrual:',parent=self)
             if reason:self._service_preview('Review AP invoice accrual reversal',lambda s:ap.cancel_invoice(s,r['id'],on,reason,True),page='AP Vendor Invoices')

@@ -1,10 +1,12 @@
-# Riju Books — Bookkeeping Training and User Guide
+# Yathartha — Bookkeeping Training and User Guide
 
-Development version 0.29.1-dev | Guide updated 2 November 2026 | Windows | INR
+Development version 0.30.0-dev | Guide updated 2 November 2026 | Windows | INR
 
 Audience: a new bookkeeper, an accountant reviewing the work, and the person delivering the books to the hospital. This guide explains both the workflow and the bookkeeping behind it. Use the matching development executable; screen names refer to that version. Dates shown in examples are practice dates, not instructions to post into live books.
 
 ## 1. Start here: what the tool does
+
+The application is now named Yathartha, with a saffron-and-blue wordmark. Its existing RijuBooks Windows data folder and older document filenames are retained for compatibility; renaming the application does not clear or move your saved books. Close the old application before opening Yathartha.exe.
 
 Riju Books keeps one legal entity's books with operating-unit analysis for JP Nagar (JP), Kammanahalli (KM) and Vaikom (VK). It is a single-user, local Windows application. The same transaction must be entered only once, even when it appears in a hospital report, bank statement and invoice file. The bank statement normally reconciles an existing payment or receipt; it is not a second sale or expense.
 
@@ -17,12 +19,12 @@ Posting always requires review. Previewing, uploading, changing a schedule or ex
 ## 2. Install and use a safe training copy
 
 1. Download the RijuBooks-Windows ZIP supplied for the matching build and extract all files. Do not run the application from inside the ZIP.
-2. Find RijuBooks.exe, normally under dist in the extracted bundle. The application does not require the end user to install Python.
+2. Find Yathartha.exe, normally under dist in the extracted bundle. The application does not require the end user to install Python.
 3. Read packaged-selftest.json: version should be 0.29.1-dev and passed should be true. The included checksum file identifies the executable supplied by the build.
-4. Use a disposable training book first. Do not practise by adding sample invoices to the live hospital book. Your administrator can start a demo copy with `RijuBooks.exe --demo --data training.json`; the JSON training file is not protected for live use.
+4. Use a disposable training book first. Do not practise by adding sample invoices to the live hospital book. Your administrator can start a demo copy with `Yathartha.exe --demo --data training.json`; the JSON training file is not protected for live use.
 5. For normal Windows use, the default book is under `%LOCALAPPDATA%\RijuBooks\books.riju`. Keep the same Windows user/profile for that book.
 6. In Settings & backup choose the external backup folder. Confirm the device is connected and a backup is actually created.
-7. When an upgrade banner appears, configure the external backup first. The original-format book must be retained before the upgraded file is saved. Older executables cannot open format 20 books.
+7. When an upgrade banner appears, configure the external backup first. The original-format book must be retained before the upgraded file is saved. Older executables cannot open format 21 books.
 
 The existing Windows DPAPI storage remains in this build. New portable encryption/recovery and mailbox ingestion were deferred. There is no new password/recovery-key setup. A copy of a DPAPI file by itself is not a proven replacement-computer recovery method; keep the original Windows profile and follow the existing recovery arrangement. Do not discard the original book/profile when testing a newer executable.
 
@@ -88,6 +90,8 @@ Enter initial opening balances using the Opening balances option and the reviewe
 
 ## 6. Journal studio: prepare, edit and approve
 
+Date fields have a Cal button. Click it, choose month/year (use Go to jump), then click the day; Today, Clear and Cancel are available. You can still type an ISO date directly. Report From/Through, optional dates, AP dates and reversal dialogs use the same picker. A month-period field selects YYYY-MM; an exceptional-date list appends selected dates. For holiday/milestone text areas use Insert calendar date at the cursor and retain the required comma/CSV separators. Picking a date changes only the form until you save or approve its normal action.
+
 For a simple completed transaction, enter narration in Journal studio and choose Prepare offline draft. For example: `Paid INR 5000 rent by bank on 1 November 2026 at JP Nagar`. The local model can extract supported dates, units, parties, amounts and methods, but the resulting lines still need your review.
 
 Check date, unit, accounts, debit/credit amounts, source reference and party. A model draft is not a journal until approved. If the description is ambiguous, the tool clears the old draft and asks for clarification or a dedicated workflow. It does not invent GST/TDS, allocate an advance or post automatically.
@@ -97,6 +101,8 @@ Add or edit manual lines when you know the correct accounts. Each branch must ba
 The offline language component is a small authored statistical intent model, not a general generative LLM. Read MODEL_CARD_OFFLINE.md for supported topics, licence and limitations. A refusal is a request to review the source, not permission to disguise a taxed transaction as a simple expense.
 
 ## 7. AP Vendor Invoices: add the vendor
+
+Vendor master is a separate visible item in the left navigation, also accessible from AP. Every saved vendor appears there immediately. Select a row and choose Edit selected vendor (or double-click) to change its name, default credit days, reference or active status. The stable vendor ID stays unchanged. Inactive vendors remain visible and retain existing invoices/payments; reactivate them before creating a new invoice. Changes apply to new invoices. Posted invoice names and credit terms retain their original source snapshot. Historical aliases cannot be reused to create another vendor and bypass duplicate checks.
 
 Open AP Vendor Invoices in the left navigation. The As at date controls the positions being displayed. The default is the current India date; do not confuse a historical As at view with today's payment instruction.
 
@@ -244,6 +250,8 @@ The proposed journal debits Cash 200 and UPI clearing 600, credits Consultation 
 
 ## 16. Sales receipt: upload, bulk-review and post hundreds of rows
 
+You may reject duplicate/invalid rows before ticking the earned-service/tax/payment approval checkbox. Enter a rejection reason; their Decision must become REJECTED. Rejection alone does not approve the other rows. Then tick the review checkbox, choose Approve all valid rows and enter the approval basis. Only after all source rows have a decision should you choose Preview batch journals. The first preview tab now shows a table with Account code, Ledger name and INR debit/credit side by side. Source details retain the full source record; ledger names in the display do not change the saved journals.
+
 1. Select Import sales receipt report from Sales receipt and choose the aligned XLSX/CSV.
 2. The report is saved as a review batch. Upload posts no journal. It retains every nonblank source row, including invalid and duplicate rows, with filename, source row and file digest.
 3. Review valid/invalid/duplicate counts. Check date/unit/reference, revenue and payment totals. Compare batch totals to the original hospital report before approval.
@@ -375,7 +383,7 @@ Follow this example in a disposable training book, never in live hospital books.
 
 The guide ZIP includes Worked-Example-Daily-Sales.xlsx, the identical CSV alternative, Worked-Example-Bank.csv and verified expected financial reports in Excel/PDF. Import only one sales-file format, not both. The expected-report files are an answer key to read and compare, not transaction files to import. Nothing from these samples is automatically loaded into your book.
 
-**Step 1 — Open the correct book and select the scope.** Extract and open RijuBooks.exe. Ask the trainer to open a disposable demo/training book, using the command in Chapter 2. At the top select financial year 2026 and operating unit JP Nagar. This financial year runs 1 April 2026–31 March 2027. The report period later will be 1–2 November, not the whole year. Do not use Start clean books on live data just to practise this example.
+**Step 1 — Open the correct book and select the scope.** Extract and open Yathartha.exe. Ask the trainer to open a disposable demo/training book, using the command in Chapter 2. At the top select financial year 2026 and operating unit JP Nagar. This financial year runs 1 April 2026–31 March 2027. The report period later will be 1–2 November, not the whole year. Do not use Start clean books on live data just to practise this example.
 
 **Step 2 — Establish the opening bank balance once.** In Journal studio select Transaction date 2026-04-01, unit JP Nagar and Opening balances. Enter narration TRAINING opening bank/capital. Choose Add manual line: account 1010 Bank, debit INR 50,000, unit JP. Add another line: account 3000 Capital, credit INR 50,000, unit JP. Review the balanced draft, select Review & post voucher and approve. There is no daily activity between April and October in this example, so the bank carries INR 50,000 into November. Opening balances must be dated 1 April; do not date the opening 1 November or post it again each month. Open Ledger A/c and confirm Bank's opening balance at 1 November is INR 50,000. If your practice book already contains an opening or other transactions, use a different empty training book instead of adding this opening twice.
 

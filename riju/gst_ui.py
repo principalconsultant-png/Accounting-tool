@@ -1,4 +1,6 @@
 """Desktop reviewed GST posting, ledger proofs and offline 2B reconciliation."""
+from .journal_preview import with_account_names
+from .date_picker import ask_date
 from datetime import datetime
 from pathlib import Path
 import json
@@ -43,7 +45,7 @@ class GstUI:
             import copy
             core.post(copy.deepcopy(self.state),doc['date'],doc['narration'],doc['lines'])
             approved.clear();approved.update(values=data,doc=doc,fingerprint=history.fingerprints(self.state))
-            preview.configure(state='normal');preview.delete('1.0','end');preview.insert('1.0',json.dumps(doc,ensure_ascii=False,indent=2));preview.configure(state='disabled')
+            preview.configure(state='normal');preview.delete('1.0','end');preview.insert('1.0',json.dumps(with_account_names(self.state,doc),ensure_ascii=False,indent=2));preview.configure(state='disabled')
         def post():
             if not approved or approved['values']!=values() or approved['fingerprint']!=history.fingerprints(self.state):raise ValueError('Prepare a fresh preview after changing any fields.')
             if messagebox.askyesno('Approve GST journal','Have you checked the invoice, rule applicability, place of supply, tax rounding and purchase ITC? This posts the displayed double-entry journal.',parent=win):
@@ -63,7 +65,7 @@ class GstUI:
         if not path:return
         registration=simpledialog.askstring('2B registration','Recipient GSTIN for this 2B file:',parent=self)
         if not registration:return
-        period=simpledialog.askstring('2B period','Statement period YYYY-MM:',parent=self)
+        period=ask_date('2B period','Statement period YYYY-MM:',parent=self)
         if not period:return
         raw=Path(path).read_bytes()
         import copy
@@ -128,7 +130,7 @@ class GstUI:
             data=values();doc=gst.plan_note(self.state,data)
             import copy
             core.post(copy.deepcopy(self.state),doc['date'],doc['narration'],doc['lines'])
-            reviewed.clear();reviewed.update(values=data,fingerprint=history.fingerprints(self.state));text.configure(state='normal');text.delete('1.0','end');text.insert('1.0',json.dumps(doc,ensure_ascii=False,indent=2));text.configure(state='disabled')
+            reviewed.clear();reviewed.update(values=data,fingerprint=history.fingerprints(self.state));text.configure(state='normal');text.delete('1.0','end');text.insert('1.0',json.dumps(with_account_names(self.state,doc),ensure_ascii=False,indent=2));text.configure(state='disabled')
         def post():
             if not reviewed or reviewed['values']!=values() or reviewed['fingerprint']!=history.fingerprints(self.state):raise ValueError('Prepare a fresh note preview after changing any fields.')
             if messagebox.askyesno('Approve GST note','Have you reviewed the original invoice, note amounts, tax treatment and actual refund/balance adjustment?',parent=win):

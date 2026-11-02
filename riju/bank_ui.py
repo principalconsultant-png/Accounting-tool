@@ -1,4 +1,5 @@
 """Complete INR bank-statement review and reconciliation desktop workflow."""
+from .date_picker import ask_date
 from pathlib import Path
 from datetime import datetime
 import tkinter as tk
@@ -261,7 +262,7 @@ class BankUI:
         if not selected:raise ValueError('Select a match in Match history.')
         m=self.brs_match_data[selected[0]];reason=simpledialog.askstring('Undo match','Reason (owned adjustment/settlement journals are reversed, not deleted):',parent=self)
         if not reason:return
-        day=simpledialog.askstring('Undo / reversal date','YYYY-MM-DD',initialvalue=datetime.now(activity.INDIA).date().isoformat(),parent=self)
+        day=ask_date('Undo / reversal date','YYYY-MM-DD',initialvalue=datetime.now(activity.INDIA).date().isoformat(),parent=self)
         if day:self.commit(lambda s:r.undo_match(s,m.get('id',m.get('bank_id')),reason,day));self.refresh_bank_tables()
     def _required_statement(self):
         sid=self._statement_id()

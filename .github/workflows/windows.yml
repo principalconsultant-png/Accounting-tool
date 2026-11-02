@@ -14,30 +14,30 @@ jobs:
       - run: python scripts/run_tests.py
         env:
           RIJU_GUI_TEST: '1'
-      - run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name RijuBooks run_riju.py
+      - run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name Yathartha run_riju.py
       - name: Validate packaged Windows executable
         shell: pwsh
         run: |
-          $p = Start-Process -FilePath .\dist\RijuBooks.exe -ArgumentList '--self-test-output packaged-selftest.json' -Wait -PassThru
+          $p = Start-Process -FilePath .\dist\Yathartha.exe -ArgumentList '--self-test-output packaged-selftest.json' -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw 'Packaged executable failed its self-test.' }
           if (-not (Test-Path packaged-selftest.json)) { throw 'No packaged self-test result.' }
           $result = Get-Content packaged-selftest.json -Raw | ConvertFrom-Json
           if (-not $result.passed) { throw 'Packaged self-test did not pass.' }
-          $hash = (Get-FileHash .\dist\RijuBooks.exe -Algorithm SHA256).Hash.ToLower()
-          "$hash  RijuBooks.exe" | Set-Content .\dist\SHA256SUMS.txt
+          $hash = (Get-FileHash .\dist\Yathartha.exe -Algorithm SHA256).Hash.ToLower()
+          "$hash  Yathartha.exe" | Set-Content .\dist\SHA256SUMS.txt
       - name: Build user guide and standard sales templates
         run: python scripts/build_user_manual.py --output dist/user-documents
       - uses: actions/upload-artifact@v4
         with:
-          name: RijuBooks-Windows
+          name: Yathartha-Windows
           path: |
-            dist/RijuBooks.exe
+            dist/Yathartha.exe
             dist/SHA256SUMS.txt
             packaged-selftest.json
             dist/user-documents/
       - uses: actions/upload-artifact@v4
         with:
-          name: RijuBooks-Training-and-Templates
+          name: Yathartha-Training-and-Templates
           path: dist/user-documents/
       - name: Publish versioned Windows download
         if: github.ref == 'refs/heads/main'
@@ -51,7 +51,7 @@ jobs:
           if ($LASTEXITCODE -eq 0) {
             Write-Host "Release $tag already exists; leaving it unchanged. Updated build remains in Actions artifacts."
           } else {
-            gh release create $tag dist/RijuBooks.exe dist/SHA256SUMS.txt packaged-selftest.json TESTING_B01_B05.md TESTING_LEDGERS.md --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "Riju Books $version" --notes-file RELEASE_NOTES.md
+            gh release create $tag dist/Yathartha.exe dist/SHA256SUMS.txt packaged-selftest.json TESTING_B01_B05.md TESTING_LEDGERS.md --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "Riju Books $version" --notes-file RELEASE_NOTES.md
             if ($LASTEXITCODE -ne 0) { throw 'Release creation failed. Download the verified executable from Actions artifacts.' }
           }
           exit 0

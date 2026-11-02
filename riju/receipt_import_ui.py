@@ -31,10 +31,13 @@ class ReceiptImportUI:
             pack=ri.totals_snapshot(self.state,key);valid=sum(r.get('amount',0) for r in batch['rows'] if r['validation']=='VALID');approved=sum(r.get('amount',0) for r in batch['rows'] if r['review']=='APPROVED')
             breakdown.configure(text='Valid source total '+core.rupees(valid)+' | Approved to post '+core.rupees(approved)+' | '+'; '.join(r[0]+' '+r[1]+' '+core.rupees(r[2]) for r in pack['rows'] if r[2]))
             for i,r in enumerate(batch['rows']):table.insert('','end',iid=str(i),values=(r['source_row'],r.get('date',''),r.get('branch',''),r.get('receipt',''),core.rupees(r.get('amount',0)),core.rupees(sum(r.get('payments',{}).values())),r['validation'],r['review'],r['error']+' '+r['reason']))
+        ttk.Label(win,text='1. Reject duplicates/errors (no approval checkbox needed). 2. Tick the review checkbox and approve valid rows. 3. Preview and approve the batch.',wraplength=1100).pack(anchor='w')
         refresh();bar=ttk.Frame(win);bar.pack(fill='x')
         def review(approved,bulk=False):
             batch=ri._batch(self.state,key)
             indices=[i for i,r in enumerate(batch['rows']) if (r['validation']=='VALID' if approved else r['validation']!='VALID')] if bulk else [int(i) for i in table.selection()]
+            if not indices:raise ValueError('Select source rows to review; there are no matching rows for this action.')
+            if approved and not confirmed.get():raise ValueError('Tick the source/tax/payment review checkbox before approving valid receipts. You may reject duplicates without ticking it.')
             reason=simpledialog.askstring('Receipt source review','Review/approval basis:' if approved else 'Rejection/correction reason:',parent=win)
             if reason:self.commit(lambda s:ri.review(s,key,indices,approved,reason,confirmed.get()));refresh()
         self.button(bar,'Approve selected rows',lambda:review(True));self.button(bar,'Reject selected rows',lambda:review(False));self.button(bar,'Approve all valid rows',lambda:review(True,True),True);self.button(bar,'Reject flagged rows',lambda:review(False,True))

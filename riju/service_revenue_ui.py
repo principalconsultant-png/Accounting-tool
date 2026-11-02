@@ -1,6 +1,8 @@
 """Guided source-linked service revenue review."""
+from .date_picker import ask_date
 import copy
 import json
+from .journal_preview import with_account_names,render
 import tkinter as tk
 from tkinter import ttk,filedialog,simpledialog
 from . import service_revenue as sr,core,tax
@@ -29,7 +31,7 @@ class ServiceRevenueUI:
     def _service_preview(self,title,action,form=None,page='Service revenue'):
         before=copy.deepcopy(self.state);candidate=copy.deepcopy(before);result=action(candidate)
         win=tk.Toplevel(self);win.title(title);win.geometry('1000x650');win.transient(form or self);win.grab_set()
-        bar=ttk.Frame(win);bar.pack(side='bottom',fill='x');text=tk.Text(win,wrap='word');text.pack(fill='both',expand=True);text.insert('1.0',json.dumps(dict(result=result,journals=candidate['vouchers'][len(before['vouchers']):]),ensure_ascii=False,indent=2));text.configure(state='disabled')
+        bar=ttk.Frame(win);bar.pack(side='bottom',fill='x');render(self,win,before,candidate,result)
         def approve():
             if self.state!=before:raise ValueError('Books changed after preview. Review a fresh service action.')
             def save(s):s.clear();s.update(copy.deepcopy(candidate));return result
@@ -51,7 +53,7 @@ class ServiceRevenueUI:
         self.button(body,'Validate service preview',preview,True)
 
     def reverse_service_action(self):
-        r=self._selected_service();on=simpledialog.askstring('Reverse service action','Reversal date YYYY-MM-DD:',initialvalue=self.service_end.get(),parent=self)
+        r=self._selected_service();on=ask_date('Reverse service action','Reversal date YYYY-MM-DD:',initialvalue=self.service_end.get(),parent=self)
         if on:self._service_preview('Reverse service action',lambda s:core.reverse(s,r['voucher'],on))
 
     def export_service_revenue(self,kind):

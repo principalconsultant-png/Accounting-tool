@@ -85,7 +85,8 @@ def stage(s,raw,filename):
 
 def review(s,key,indices,approved,reason,confirmed=False):
     q=_batch(s,key)
-    if q['status']!='PENDING_REVIEW' or not reason.strip() or type(approved)!=bool or not confirmed:raise ValueError('Review pending source rows with a reason and confirm earned-service/tax/payment treatment.')
+    if q['status']!='PENDING_REVIEW' or not reason.strip() or type(approved)!=bool:raise ValueError('Select pending source rows and enter a review/rejection reason.')
+    if approved and not confirmed:raise ValueError('Confirm earned-service, tax and payment review before approving valid receipts. Rejection does not require this confirmation.')
     if not indices or len(indices)!=len(set(indices)) or any(type(i)!=int or not 0<=i<len(q['rows']) for i in indices):raise ValueError('Select actual source rows.')
     if approved and any(q['rows'][i]['validation']!='VALID' for i in indices):raise ValueError('Invalid/duplicate rows cannot be approved. Reject them with a reason and upload a corrected report.')
     changes=[dict(index=i,status='APPROVED' if approved else 'REJECTED',reason=reason.strip()) for i in indices]
@@ -95,7 +96,9 @@ def review(s,key,indices,approved,reason,confirmed=False):
 
 def post(s,key):
     core.verify_audit(s);c=copy.deepcopy(s);q=_batch(c,key)
-    if q['status']!='PENDING_REVIEW' or any(r['review'] not in ('APPROVED','REJECTED') for r in q['rows']):raise ValueError('Approve or reject every source row before atomic batch posting.')
+    if q['status']!='PENDING_REVIEW':raise ValueError('This batch is already processed; it cannot post again.')
+    pending=sum(r['review'] not in ('APPROVED','REJECTED') for r in q['rows'])
+    if pending:raise ValueError(str(pending)+' source row(s) still need a decision. Rejected duplicates stay excluded. Tick the review checkbox and use Approve all valid rows; reject any remaining flagged rows, then preview again.')
     selected=[r for r in q['rows'] if r['review']=='APPROVED']
     if not selected:raise ValueError('There are no approved receipts to post.')
     existing=known(c,key);seen=set()

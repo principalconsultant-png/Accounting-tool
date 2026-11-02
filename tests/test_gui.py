@@ -423,7 +423,7 @@ class Gst2bNoteDesktopTests(unittest.TestCase):
             try:
                 app.commit(lambda s:(s.clear(),s.update(copy.deepcopy(fixture.s))));app.show('GST accounting');app.update()
                 count=len(app.state['vouchers'])
-                with patch('riju.gst_ui.filedialog.askopenfilename',return_value=str(source)),patch('riju.gst_ui.simpledialog.askstring',side_effect=['29ABCDE1234F1Z5','2026-05']),patch('riju.gst_ui.messagebox.askyesno',return_value=True):app.import_gst_2b()
+                with patch('riju.gst_ui.filedialog.askopenfilename',return_value=str(source)),patch('riju.gst_ui.simpledialog.askstring',return_value='29ABCDE1234F1Z5'),patch('riju.gst_ui.ask_date',return_value='2026-05'),patch('riju.gst_ui.messagebox.askyesno',return_value=True):app.import_gst_2b()
                 app.update();app.gst_import_table.selection_set(app.gst_import_table.get_children()[0]);app.review_gst_2b();app.update()
                 win=next(w for w in app.winfo_children() if isinstance(w,tk.Toplevel));table=next(w for w in walk(win) if isinstance(w,ttk.Treeview) and 'Match status' in w['columns'])
                 self.assertIn('Credit note',table.item(table.get_children()[0],'values'));self.assertIn('P-1',table.item(table.get_children()[0],'values'))

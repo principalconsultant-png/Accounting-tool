@@ -1,4 +1,5 @@
 """Income Tax depreciation working papers, distinct from book postings."""
+from .journal_preview import with_account_names
 import copy
 import csv
 import io
@@ -36,7 +37,7 @@ class TaxDepreciationUI:
         before=copy.deepcopy(self.state);temp=copy.deepcopy(before);result=action(temp)
         win=tk.Toplevel(self);win.title(title);win.geometry(f'{min(1050,self.winfo_screenwidth()-80)}x{min(650,self.winfo_screenheight()-100)}');win.transient(form or self);win.grab_set()
         ttk.Label(win,text='Review this tax working-paper change. No book journal is posted. The frozen preview is rejected if the books change.',padding=10,wraplength=950).pack(anchor='w')
-        bar=ttk.Frame(win);bar.pack(side='bottom',fill='x');text=tk.Text(win,wrap='word');scroll=ttk.Scrollbar(win,command=text.yview);text.configure(yscrollcommand=scroll.set);scroll.pack(side='right',fill='y');text.pack(fill='both',expand=True);text.insert('1.0',json.dumps(result,ensure_ascii=False,indent=2));text.configure(state='disabled')
+        bar=ttk.Frame(win);bar.pack(side='bottom',fill='x');text=tk.Text(win,wrap='word');scroll=ttk.Scrollbar(win,command=text.yview);text.configure(yscrollcommand=scroll.set);scroll.pack(side='right',fill='y');text.pack(fill='both',expand=True);text.insert('1.0',json.dumps(with_account_names(temp,result),ensure_ascii=False,indent=2));text.configure(state='disabled')
         def approve():
             if self.state!=before:raise ValueError('Books changed after preview. Prepare a new tax working preview.')
             def persist(s):s.clear();s.update(copy.deepcopy(temp));return result

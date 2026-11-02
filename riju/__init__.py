@@ -1,3 +1,5 @@
-"""Riju Books — offline bookkeeping."""
+"""यथार्थः (Yathartha) — offline bookkeeping; legacy package compatibility retained."""
 
-APP_VERSION = "0.29.1-dev"
+APP_VERSION = "0.30.0-dev"
+APP_NAME = "यथार्थः"
+APP_NAME_EN = "Yathartha"

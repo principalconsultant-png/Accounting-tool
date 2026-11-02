@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .date_picker import ask_date
 import argparse
 import copy
 import csv
@@ -9,7 +10,8 @@ from datetime import date, datetime
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
-from . import core, APP_VERSION
+from .date_picker import today as ui_today
+from . import core, APP_VERSION, APP_NAME, APP_NAME_EN
 from .storage import Vault
 from .foundation_ui import FoundationUI
 from .ledger_ui import LedgerUI
@@ -34,10 +36,11 @@ from .statements_ui import StatementsUI
 from . import activity
 from . import foundation
 
-# Soft Indian tricolor: saffron, ivory, sage, with restrained Chakra-blue accents.
-BG='#FBF9F5'; WHITE='#FFFEFC'; INK='#293B55'; GREEN='#355D49'
-SAGE='#E3EEDF'; SAFFRON='#F9E5D1'; MUTED='#596878'
-SAFFRON_HOVER='#F2D5B5'; SAGE_HOVER='#D1E2CB'; BLUE='#E7EDF7'; BORDER='#DCE2DC'
+# Saffron and blue wordmark with pale blue/ivory reading surfaces.
+BG='#FAFBFF'; WHITE='#FFFFFF'; INK='#183B67'; GREEN='#154C8A'
+SAGE='#E8F0FC'; SAFFRON='#FFE3BF'; MUTED='#566B85'
+BRAND_SAFFRON='#D97716'; BRAND_BLUE='#154C8A'
+SAFFRON_HOVER='#F2D5B5'; SAGE_HOVER='#D4E3F8'; BLUE='#E7EDF7'; BORDER='#DCE2DC'
 
 class App(ReceiptImportUI,ApUI,ChecksUI,StatementsUI,GstCompletionUI,BulkImportUI,ServiceRevenueUI,CwipUI,TaxDepreciationUI,FixedAssetsUI,CashFlowUI,TdsUI,RcmUI,GstUI,TaxUI,HistoryUI,BankUI,OperationsUI,LedgerUI,FoundationUI,tk.Tk):
     def __init__(self,vault):
@@ -53,7 +56,7 @@ class App(ReceiptImportUI,ApUI,ChecksUI,StatementsUI,GstCompletionUI,BulkImportU
             self._instance_guard=None
             super().destroy()
             raise
-        self.title(f'Riju Books {APP_VERSION} · ऋजु · Offline accounting')
+        self.title(f'{APP_NAME} · {APP_NAME_EN} {APP_VERSION} · Offline accounting')
         self.geometry('1280x820'); self.minsize(1000,680); self.configure(bg=BG)
         style=ttk.Style(self); style.theme_use('clam')
         style.configure('.',font=('Segoe UI',10),background=BG,foreground=INK)
@@ -78,17 +81,18 @@ class App(ReceiptImportUI,ApUI,ChecksUI,StatementsUI,GstCompletionUI,BulkImportU
         style.configure('Treeview.Heading',background=SAGE,padding=8,font=('Segoe UI',10,'bold'))
         style.map('Treeview',background=[('selected',BLUE)],foreground=[('selected',INK)])
         ribbon=tk.Frame(self,bg=BG);ribbon.pack(fill='x')
-        for color in (SAFFRON,WHITE,SAGE):tk.Frame(ribbon,bg=color,height=3).pack(fill='x')
+        for color in (BRAND_SAFFRON,WHITE,BRAND_BLUE):tk.Frame(ribbon,bg=color,height=3).pack(fill='x')
         header=ttk.Frame(self,padding=(24,18)); header.pack(fill='x')
-        ttk.Label(header,text='ऋजु  RIJU BOOKS',font=('Segoe UI',19,'bold')).pack(side='left')
+        ttk.Label(header,text=APP_NAME,font=('Nirmala UI',23,'bold'),foreground=BRAND_SAFFRON).pack(side='left')
+        ttk.Label(header,text='  YATHARTHA',font=('Segoe UI',16,'bold'),foreground=BRAND_BLUE).pack(side='left')
         ttk.Label(header,text='  /  Clear books. Thoughtful decisions.',style='Sub.TLabel').pack(side='left',padx=15)
         self.branch=tk.StringVar(value='All operating units')
         self.branch_names={'All operating units':'ALL',**{v:k for k,v in self.branches.items()}}
         select=ttk.Combobox(header,textvariable=self.branch,values=list(self.branch_names),state='readonly',width=23)
         self.branch_select=select
         select.pack(side='right'); select.bind('<<ComboboxSelected>>',lambda e:self.show(self.current))
-        self.year=tk.StringVar(value=str(core.financial_year(date.today().isoformat())))
-        fy=ttk.Combobox(header,textvariable=self.year,values=[str(i) for i in range(2000,date.today().year+3)],state='readonly',width=7)
+        self.year=tk.StringVar(value=str(core.financial_year(ui_today().isoformat())))
+        fy=ttk.Combobox(header,textvariable=self.year,values=[str(i) for i in range(2000,ui_today().year+3)],state='readonly',width=7)
         self.year_select=fy
         self.refresh_masters()
         fy.pack(side='right',padx=12); fy.bind('<<ComboboxSelected>>',lambda e:self.show(self.current))
@@ -102,7 +106,7 @@ class App(ReceiptImportUI,ApUI,ChecksUI,StatementsUI,GstCompletionUI,BulkImportU
         nav=ttk.Frame(self.nav_canvas,padding=(12,14));nav_window=self.nav_canvas.create_window((0,0),window=nav,anchor='nw')
         nav.bind('<Configure>',lambda e:self.nav_canvas.configure(scrollregion=self.nav_canvas.bbox('all')))
         self.nav_canvas.bind('<Configure>',lambda e:self.nav_canvas.itemconfigure(nav_window,width=e.width))
-        self.pages={'Overview':self.overview,'Ledger A/c':self.ledger_accounts,'Work volume':self.work_volume,'Journal studio':self.studio,'Sales receipt':self.sales_receipt,'AP Vendor Invoices':self.ap_invoices,'Service revenue':self.service_revenue,'FX receipts':self.fx_receipts,'Vouchers':self.vouchers,
+        self.pages={'Overview':self.overview,'Ledger A/c':self.ledger_accounts,'Work volume':self.work_volume,'Journal studio':self.studio,'Sales receipt':self.sales_receipt,'AP Vendor Invoices':self.ap_invoices,'Vendor master':self.vendor_master,'Service revenue':self.service_revenue,'FX receipts':self.fx_receipts,'Vouchers':self.vouchers,
                     'Chart of accounts':self.accounts,'Tax setup':self.taxes,'TDS accounting':self.tds_accounting,'GST accounting':self.gst_accounting,'GST cash & filing':self.gst_cash_filing,'GST reverse charge':self.reverse_charge,'Setup & periods':self.setup,'Saved drafts':self.saved_drafts,'Financial reports':self.reports,'Statement review':self.statement_page,'Checks & questions':self.accounting_check_page,'Cash flow setup':self.cash_flow_setup,
                     'Import queue':self.imports,'Bulk import review':self.bulk_imports,'Bank reconciliation':self.banking,
                     'Assets & depreciation':self.assets,'Tax depreciation':self.tax_depreciation,'CWIP & commissioning':self.cwip_projects,'Settings & backup':self.settings,'Change history':self.history}
@@ -154,7 +158,7 @@ class App(ReceiptImportUI,ApUI,ChecksUI,StatementsUI,GstCompletionUI,BulkImportU
         folder=self.state['settings'].get('backup_dir')
         if folder:
             try:
-                existing=list(Path(folder).glob('Riju-'+date.today().strftime('%Y%m%d')+'-*')) if Path(folder).is_dir() else []
+                existing=list(Path(folder).glob('Riju-'+ui_today().strftime('%Y%m%d')+'-*')) if Path(folder).is_dir() else []
                 if not existing:
                     if not self.vault.path.exists(): self.vault.save(self.state)
                     self.vault.backup(folder)
@@ -206,7 +210,11 @@ class App(ReceiptImportUI,ApUI,ChecksUI,StatementsUI,GstCompletionUI,BulkImportU
         ttk.Label(f,text=label).pack(anchor='w')
         var=tk.StringVar(value=default)
         w=ttk.Combobox(f,textvariable=var,values=values,state='readonly',width=width) if values else ttk.Entry(f,textvariable=var,width=width)
-        w.pack(fill='x',pady=5); return var
+        from .date_picker import date_mode,attach
+        mode=date_mode(label,default) if not values else None
+        w.pack(side='left' if mode else 'top',fill='x',pady=5)
+        if mode:attach(w,var,mode)
+        return var
     def overview(self):
         self.note('One entity. Three perspectives. Your books stay on this computer.')
         start,end=self.dates(); b=core.balances(self.state,end,self.unit(),start); allb=core.balances(self.state,end,self.unit())
@@ -232,7 +240,7 @@ class App(ReceiptImportUI,ApUI,ChecksUI,StatementsUI,GstCompletionUI,BulkImportU
     def studio(self):
         self.note('Describe a supported payment or receipt. Review every account before posting. Unknown treatments require manual entry; no LLM is bundled.')
         top=self.bar()
-        self.jdate=self.field(top,'Transaction date',date.today().isoformat(),width=13)
+        self.jdate=self.field(top,'Transaction date',ui_today().isoformat(),width=13)
         names=list(self.branches.values()); chosen=self.branch.get() if self.unit()!='ALL' else names[0]
         self.jbranch=self.field(top,'Operating unit',chosen,names,width=22)
         self.jopening=tk.BooleanVar(); ttk.Checkbutton(top,text='Opening balances',variable=self.jopening).pack(side='left',padx=12,pady=20)
@@ -317,7 +325,7 @@ class App(ReceiptImportUI,ApUI,ChecksUI,StatementsUI,GstCompletionUI,BulkImportU
         from .revenue import MODES, receipt_lines
         self.note('Split a receipt across any of the 15 hospital collection categories and cash, card, UPI or other. Treatment payments received are earned revenue; Other source remains in clearing. No GST split is inferred.')
         uploads=self.bar();self.button(uploads,'Import sales receipt report',self.import_sales_report,True);self.button(uploads,'Excel receipt template',lambda:self.sales_report_template('xlsx'));self.button(uploads,'CSV receipt template',lambda:self.sales_report_template('csv'));self.button(uploads,'Review sales report imports',self.review_sales_reports)
-        top=self.bar(); day=self.field(top,'Date',date.today().isoformat(),width=13)
+        top=self.bar(); day=self.field(top,'Date',ui_today().isoformat(),width=13)
         unit=self.field(top,'Operating unit',self.branch.get() if self.unit()!='ALL' else next(iter(self.branches.values())),list(self.branches.values()),width=22)
         narration=self.field(top,'Receipt / narration','Daily sales receipt',width=36)
         grid=ttk.Frame(self.content);grid.pack(fill='x',pady=10)
@@ -351,7 +359,7 @@ class App(ReceiptImportUI,ApUI,ChecksUI,StatementsUI,GstCompletionUI,BulkImportU
         def view():
             v=selected(); messagebox.showinfo(v['id'],core.display_narration(v,self.state)+'\n\n'+'\n'.join(f"{self.branches[l['branch']]} | {l['account']} {self.account_name(l['account'])} | Dr {core.rupees(l['debit'])} Cr {core.rupees(l['credit'])}" for l in v['lines']),parent=self)
         def rev():
-            v=selected(); day=simpledialog.askstring('Reversal date','YYYY-MM-DD',initialvalue=date.today().isoformat(),parent=self)
+            v=selected(); day=ask_date('Reversal date','YYYY-MM-DD',initialvalue=ui_today().isoformat(),parent=self)
             if day and messagebox.askyesno('Confirm reversal','Reverse '+v['id']+'?',parent=self):
                 self.commit(lambda s:core.reverse(s,v['id'],day)); self.show('Vouchers')
         bar=self.bar(); self.button(bar,'View lines',view); self.button(bar,'Reverse selected voucher',rev)
@@ -468,6 +476,8 @@ class App(ReceiptImportUI,ApUI,ChecksUI,StatementsUI,GstCompletionUI,BulkImportU
         bar=self.bar(); entity=self.field(bar,'Legal entity name',self.state['settings']['entity'],width=42); locked=self.field(bar,'Lock through (YYYY-MM-DD)',self.state['locked_through'],width=22)
         ttk.Label(self.content,text='Bengaluru banking holidays — comma-separated YYYY-MM-DD dates. Sundays and 2nd/4th Saturdays are built in.',style='Sub.TLabel',wraplength=900).pack(anchor='w',pady=10)
         holiday=tk.Text(self.content,height=3,bg=WHITE,font=('Segoe UI',10)); holiday.pack(fill='x'); holiday.insert('1.0',', '.join(self.state['holidays']))
+        from .date_picker import insert_date_button
+        insert_date_button(self.content,holiday,'Insert holiday date at cursor (separate dates with commas)')
         ttk.Label(self.content,text='Legacy tax references — starter values only. Use Tax setup for reviewed effective-dated GST/TDS versions and payee registrations. These reference fields and manual journals do not apply taxes automatically.',style='Sub.TLabel',wraplength=900).pack(anchor='w',pady=10)
         rule_fields=[]
         for rule in self.state['settings']['tax_rules']:
@@ -530,7 +540,7 @@ class App(ReceiptImportUI,ApUI,ChecksUI,StatementsUI,GstCompletionUI,BulkImportU
 
 
 def main():
-    parser=argparse.ArgumentParser(description='Riju Books offline Windows accounting')
+    parser=argparse.ArgumentParser(description='Yathartha offline Windows accounting')
     parser.add_argument('--demo',action='store_true',help='Unencrypted disposable development vault; never use real financial information.')
     parser.add_argument('--data',help='Optional vault path')
     parser.add_argument('--self-test-output',help=argparse.SUPPRESS)
@@ -546,7 +556,7 @@ def main():
         try:
             from .history_ui import offer_integrity_recovery
             recovered=offer_integrity_recovery(vault,e,root)
-            if not recovered:messagebox.showerror('Riju Books could not start',str(e),parent=root)
+            if not recovered:messagebox.showerror('यथार्थः could not start',str(e),parent=root)
         except Exception as recovery_error:
             messagebox.showerror('Recovery could not complete',str(recovery_error),parent=root)
             raise

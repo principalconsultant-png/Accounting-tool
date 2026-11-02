@@ -1,4 +1,5 @@
 """Desktop TDS review, cumulative assessment, challan allocation and exports."""
+from .journal_preview import with_account_names
 import csv
 import io
 import json
@@ -55,7 +56,7 @@ class TdsUI:
             return data
         def prepare():
             data=values();record=tds.prepare(self.state,kind,data);prepared.clear();prepared.update(values=data,fingerprint=history.fingerprints(self.state))
-            preview.configure(state='normal');preview.delete('1.0','end');preview.insert('1.0',json.dumps(record,ensure_ascii=False,indent=2));preview.configure(state='disabled')
+            preview.configure(state='normal');preview.delete('1.0','end');preview.insert('1.0',json.dumps(with_account_names(self.state,record),ensure_ascii=False,indent=2));preview.configure(state='disabled')
         def post():
             if not prepared or prepared['values']!=values() or prepared['fingerprint']!=history.fingerprints(self.state):raise ValueError('Prepare a fresh preview after changing any fields or books.')
             if messagebox.askyesno('Approve TDS entry','Have you checked the source, tax point, section, thresholds, historical catch-up and journal? No real bank instruction or return is sent.',parent=win):

@@ -43,11 +43,21 @@ def credit_days(value):
     return n
 
 @atomic
-def save_vendor(s,values):
+def save_vendor(s,values,vendor_id=None):
     name=str(values.get('name','')).strip();days=credit_days(values.get('credit_days','0'))
     if not name or not norm(name):raise ValueError('Enter the vendor legal/source name.')
-    if any(norm(v['name'])==norm(name) for v in data(s)['vendors']):raise ValueError('This vendor is already present; use the existing vendor to prevent duplicate invoices.')
-    v=dict(id=uid(),name=name,credit_days=days,reference=str(values.get('reference','')).strip());data(s)['vendors'].append(v);core.add_audit(s,'AP_VENDOR_CREATED',v);return v
+    old=copy.deepcopy(vendor(s,vendor_id)) if vendor_id else None
+    for v in data(s)['vendors']:
+        if v['id']!=vendor_id and norm(name) in {norm(n) for n in [v['name'],*v.get('previous_names',[])]}:raise ValueError('This vendor name or historical alias already belongs to another vendor. Edit that vendor instead.')
+    active=values.get('active',old.get('active',True) if old else True)
+    if type(active)!=bool:raise ValueError('Vendor active status must be yes or no.')
+    names=list(old.get('previous_names',[])) if old else []
+    if old and old['name']!=name and old['name'] not in names:names.append(old['name'])
+    v=dict(id=vendor_id or uid(),name=name,credit_days=days,reference=str(values.get('reference','')).strip(),active=active,previous_names=names)
+    if old:data(s)['vendors'][next(i for i,x in enumerate(data(s)['vendors']) if x['id']==vendor_id)]=v
+    else:data(s)['vendors'].append(v)
+    core.add_audit(s,'AP_VENDOR_UPDATED' if old else 'AP_VENDOR_CREATED',dict(old=old,new=v));return v
+
 
 
 def position(s,r,on='9999-12-31',net=None):
@@ -63,7 +73,9 @@ def schedule(s,r,on='9999-12-31'):
 
 @atomic
 def enter_invoice(s,v):
-    reviewed(v);supplier=vendor(s,v['vendor']);branch=v['branch'];ref=str(v.get('reference','')).strip()
+    reviewed(v);supplier=vendor(s,v['vendor'])
+    if not supplier.get('active',True):raise ValueError('Vendor is inactive. Reactivate it in Vendor master before entering a new invoice.')
+    branch=v['branch'];ref=str(v.get('reference','')).strip()
     if branch not in foundation.branches(s,True) or not ref or not norm(ref):raise ValueError('Select an active unit and enter the vendor invoice number.')
     invdate=day(v['invoice_date']);received=day(v['received_date']);posted=day(v['accounting_date']);days=credit_days(v['credit_days'])
     if invdate>received:raise ValueError('Invoice receipt cannot precede its invoice date.')

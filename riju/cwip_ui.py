@@ -1,4 +1,6 @@
 """Desktop review screens for project construction and commissioning."""
+from .journal_preview import with_account_names
+from .date_picker import ask_date
 import copy
 import csv
 import io
@@ -44,7 +46,7 @@ class CwipUI:
         win=tk.Toplevel(self);win.title(title);win.geometry('1000x650');win.transient(form or self);win.grab_set()
         ttk.Label(win,text='Review the exact sources, allocations and journals. Approval saves this frozen result only while the books remain unchanged.',wraplength=950,padding=10).pack(anchor='w')
         bar=ttk.Frame(win);bar.pack(side='bottom',fill='x');text=tk.Text(win,wrap='word');scroll=ttk.Scrollbar(win,command=text.yview);text.configure(yscrollcommand=scroll.set);scroll.pack(side='right',fill='y');text.pack(fill='both',expand=True)
-        text.insert('1.0',json.dumps(dict(result=result,new_journals=candidate['vouchers'][len(before['vouchers']):]),ensure_ascii=False,indent=2));text.configure(state='disabled')
+        text.insert('1.0',json.dumps(with_account_names(candidate,dict(result=result,new_journals=candidate['vouchers'][len(before['vouchers']):])),ensure_ascii=False,indent=2));text.configure(state='disabled')
         def approve():
             if self.state!=before:raise ValueError('Books changed after this preview. Prepare a fresh CWIP review.')
             def persist(s):s.clear();s.update(copy.deepcopy(candidate));return result
@@ -71,6 +73,8 @@ class CwipUI:
         win,body,fields=self._cwip_form('Revise project plan',specs,save)
         ttk.Label(body,text='Milestones CSV: key,name,due,completed. Dates YYYY-MM-DD; completed may be blank. Revisions retain earlier plans.').pack(anchor='w')
         text=tk.Text(body,height=7);text.pack(fill='x');out=io.StringIO();w=csv.DictWriter(out,fieldnames=['key','name','due','completed']);w.writeheader();w.writerows(pp['milestones']);text.insert('1.0',out.getvalue())
+        from .date_picker import insert_date_button
+        insert_date_button(body,text,'Insert milestone due/completed date at cursor')
 
     def cwip_cost(self):
         p=self._cwip_project();specs=[('mode','Cost source mode','Post cost',['Post cost','Link existing']),('date','Cost / source date',self.cwip_asof.get(),None),('reference','Supplier/source reference','',None),('party','Supplier/payee reference','',None),('category','Cost category','Civil',list(cwip.CATEGORIES)),('gross','Gross cost INR','',None),('capital','Eligible capital INR','',None),('expense','Hospital expense ledger','4590',None),('payable','Supplier payable ledger','2000',None),('retention','Retention to hold INR','0',None),('source','Existing source voucher ID','',None),('basis','Capitalization / expense review basis','',None)]
@@ -110,7 +114,7 @@ class CwipUI:
     def cwip_reverse(self):
         if not self.cwip_event_table.selection():raise ValueError('Select a project event first; cost-source reversals are available in Vouchers after reversing dependent events.')
         e=self.cwip_event_rows[self.cwip_event_table.selection()[0]]
-        on=simpledialog.askstring('Project reversal','Exact dated reversal date YYYY-MM-DD:',initialvalue=self.cwip_asof.get(),parent=self)
+        on=ask_date('Project reversal','Exact dated reversal date YYYY-MM-DD:',initialvalue=self.cwip_asof.get(),parent=self)
         if on:self._cwip_preview('Review project reversal',lambda s:core.reverse(s,e[3],on))
 
     def export_cwip(self,kind):
