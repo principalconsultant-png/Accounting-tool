@@ -69,5 +69,7 @@ def main():
     p=argparse.ArgumentParser();p.add_argument('--output',default='dist/user-documents');args=p.parse_args();root=Path(__file__).resolve().parents[1];out=Path(args.output);out.mkdir(parents=True,exist_ok=True)
     build_pdf(root/'docs/USER_TRAINING_GUIDE.md',out/'RijuBooks-User-Training-Guide.pdf');(out/'USER_TRAINING_GUIDE.md').write_text((root/'docs/USER_TRAINING_GUIDE.md').read_text(encoding='utf-8'),encoding='utf-8')
     for kind in ('xlsx','csv'):receipt_import.template(out/('RijuBooks-Sales-Receipts-Template.'+kind))
-    print('Created PDF, source guide and standard XLSX/CSV receipt templates in '+str(out))
+    from scripts.build_worked_example import build_example
+    build_example(out)
+    print('Created guide, blank templates and verified end-to-end sample inputs/reports in '+str(out))
 if __name__=='__main__':main()

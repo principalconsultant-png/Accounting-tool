@@ -1,0 +1,3 @@
+﻿receipt_date,branch,receipt_no,invoice_no,party,record_type,tax_mode,treatment,consultation,eye_check,registration,medicine_retail,medicine_treatment,consumables,room_rent,nursing,duty_doctor,food,swarnaprashna,kalari,treatment_receipt,misc,cash,bank,upi,card,other,total
+2026-11-01,JP,WALK-001,,,earned,no_separate_tax,300,500,,,,,,,,,,,,,,200,,600,,,800
+2026-11-01,JP,WALK-002,,,earned,no_separate_tax,,200,,,,,,1000,,,,,,,,,,,1200,,1200

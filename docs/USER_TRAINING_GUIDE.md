@@ -1,6 +1,6 @@
 # Riju Books — Bookkeeping Training and User Guide
 
-Development version 0.29.1-dev | 1 November 2026 | Windows | INR
+Development version 0.29.1-dev | Guide updated 2 November 2026 | Windows | INR
 
 Audience: a new bookkeeper, an accountant reviewing the work, and the person delivering the books to the hospital. This guide explains both the workflow and the bookkeeping behind it. Use the matching development executable; screen names refer to that version. Dates shown in examples are practice dates, not instructions to post into live books.
 
@@ -368,3 +368,103 @@ Allow an introductory session of about three hours plus supervised practice. Sug
 Before independent live use, the trainee should be able to identify the book/year/unit, explain invoice versus payment journals, process a partial payment without duplicating expense, extend a plan without posting, align and review a multi-receipt report, reject a duplicate, trace a bank match to the existing voucher, explain actual cash flow versus AP forecast, export a reconciled pack, and demonstrate backup and a safe correction in training books.
 
 The reviewer should verify real source samples, applicable accounting/tax treatment, vendor controls, bank mappings, required financial disclosures, supported language examples and the actual Windows PC. Development/CI tests do not replace those acceptance steps. New portable encryption/recovery, mailbox ingestion, full MIS/executive pack and other tracker items remain separate from this AP/import delivery.
+
+## 26. End-to-end worked example: daily sales report to final financial reports
+
+Follow this example in a disposable training book, never in live hospital books. It starts with the actual daily-sales file, accounts for the transactions, reconciles the bank and ends with P&L, balance sheet and cash flow. All amounts are INR, all transactions belong to JP Nagar (JP), and the two working days are 1–2 November 2026. Assume these specific training services need no separate GST/TDS entry, no depreciation and no closing journal. For real taxed receipts, follow the dedicated source workflow rather than copying this training tax assumption.
+
+The guide ZIP includes Worked-Example-Daily-Sales.xlsx, the identical CSV alternative, Worked-Example-Bank.csv and verified expected financial reports in Excel/PDF. Import only one sales-file format, not both. The expected-report files are an answer key to read and compare, not transaction files to import. Nothing from these samples is automatically loaded into your book.
+
+**Step 1 — Open the correct book and select the scope.** Extract and open RijuBooks.exe. Ask the trainer to open a disposable demo/training book, using the command in Chapter 2. At the top select financial year 2026 and operating unit JP Nagar. This financial year runs 1 April 2026–31 March 2027. The report period later will be 1–2 November, not the whole year. Do not use Start clean books on live data just to practise this example.
+
+**Step 2 — Establish the opening bank balance once.** In Journal studio select Transaction date 2026-04-01, unit JP Nagar and Opening balances. Enter narration TRAINING opening bank/capital. Choose Add manual line: account 1010 Bank, debit INR 50,000, unit JP. Add another line: account 3000 Capital, credit INR 50,000, unit JP. Review the balanced draft, select Review & post voucher and approve. There is no daily activity between April and October in this example, so the bank carries INR 50,000 into November. Opening balances must be dated 1 April; do not date the opening 1 November or post it again each month. Open Ledger A/c and confirm Bank's opening balance at 1 November is INR 50,000. If your practice book already contains an opening or other transactions, use a different empty training book instead of adding this opening twice.
+
+**Step 3 — Pick the daily sales report.** Open Worked-Example-Daily-Sales.xlsx and inspect the Receipts sheet. Alternatively inspect the same rows in Worked-Example-Daily-Sales.csv. These are the two receipts:
+
+| Receipt / date / unit | Earned revenue columns | Actual payment columns | Receipt total |
+| --- | --- | --- | --- |
+| WALK-001 / 2026-11-01 / JP | consultation 500; treatment 300 | cash 200; upi 600 | 800 |
+| WALK-002 / 2026-11-01 / JP | consultation 200; room_rent 1,000 | card 1,200 | 1,200 |
+
+All other monetary cells are blank/zero. Both rows use record_type earned and tax_mode no_separate_tax. Source revenue is consultation 700 + therapy 300 + room revenue 1,000 = INR 2,000. Source collections are cash 200 + UPI 600 + card 1,200 = INR 2,000. There is no bank collection yet. For your real report, align it to these same template headings, replace sample IDs with genuine unique receipt numbers and verify applicable tax/service recognition before uploading.
+
+**Step 4 — Import and review the report.** In the left navigation select Sales receipt, then Import sales receipt report. Select the XLSX file or its CSV alternative once. In the review window expect two VALID rows and no INVALID/DUPLICATE rows. Uploading creates a queue batch, not revenue. Compare the valid-source category/payment totals to the source totals above. If they differ, stop and correct the source rather than changing the bank figure to make it balance.
+
+Tick the earned-service/tax/payment review confirmation, select Approve all valid rows and enter TRAINING source totals and payment splits checked. Every row must have a decision. Select Preview batch journals and inspect the two balanced journals. Approve sales batch. Reopen Review sales report imports if needed and confirm PROCESSED. Do not import the CSV alternative after posting the XLSX: the same receipt IDs must be treated as duplicates.
+
+| Source journal | Debits | Credits |
+| --- | --- | --- |
+| WALK-001 | Cash 1000: 200; UPI clearing 1110: 600 | Consultation 4000: 500; Therapy 4010: 300 |
+| WALK-002 | Card clearing 1120: 1,200 | Consultation 4000: 200; IPD room revenue 4020: 1,000 |
+
+Open Vouchers to view the source references and journal lines. In Ledger A/c through 1 November, Cash should be 200 debit, UPI clearing 600 debit and Card clearing 1,200 debit. Bank must still be 50,000 debit. UPI/card collection is not yet a bank deposit. Current code numbers above assume unchanged starter account mappings.
+
+**Step 5 — Record a vendor invoice when received.** In AP Vendor Invoices set As at to 2026-11-01. Choose Add vendor: name TRAINING Office Supplier, credit period 0. Save vendor. Choose Enter invoice and fill the following:
+
+| AP field | Training value |
+| --- | --- |
+| Vendor invoice number | WALK-AP-001 |
+| Invoice / received / accrual accounting dates | 2026-11-01 for all three |
+| Credit period / starts at | 0 days / Receipt date |
+| Scheduled payment date | Blank, so contractual due date 2026-11-01 is used |
+| Operating unit | JP |
+| Net amount payable | 1,000 |
+| Trade payables ledger / cost ledger | 2000 / 4590 Administration |
+| Existing accrual voucher | Blank: this is a new simple accrual |
+| Review basis | TRAINING administration service, no separate tax split |
+
+Confirm source review, select Preview invoice accrual and Approve AP action. Expected journal: Dr Administration 1,000 / Cr Trade payables 1,000. Bank is still 50,000. The entire expense belongs in P&L even though the supplier has not been paid. The invoice is due in the AP register. Do not also enter a manual expense journal for this same invoice.
+
+**Step 6 — Record the revised payment plan, then the actual partial payment.** Set AP As at to 2026-11-02 and refresh. Select WALK-AP-001 → Extend payment date. Enter effective date 2026-11-02, new date 2026-11-10 and reason TRAINING supplier agreement. Confirm, preview and approve. Contractual due stays 1 November, scheduled payment becomes 10 November and no voucher is added by the extension.
+
+Assume a partial payment of INR 400 actually occurred on 2 November. Select the invoice again → Mark selected invoices paid. Enter Actual payment date 2026-11-02, cash/bank ledger 1010, reference WALK-PAY-001, amount 400 and the training evidence basis. Leave Existing exact payment voucher blank because this payment has not already been posted. Confirm actual payment evidence, select Preview payment journal and Approve AP action. Expected Dr Trade payables 400 / Cr Bank 400. AP must show Part paid, paid 400, outstanding 600. Administration expense remains 1,000, not 1,400. The remaining 600 is a planned outflow for 10 November; it is not another actual payment.
+
+**Step 7 — Import the bank statement, without posting the AP payment twice.** Open Bank reconciliation, select bank 1010 and New statement scope JP Nagar. Select Import statement and choose Worked-Example-Bank.csv. Enter statement From 2026-11-01, Through 2026-11-02, Opening bank balance 50,000 and Closing bank balance 51,400. Use the CSV headings for date, narration, reference, debit, credit and balance, with the header on row 1. Review and import using the screen's confirmation. Select this imported statement in Statement / reporting period and choose Load statement if needed.
+
+| Bank date | Reference | Bank debit / money out | Bank credit / money in | Running balance |
+| --- | --- | --- | --- | --- |
+| 2026-11-02 | WALK-UPI-001 | 0 | 600 | 50,600 |
+| 2026-11-02 | WALK-CARD-001 | 0 | 1,200 | 51,800 |
+| 2026-11-02 | WALK-PAY-001 | 400 | 0 | 51,400 |
+
+The bank statement's debit/credit headings describe the bank's statement convention. They are not a request to copy those same sides mechanically into your Bank ledger. Importing the statement does not create three new sales/expense entries.
+
+**Step 8 — Transfer UPI/card clearing into the bank.** In Bank transactions select WALK-UPI-001 → Review UPI / card / cash settlement. Choose UPI, Load channel receipts and select the WALK-001 gross receipt line for 600. Enter fee 0, eligible fee GST 0 and treatment None. Select Review & post settlement and approve the displayed journal: Dr Bank 600 / Cr UPI clearing 600. It posts and matches this settlement. If the business-calendar suggestion is unavailable, select the actual source manually after verifying the training bank advice.
+
+Repeat for WALK-CARD-001 using Card and its WALK-002 receipt for 1,200, again zero fees/tax. Expected Dr Bank 1,200 / Cr Card clearing 1,200. UPI and Card clearing must both now be zero. Revenue must still total 2,000: settlement is not a second sale. In real work, review actual provider fees and supporting fee GST instead of copying these zero-fee assumptions.
+
+**Step 9 — Match the existing vendor payment and finish BRS.** For WALK-PAY-001 choose Suggest book matches and review the AP payment voucher, or select that bank row and the existing Bank credit 400 on Book movements, then Match selected bank + book rows. Do not choose Create reviewed adjustment for this payment, because AP already posted it. Open BRS / handover: statement closing and book bank closing should both be 51,400, with zero variance and no unmatched training rows. After checking the proof, use Finalise statement. A finalised bank period needs a reasoned reopen before later corrections.
+
+**Step 10 — Review ledger and trial-balance checkpoints.** Open Ledger A/c or Financial reports → Trial balance. Select JP Nagar and dates From 2026-11-01 / Through 2026-11-02, then refresh. Read the Closing Dr/Cr columns, not just November movement. With unchanged starter accounts, the nonzero closing balances should be:
+
+| Ledger | Closing debit INR | Closing credit INR |
+| --- | --- | --- |
+| 1000 Cash | 200 | 0 |
+| 1010 Bank | 51,400 | 0 |
+| 4590 Administration | 1,000 | 0 |
+| 2000 Trade payables | 0 | 600 |
+| 3000 Capital | 0 | 50,000 |
+| 4000 Consultation revenue | 0 | 700 |
+| 4010 Therapy revenue | 0 | 300 |
+| 4020 IPD room revenue | 0 | 1,000 |
+| TOTAL | 52,600 | 52,600 |
+
+UPI/card clearing are zero and may still appear as zero-value rows. Trial-balance differences should be zero. AP register outstanding is 600 and should reconcile to Trade payables credit 600. An unexpected account, extra sale, wrong bank total or unregistered AP difference means an earlier step needs investigation before reports are delivered.
+
+**Step 11 — Generate and export P&L.** Open Financial reports. Set Report to Profit and loss, From 2026-11-01, Through 2026-11-02 and global unit JP Nagar. Select Refresh. Expect Revenue 2,000, Expense 1,000 and Profit / (loss) 1,000. The unpaid supplier portion is still an expense under accrual accounting. The opening capital and clearing-to-bank transfers are not revenue. Select Export Excel (.xlsx) and Export PDF, save with unit/period in the filename and compare their totals to the screen. Repeat this selector/refresh/export procedure for the other reports below.
+
+**Step 12 — Generate and export the balance sheet.** Set Report to Balance sheet with the same period and refresh. This report is a position through the end date, including the opening carried from April. Expect total assets 51,600 = Bank 51,400 + Cash 200. Expect liabilities 600 = unpaid vendor AP. Equity is Capital 50,000 + Unclosed accumulated result 1,000 = 51,000. Total liabilities/equity is 51,600 and the balance-sheet difference is zero. For this exercise, do not enter a year-end closing journal just to make the current profit appear in equity; the report includes the unclosed result automatically. Export Excel/PDF.
+
+**Step 13 — Review cash-flow setup before generating cash flow.** Open Cash flow setup → New / revised policy. Use effective date 2026-04-01, cash/equivalent codes 1000,1010 and a clear training policy basis. Review the proposed classifications: these training service collections, administration expense, trade payables and UPI/card clearing belong to Operating; opening capital is an opening balance, not a November financing receipt. UPI/card are excluded from cash/equivalents in this example until settlement. Confirm and Save policy version. Never change the cash-definition policy just to force an unexplained difference to zero.
+
+**Step 14 — Generate actual direct and indirect cash flow, then the separate AP forecast.** In Financial reports choose Cash flow - direct, the same November dates and JP Nagar, then Refresh. Operating receipts should be 2,000: cash receipt 200 plus actual UPI/card bank settlements 1,800. Operating payments are -400. Net operating cash is +1,600, investing/financing movements are zero, opening cash/bank is 50,000 and closing cash/bank is 51,600. The April opening is carried forward, not recorded as a November cash flow. Check both cash and direct/indirect reconciliation differences are zero; export Excel/PDF.
+
+Choose Cash flow - indirect and refresh. Expect profit 1,000 plus the increase in trade payables 600 = operating cash 1,600. There are no outstanding clearing balances or other adjustments in this finished example. Export Excel/PDF. Cash differs from profit because 600 of the expense is still unpaid, not because the revenue was posted twice.
+
+Now open AP Vendor Invoices, set As at 2026-11-02 and Forecast through 2026-11-30, then choose AP forecast Excel/PDF. Expect only -600 scheduled for 2026-11-10. Alternatively choose Financial reports → Cash flow - AP forecast, From 2026-11-02 / Through 2026-11-30. Its From date is the forecast as-of date. Do not add this planned -600 to the actual -400 paid: the two reports answer different questions.
+
+**Step 15 — Produce the handover pack and preserve the evidence.** In Financial reports select Financial pack — Excel or Financial pack — PDF for the reviewed scope/period. For this November historical pack, the included AP forecast uses the report's From as its as-of date; use the separate AP forecast just described for the explicit 2 November planning position. Cash flow setup export uses its own actual reporting end and subsequent 90-day horizon. Label these horizons so the recipient cannot confuse historical actuals with a forward plan.
+
+Save the source sales file, source bank statement, reviewed import summary, AP register/reconciliation, ledgers, BRS and the three financial statements. Compare your results with Worked-Example-Financial-Reports.xlsx/PDF. Confirm the external backup. For actual accountant-ready presentation, complete Statement review mappings/disclosures and other required tax, asset and source review; this small example demonstrates workflow and arithmetic, not complete statutory financial statements.
+
+**Final check:** sales 2,000; administration expense 1,000; profit 1,000; bank 51,400; cash 200; AP 600; assets and liabilities/equity both 51,600; actual net operating cash 1,600; future AP outflow 600. If your figures differ, trace source vouchers and duplicate imports before posting any unsupported balancing journal. To replay the exercise, use another disposable book; importing the same receipts into this completed book must remain blocked as duplicates.

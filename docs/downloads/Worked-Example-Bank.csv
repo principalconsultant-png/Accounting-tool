@@ -1,0 +1,4 @@
+﻿date,narration,reference,debit,credit,balance
+2026-11-02,TRAINING UPI settlement,WALK-UPI-001,0,600,50600
+2026-11-02,TRAINING card settlement,WALK-CARD-001,0,1200,51800
+2026-11-02,TRAINING vendor payment,WALK-PAY-001,400,0,51400

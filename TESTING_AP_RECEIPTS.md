@@ -1,6 +1,6 @@
 # AP vendor invoices and standard sales receipt import — 0.29.0-dev
 
-Use disposable books; the full newcomer workflow is in docs/USER_TRAINING_GUIDE.md, also distributed as the 29-page PDF plus Excel/CSV templates in the Windows build artifacts.
+Use disposable books; the full newcomer workflow is in docs/USER_TRAINING_GUIDE.md, also distributed as the PDF plus Excel/CSV templates in the Windows build artifacts.
 
 ## Vendor AP acceptance
 
