@@ -5,7 +5,7 @@ from decimal import Decimal
 import uuid
 import json
 from pathlib import Path
-from . import core,foundation,gst,tax
+from . import core,foundation,gst,tax,report_branding
 
 CATEGORIES=('Operating','Investing','Financing','Exchange effects','Review')
 DIRECT='Cash flow - direct';INDIRECT='Cash flow - indirect';FORECAST='Cash flow - AP forecast'
@@ -191,7 +191,7 @@ def snapshot(state,mode,start,end,branch='ALL'):
     else:raise ValueError('Choose direct or indirect cash flow.')
     rows.extend([['Cash proof','Opening cash/equivalents',result['opening']],['Cash proof','Opening balances introduced during period',result['introduced']],['Cash proof','Net movement including exchange effects',sum(result['totals'].values())],['Cash proof','Closing cash/equivalents',result['closing']]])
     status='REVIEWED — arithmetic proofs passed' if result['ready'] else 'DRAFT — policy, mapping or cash-flow review incomplete'
-    return dict(entity=result['entity'],registration=result['registration'],mode=mode,start=start,end=end,branch=branch,scope=result['scope'],prepared=datetime.now(timezone(timedelta(hours=5,minutes=30))).isoformat(timespec='seconds'),currency='INR',columns=['Category','Cash-flow item','Amount INR'],money_columns=[2],rows=rows,controls={'Cash reconciliation difference':result['cash_difference'],'Direct/indirect operating difference':result['indirect_difference']},status=status,note=status+'. Report-wide policy as at period end is applied consistently to the whole period. Net bank-level receipts/payments are shown unless reviewed gross allocations are supplied. Operating balance changes can include noncash items; full voucher support is retained. Inter-unit cash transfers are excluded at entity scope. This is a working statement; actual cash-equivalent/overdraft/interest classification and final Ind AS 7 presentation require accountant review.',cash_flow=result)
+    return dict(logos=report_branding.snapshot(state),entity=result['entity'],registration=result['registration'],mode=mode,start=start,end=end,branch=branch,scope=result['scope'],prepared=datetime.now(timezone(timedelta(hours=5,minutes=30))).isoformat(timespec='seconds'),currency='INR',columns=['Category','Cash-flow item','Amount INR'],money_columns=[2],rows=rows,controls={'Cash reconciliation difference':result['cash_difference'],'Direct/indirect operating difference':result['indirect_difference']},status=status,note=status+'. Report-wide policy as at period end is applied consistently to the whole period. Net bank-level receipts/payments are shown unless reviewed gross allocations are supplied. Operating balance changes can include noncash items; full voucher support is retained. Inter-unit cash transfers are excluded at entity scope. This is a working statement; actual cash-equivalent/overdraft/interest classification and final Ind AS 7 presentation require accountant review.',cash_flow=result)
 
 
 def support_snapshot(state,start,end,branch='ALL'):

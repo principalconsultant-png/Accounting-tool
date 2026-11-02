@@ -50,7 +50,8 @@ class FinancialReportTests(unittest.TestCase):
                 wb=load_workbook(xlsx,data_only=False);ws=wb.active;self.assertEqual(ws['A1'].value,'=Hospital <Test>');self.assertEqual(ws['A1'].data_type,'s')
                 header=next(r[0].row for r in ws.iter_rows() if r[0].value==pack['columns'][0] and len(r)>1 and r[1].value==pack['columns'][1])
                 for i,row in enumerate(pack['rows'],header+1):
-                    for col in pack['money_columns']:self.assertAlmostEqual(ws.cell(i,col+1).value,row[col]/100)
+                    for col in pack['money_columns']:
+                        if row[col] is not None:self.assertAlmostEqual(ws.cell(i,col+1).value,row[col]/100)
                 self.assertTrue(ws.freeze_panes);self.assertTrue(ws.print_title_rows);wb.close()
                 text='\n'.join(p.extract_text() for p in PdfReader(pdf).pages);self.assertIn(mode,text);self.assertIn('2025-04-01',text);self.assertIn('Page 1',text)
         self.assertEqual(before,self.s)

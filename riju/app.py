@@ -375,6 +375,7 @@ class App(ApBulkUI,ReceiptImportUI,ApUI,ChecksUI,StatementsUI,GstCompletionUI,Bu
         pack_actions=self.bar()
         self.button(pack_actions,'Financial pack — Excel',lambda:self.export_financial_pack('xlsx'))
         self.button(pack_actions,'Financial pack — PDF',lambda:self.export_financial_pack('pdf'))
+        self.button(pack_actions,'Report logos',self.report_logos)
         self.financial_holder=ttk.Frame(self.content);self.financial_holder.pack(fill='both',expand=True)
         self.refresh_financial_report()
 
@@ -385,6 +386,7 @@ class App(ApBulkUI,ReceiptImportUI,ApUI,ChecksUI,StatementsUI,GstCompletionUI,Bu
         self.financial_snapshot=pack
         ttk.Label(self.financial_holder,text=pack['entity']+' | '+pack['scope']+' | '+pack['start']+' to '+pack['end']+' | INR',wraplength=950).pack(anchor='w',pady=6)
         if pack.get('comparison'):ttk.Label(self.financial_holder,text='Previous year: '+pack['comparison']['start']+' to '+pack['comparison']['end']).pack(anchor='w')
+        self.report_logo_preview(self.financial_holder,pack.get('logos',{}))
         self.report_table=self.table(pack['columns'],financial.display_rows(pack),parent=self.financial_holder)
         ttk.Label(self.financial_holder,text=' | '.join(label+': '+core.rupees(value) for label,value in pack['controls'].items()),wraplength=950).pack(anchor='w',pady=8)
         ttk.Label(self.financial_holder,text=pack['note'],wraplength=950).pack(anchor='w',pady=6)
@@ -474,6 +476,42 @@ class App(ApBulkUI,ReceiptImportUI,ApUI,ChecksUI,StatementsUI,GstCompletionUI,Bu
     def import_lines(self,row):
         return [{'account':row['debit_account'],'branch':row['branch'],'debit':row['amount'],'credit':0},
                 {'account':row['credit_account'],'branch':row['branch'],'debit':0,'credit':row['amount']}]
+    def report_logo_preview(self,parent,logos):
+        import io
+        from PIL import Image,ImageTk
+        from . import report_branding
+        if not logos:return
+        row=ttk.Frame(parent);row.pack(fill='x',pady=8)
+        for slot in ('client','axiom'):
+            if slot not in logos:continue
+            with Image.open(io.BytesIO(report_branding.image_bytes(logos[slot]))) as image:
+                image.thumbnail((180,65));photo=ImageTk.PhotoImage(image.copy())
+            label=ttk.Label(row,image=photo);label.image=photo;label.pack(side='left' if slot=='client' else 'right',padx=8)
+
+    def report_logos(self):
+        from . import report_branding
+        win=tk.Toplevel(self);win.title('Report logos — client left / AXIOM right');win.geometry('760x400');win.transient(self)
+        ttk.Label(win,text='Logos are saved inside this client book and its backups. PNG/JPEG, up to 5 MB.\nPDF headers repeat on every page; Excel reports include both logos. CSV contains text only.',wraplength=720).pack(anchor='w',padx=14,pady=12)
+        holder=ttk.Frame(win);holder.pack(fill='both',expand=True,padx=14)
+        def refresh():
+            for child in holder.winfo_children():child.destroy()
+            logos=report_branding.snapshot(self.state);self.report_logo_preview(holder,logos)
+            for slot,label in report_branding.SLOTS.items():
+                bar=ttk.Frame(holder);bar.pack(fill='x',pady=8)
+                ttk.Label(bar,text=label+': '+logos.get(slot,{}).get('filename','Not set'),width=58).pack(side='left')
+                self.button(bar,'Choose / replace',lambda slot=slot:choose(slot))
+                self.button(bar,'Remove',lambda slot=slot:remove(slot))
+        def choose(slot):
+            path=filedialog.askopenfilename(parent=win,title=report_branding.SLOTS[slot],filetypes=[('Logo image','*.png *.jpg *.jpeg')])
+            if path:self.commit(lambda s:report_branding.set_logo(s,slot,path));refresh()
+        def remove(slot):
+            self.commit(lambda s:report_branding.remove_logo(s,slot));refresh()
+        refresh()
+        def close():
+            win.destroy()
+            if hasattr(self,'financial_holder') and self.financial_holder.winfo_exists():self.refresh_financial_report()
+        self.button(win,'Done',close,True);win.protocol('WM_DELETE_WINDOW',close)
+
     def settings(self):
         self.note('No app password. Windows protects the live vault. Backups currently require the same Windows account; portable recovery is pending.')
         bar=self.bar(); entity=self.field(bar,'Legal entity name',self.state['settings']['entity'],width=42); locked=self.field(bar,'Lock through (YYYY-MM-DD)',self.state['locked_through'],width=22)
@@ -505,6 +543,7 @@ class App(ApBulkUI,ReceiptImportUI,ApUI,ChecksUI,StatementsUI,GstCompletionUI,Bu
                 core.add_audit(s,'SETTINGS',{'entity':entity.get().strip(),'locked_through':lock,'holidays':holidays,'tax_rules':taxrules})
             self.commit(action); messagebox.showinfo('Saved','Settings saved locally.',parent=self)
         bar=self.bar(); self.button(bar,'Save settings',save,True)
+        self.button(bar,'Report logos — client / AXIOM',self.report_logos)
         def choose():
             folder=filedialog.askdirectory(title='Choose a folder on your external drive',parent=self)
             if folder:

@@ -154,6 +154,19 @@ def run(output):
                 if workbook.sheetnames!=['Contents',*financial_reports.MODES]:raise ValueError('Packaged financial pack mismatch')
             finally:workbook.close()
             result['financial_report_pack_passed']=True
+            from . import report_branding
+            from PIL import Image
+            branded=copy.deepcopy(loaded)
+            for slot,color in [('client','red'),('axiom','blue')]:
+                logo=root/(slot+'-logo.png');Image.new('RGB',(240,80),color).save(logo);report_branding.set_logo(branded,slot,logo);logo.unlink()
+            tform=financial_reports.snapshot(branded,'Balance sheet - T form','2026-04-01','2027-03-31')
+            if any(tform['controls'].values()) or len(tform['logos'])!=2:raise ValueError('Packaged T-form/logo snapshot mismatch')
+            financial_reports.export_xlsx(tform,root/'branded-t-form.xlsx');financial_reports.export_pdf(tform,root/'branded-t-form.pdf')
+            workbook=load_workbook(root/'branded-t-form.xlsx')
+            try:
+                if len(workbook.active._images)!=2:raise ValueError('Packaged Excel report logos missing')
+            finally:workbook.close()
+            result['t_form_and_report_logos_passed']=True
             from . import tds
             payee=tax.save_party(loaded,dict(name='Synthetic TDS company',effective='2026-04-01',category='Company',pan='ABCDE1234F'))
             tax.save_rule(loaded,dict(family='TDS',key='SELFTEST-J',label='Synthetic TDS rule',effective='2026-04-01',section='194J',rate='10',treatment='Withholding',party_category='Company',annual_threshold='1000',threshold_basis='Financial-year aggregate',applicability='Invented test only',source='Packaged test',reviewed=True))

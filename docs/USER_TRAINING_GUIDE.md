@@ -1,6 +1,6 @@
 # Yathartha — Bookkeeping Training and User Guide
 
-Development version 0.31.0-dev | Guide updated 2 November 2026 | Windows | INR
+Development version 0.32.0-dev | Guide updated 2 November 2026 | Windows | INR
 
 Audience: a new bookkeeper, an accountant reviewing the work, and the person delivering the books to the hospital. This guide explains both the workflow and the bookkeeping behind it. Use the matching development executable; screen names refer to that version. Dates shown in examples are practice dates, not instructions to post into live books.
 
@@ -20,7 +20,7 @@ Posting always requires review. Previewing, uploading, changing a schedule or ex
 
 1. Download the RijuBooks-Windows ZIP supplied for the matching build and extract all files. Do not run the application from inside the ZIP.
 2. Find Yathartha.exe, normally under dist in the extracted bundle. The application does not require the end user to install Python.
-3. Read packaged-selftest.json: version should be 0.31.0-dev and passed should be true. The included checksum file identifies the executable supplied by the build.
+3. Read packaged-selftest.json: version should be 0.32.0-dev and passed should be true. The included checksum file identifies the executable supplied by the build.
 4. Use a disposable training book first. Do not practise by adding sample invoices to the live hospital book. Your administrator can start a demo copy with `Yathartha.exe --demo --data training.json`; the JSON training file is not protected for live use.
 5. For normal Windows use, the default book is under `%LOCALAPPDATA%\RijuBooks\books.riju`. Keep the same Windows user/profile for that book.
 6. In Settings & backup choose the external backup folder. Confirm the device is connected and a backup is actually created.
@@ -515,3 +515,14 @@ The XLSX pre-fills Receipt date and 2000 for 1,000 input rows. Those defaults al
 9. Export Review Excel/PDF if required and process actual payments later through Mark selected invoices paid. Import queue also routes these batches to their AP review screen. Cancel unused batch is available only before posting, with a reason; processed invoices use the normal AP/source correction controls.
 
 Duplicate checks cover already registered/manual/cancelled invoices, repeated rows and other queued AP files using the same vendor and invoice fiscal year. A renamed file cannot force a second copy. Registering an existing source must fit its unregistered payable capacity. Never upload the same invoice as a new accrual if it was already posted elsewhere; link the original unpaid voucher once.
+
+
+## 28. T-form balance sheet and client report logos
+
+Open Financial reports. Choose **Balance sheet - T form**, set From/Through using the calendars and select the operating unit or All operating units. Click Refresh. Liabilities and equity appear on the left, assets on the right. Account codes and names appear together. The final line shows both totals; Assets minus liabilities and equity must be zero. Accumulated loss and contra assets retain their negative signs. This uses exactly the same closing balances as the vertical Balance sheet; it does not post or alter a transaction. Both layouts are included in the financial pack.
+
+Example: after importing daily sales, posting vendor invoices, recording actual payments and reconciling the bank as in the worked example, select Balance sheet - T form through 2026-11-02. Check that both sides total INR 51,600 and the difference is zero. Export Excel or PDF. Return to Profit and loss to check profit INR 1,000 and Cash flow - direct to check net movement INR 1,600. Changing the balance-sheet layout does not change these results.
+
+Click **Report logos** in Financial reports, or **Report logos — client / AXIOM** in Settings & backup. Choose / replace Client logo (left) and AXIOM logo (right), then Done. Use PNG or JPEG, maximum 5 MB and 16 million pixels. A transparent PNG usually prints best. The app preserves image proportions. You can replace only the client logo when preparing a different client's book, retain AXIOM on the right, or remove either image. Check the preview and export a PDF before sharing.
+
+Logos are embedded in this client book and its backups, not linked to the image's original location. They are not a global setting: configure them in each client's separate book. Refresh a report after changing images. Generated PDF headers repeat logos on every page; Excel sheets include them at the top. Financial report packs (including P&L, balance sheet, cash flow and reviewed statements) use the same branding. CSV is text only. Older exported files are unchanged; generate fresh files to apply replacements. Original logo files are not bundled in public downloads; choose your own images in the app.

@@ -6,9 +6,9 @@ from decimal import Decimal
 import html
 import os
 from pathlib import Path
-from . import core,foundation,ledgers
+from . import core,foundation,ledgers,report_branding
 
-MODES=('Trial balance','Profit and loss','Balance sheet','Comparative P&L','Comparative balance sheet','Branch matrix','General ledger','Cash flow - direct','Cash flow - indirect','Cash flow - AP forecast')
+MODES=('Trial balance','Profit and loss','Balance sheet','Balance sheet - T form','Comparative P&L','Comparative balance sheet','Branch matrix','General ledger','Cash flow - direct','Cash flow - indirect','Cash flow - AP forecast')
 
 
 def previous_year(day):
@@ -22,11 +22,21 @@ def snapshot(state,mode,start,end,branch='ALL'):
     if date.fromisoformat(start).isoformat()!=start or date.fromisoformat(end).isoformat()!=end or start>end:raise ValueError('Choose a valid YYYY-MM-DD reporting period.')
     names=foundation.branches(state)
     if branch!='ALL' and branch not in names:raise ValueError('Select a valid branch.')
+    if mode=='Balance sheet - T form':
+        pack=snapshot(state,'Balance sheet',start,end,branch);left=[];right=[]
+        for code,kind,label,amount in pack['rows']:
+            if kind=='Asset':right.append([code+' '+label,amount])
+            elif kind in ('Liability','Equity'):left.append([(code+' '+label).strip(),amount])
+        assets=next(r[3] for r in pack['rows'] if r[2]=='Total assets');liabilities=next(r[3] for r in pack['rows'] if r[2]=='Total liabilities and equity')
+        size=max(len(left),len(right));left += [['',None] for _ in range(size-len(left))];right += [['',None] for _ in range(size-len(right))]
+        pack.update(mode=mode,columns=['Liabilities and equity','Amount INR (left)','Assets','Amount INR (right)'],money_columns=[1,3],rows=[a+b for a,b in zip(left,right)]+[['TOTAL LIABILITIES AND EQUITY',liabilities,'TOTAL ASSETS',assets]],layout='t_form')
+        pack['note']+=' T form preserves signed ledger balances, including contra assets and accumulated losses; no balancing figure is inserted.'
+        return pack
     if mode in ('Cash flow - direct','Cash flow - indirect','Cash flow - AP forecast'):
         from . import cash_flow
         return cash_flow.snapshot(state,mode,start,end,branch)
     effective='ALL' if mode=='Branch matrix' else branch
-    pack=dict(entity=state['settings']['entity'],registration=copy.deepcopy(state['settings'].get('registration',{})),mode=mode,start=start,end=end,branch=effective,scope='All operating units' if effective=='ALL' else names[effective],prepared=datetime.now(timezone(timedelta(hours=5,minutes=30))).isoformat(timespec='seconds'),currency='INR',columns=[],money_columns=[],rows=[],controls={},note='Accounting working report. Applicable Schedule III/Ind AS presentation, disclosures and final review remain pending.')
+    pack=dict(entity=state['settings']['entity'],registration=copy.deepcopy(state['settings'].get('registration',{})),mode=mode,start=start,end=end,branch=effective,scope='All operating units' if effective=='ALL' else names[effective],prepared=datetime.now(timezone(timedelta(hours=5,minutes=30))).isoformat(timespec='seconds'),currency='INR',logos=report_branding.snapshot(state),columns=[],money_columns=[],rows=[],controls={},note='Accounting working report. Applicable Schedule III/Ind AS presentation, disclosures and final review remain pending.')
     rows=pack['rows'];closing=core.balances(state,end,effective);movement=core.balances(state,end,effective,start)
     if mode=='Trial balance':
         books=ledgers.ledger_pack(state,[a['code'] for a in state['accounts']],start,end,effective)['books'];pack['columns']=['Code','Ledger','Opening Dr','Opening Cr','Period debit','Period credit','Closing Dr','Closing Cr'];pack['money_columns']=list(range(2,8));totals=[0]*6
@@ -89,6 +99,7 @@ def _worksheet(wb,pack,title):
         ws.append(values)
         for cell in ws[ws.max_row]:
             if isinstance(cell.value,str):cell.data_type='s'
+    report_branding.excel_header(ws,pack,len(pack['columns']))
     for line in captions(pack)+[pack['note']]:
         append([line]);ws.merge_cells(start_row=ws.max_row,start_column=1,end_row=ws.max_row,end_column=len(pack['columns']));ws.cell(ws.max_row,1).alignment=Alignment(wrap_text=True,vertical='top');ws.row_dimensions[ws.max_row].height=34 if len(line)>100 else 22
     append(pack['columns']);header=ws.max_row
@@ -98,7 +109,11 @@ def _worksheet(wb,pack,title):
         for col in pack['money_columns']:ws.cell(ws.max_row,col+1).number_format='#,##0.00;[Red](#,##0.00)'
         for cell in ws[ws.max_row]:cell.alignment=Alignment(wrap_text=True,vertical='top')
     for label,value in pack['controls'].items():append([label,Decimal(value)/100]);ws.cell(ws.max_row,2).number_format='#,##0.00'
-    for i,col in enumerate(pack['columns']):ws.column_dimensions[get_column_letter(i+1)].width=19 if i in pack['money_columns'] else 48 if col in ('Ledger','Narration','Account') else 23
+    for i,col in enumerate(pack['columns']):ws.column_dimensions[get_column_letter(i+1)].width=19 if i in pack['money_columns'] else 48 if col in ('Ledger','Narration','Account','Liabilities and equity','Assets') else 23
+    if pack.get('layout')=='t_form':
+        from openpyxl.styles import Border,Side
+        for cells in ws.iter_rows(min_row=header,max_row=header+len(pack['rows']),min_col=2,max_col=2):cells[0].border=Border(right=Side(style='medium',color='154C8A'))
+        for cell in ws[header+len(pack['rows'])]:cell.font=Font(bold=True,color='154C8A')
     ws.freeze_panes=f'A{header+1}';ws.auto_filter.ref=f'A{header}:{get_column_letter(len(pack["columns"]))}{header+len(pack["rows"])}';ws.print_title_rows=f'1:{header}';ws.sheet_properties.pageSetUpPr.fitToPage=True;ws.page_setup.orientation='landscape';ws.page_setup.paperSize=ws.PAPERSIZE_A4;ws.page_setup.fitToWidth=1;ws.page_setup.fitToHeight=0;ws.oddFooter.center.text='Page &P of &N'
     return ws
 
@@ -120,6 +135,7 @@ def export_pack_xlsx(packs,path):
     from openpyxl.styles import Font,PatternFill,Alignment
     wb=Workbook();ws=wb.active;ws.title='Contents'
     lines=[packs[0]['entity'],'Financial working report pack',packs[0]['start']+' to '+packs[0]['end'],'Prepared India: '+packs[0]['prepared'],packs[0]['note']]
+    report_branding.excel_header(ws,packs[0],4)
     for line in lines:
         ws.append([line]);ws.cell(ws.max_row,1).data_type='s';ws.merge_cells(start_row=ws.max_row,start_column=1,end_row=ws.max_row,end_column=3);ws.cell(ws.max_row,1).alignment=Alignment(wrap_text=True);ws.row_dimensions[ws.max_row].height=35
     ws.append(['Report','Scope','Currency','Review status'])
@@ -136,8 +152,9 @@ def export_csv(pack,path):
     with open(path,'w',encoding='utf-8-sig',newline='') as f:
         w=csv.writer(f)
         for line in captions(pack)+[pack['note']]:w.writerow([ledgers.safe_csv(line)])
+        if pack.get('logos'):w.writerow(['Logos are available in PDF/Excel exports; CSV is text only.'])
         w.writerow(pack['columns'])
-        for row in pack['rows']:w.writerow([ledgers.number(v) if i in pack['money_columns'] else ledgers.safe_csv(v) for i,v in enumerate(row)])
+        for row in pack['rows']:w.writerow(['' if v is None else ledgers.number(v) if i in pack['money_columns'] else ledgers.safe_csv(v) for i,v in enumerate(row)])
         for label,value in pack['controls'].items():w.writerow([label,ledgers.number(value)])
 
 
@@ -159,7 +176,7 @@ def export_pdf(pack,path):
     packs=pack if isinstance(pack,list) else [pack]
     if not packs:raise ValueError('Select at least one report for the pack.')
     first=packs[0];footer_scope=first['scope'] if len({section['scope'] for section in packs})==1 else 'Mixed scopes; see section headings';title=first['mode'] if len(packs)==1 else 'Financial working report pack'
-    doc=SimpleDocTemplate(str(path),pagesize=landscape(A4),leftMargin=28,rightMargin=28,topMargin=26,bottomMargin=40,title=title,author=first['entity']);story=[]
+    doc=SimpleDocTemplate(str(path),pagesize=landscape(A4),leftMargin=28,rightMargin=28,topMargin=92 if first.get('logos') else 26,bottomMargin=40,title=title,author=first['entity']);story=[]
     if len(packs)>1:
         for line in (first['entity'],title,first['start']+' to '+first['end'],'Prepared India: '+first['prepared']):story.append(Paragraph(html.escape(line),heading))
         story.extend([p(first['note']),Spacer(1,12)])
@@ -174,12 +191,14 @@ def export_pdf(pack,path):
             for i,line in enumerate(captions(pack)):story.append(Paragraph(html.escape(line),heading if i<2 else style))
             story.extend([p(pack['note']),Spacer(1,10)])
             # Repeated column headings and wrapped paragraphs prevent clipped long narrations.
-            weights=[4 if pack['columns'][i]=='Narration' else 2.5 if pack['columns'][i] in ('Ledger','Account') else 1.4 if i not in money else 1.3 for i in indices];widths=[doc.width*w/sum(weights) for w in weights]
+            weights=[4 if pack['columns'][i]=='Narration' else 2.5 if pack['columns'][i] in ('Ledger','Account','Liabilities and equity','Assets') else 1.4 if i not in money else 1.3 for i in indices];widths=[doc.width*w/sum(weights) for w in weights]
             data=[[p(pack['columns'][i]) for i in indices]]+[[p('' if row[i] is None else ledgers.number(row[i],True) if i in money else row[i]) for i in indices] for row in pack['rows']]
-            table=LongTable(data,colWidths=widths,repeatRows=1,splitInRow=1);table.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#E3EEDF')),('VALIGN',(0,0),(-1,-1),'TOP'),('GRID',(0,0),(-1,-1),.25,colors.HexColor('#DCE2DC')),('BOTTOMPADDING',(0,0),(-1,-1),5)]));story.append(table)
+            table=LongTable(data,colWidths=widths,repeatRows=1,splitInRow=1);table.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#E3EEDF')),('VALIGN',(0,0),(-1,-1),'TOP'),('GRID',(0,0),(-1,-1),.25,colors.HexColor('#DCE2DC')),('BOTTOMPADDING',(0,0),(-1,-1),5)]))
+            if pack.get('layout')=='t_form':table.setStyle(TableStyle([('LINEAFTER',(1,0),(1,-1),1.3,colors.HexColor('#154C8A')),('LINEABOVE',(0,-1),(-1,-1),1,colors.HexColor('#154C8A')),('BACKGROUND',(0,-1),(-1,-1),colors.HexColor('#E8F0FC'))]))
+            story.append(table)
         story.append(Spacer(1,10))
         for label,value in pack['controls'].items():story.append(p(label+': '+ledgers.number(value,True)))
         story.extend([Spacer(1,14),p('Prepared by: ____________________    Reviewed by: ____________________')])
     def footer(canvas,document):
-        canvas.saveState();canvas.setFont(font,7);canvas.drawString(28,31,first['entity'][:100]);canvas.drawString(28,22,title+' | '+first['start']+' to '+first['end']+' | '+footer_scope);canvas.drawRightString(landscape(A4)[0]-28,22,'Page '+str(document.page));canvas.restoreState()
+        canvas.saveState();report_branding.draw_pdf(canvas,document,first.get('logos',{}));canvas.setFont(font,7);canvas.drawString(28,31,first['entity'][:100]);canvas.drawString(28,22,title+' | '+first['start']+' to '+first['end']+' | '+footer_scope);canvas.drawRightString(landscape(A4)[0]-28,22,'Page '+str(document.page));canvas.restoreState()
     doc.build(story,onFirstPage=footer,onLaterPages=footer)
