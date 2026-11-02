@@ -10,7 +10,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from riju import APP_VERSION,receipt_import
 
 
-def build_pdf(source,target):
+def build_pdf(source,target,compact=False):
     from reportlab.platypus import BaseDocTemplate,PageTemplate,Frame,Paragraph,Spacer,PageBreak,LongTable,TableStyle,Preformatted
     from reportlab.platypus.tableofcontents import TableOfContents
     from reportlab.lib.styles import getSampleStyleSheet,ParagraphStyle
@@ -40,9 +40,9 @@ def build_pdf(source,target):
         if not line:i+=1;continue
         if line.startswith('# '):story.append(Paragraph(formatted(line[2:]),title));i+=1;continue
         if line.startswith('## '):
-            if not contents:
+            if not compact and not contents:
                 story.append(PageBreak());story.append(Paragraph('Contents',title));toc=TableOfContents();toc.levelStyles=[tocstyle];story.append(toc);contents=True
-            story.append(PageBreak());story.append(Paragraph(formatted(line[3:]),chapter));i+=1;continue
+            story.append(Spacer(1,12) if compact else PageBreak());story.append(Paragraph(formatted(line[3:]),chapter));i+=1;continue
         if line.startswith('|'):
             rows=[]
             while i<len(lines) and lines[i].strip().startswith('|'):
@@ -69,6 +69,9 @@ def main():
     p=argparse.ArgumentParser();p.add_argument('--output',default='dist/user-documents');args=p.parse_args();root=Path(__file__).resolve().parents[1];out=Path(args.output);out.mkdir(parents=True,exist_ok=True)
     build_pdf(root/'docs/USER_TRAINING_GUIDE.md',out/'RijuBooks-User-Training-Guide.pdf');(out/'USER_TRAINING_GUIDE.md').write_text((root/'docs/USER_TRAINING_GUIDE.md').read_text(encoding='utf-8'),encoding='utf-8')
     for kind in ('xlsx','csv'):receipt_import.template(out/('RijuBooks-Sales-Receipts-Template.'+kind))
+    reference=root/'docs/ACCOUNT_POSTING_REFERENCE.md'
+    if reference.exists():
+        build_pdf(reference,out/'Yathartha-Account-Posting-Reference.pdf',compact=True);(out/'ACCOUNT_POSTING_REFERENCE.md').write_text(reference.read_text(encoding='utf-8'),encoding='utf-8')
     from scripts.build_worked_example import build_example
     build_example(out)
     print('Created guide, blank templates and verified end-to-end sample inputs/reports in '+str(out))

@@ -95,3 +95,5 @@ Linux development can use `python run_riju.py --demo --data /tmp/riju-demo.json`
 - Departmental budgets, package advance recognition automation, full asset/CWIP schedules, inventory cost controls, broader import duplicate detection. Customer-ready ledger delivery is now available from Ledger A/c. Entity/branch metadata and capacity fields are now editable.
 
 No cloud environment publication, remote push or client data import is performed by these instructions. Use the existing checkout in the isolated cloud task; do not create a worktree unless requested.
+
+For daily posting without repeatedly opening the chart of accounts, use the [account/posting reference](docs/ACCOUNT_POSTING_REFERENCE.md) or [printable PDF](docs/downloads/Yathartha-Account-Posting-Reference.pdf). It lists common debit/credit cases, all starter revenue categories and source-workflow safeguards. Custom/mapped accounts in an existing client book can differ.
