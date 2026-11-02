@@ -8,7 +8,7 @@ Audience: a new bookkeeper, an accountant reviewing the work, and the person del
 
 The application is now named Yathartha, with a saffron-and-blue wordmark. Its existing RijuBooks Windows data folder and older document filenames are retained for compatibility; renaming the application does not clear or move your saved books. Close the old application before opening Yathartha.exe.
 
-Riju Books keeps one legal entity's books with operating-unit analysis for JP Nagar (JP), Kammanahalli (KM) and Vaikom (VK). It is a single-user, local Windows application. The same transaction must be entered only once, even when it appears in a hospital report, bank statement and invoice file. The bank statement normally reconciles an existing payment or receipt; it is not a second sale or expense.
+Yathartha keeps one legal entity's books with operating-unit analysis for JP Nagar (JP), Kammanahalli (KM) and Vaikom (VK). It is a single-user, local Windows application. The same transaction must be entered only once, even when it appears in a hospital report, bank statement and invoice file. The bank statement normally reconciles an existing payment or receipt; it is not a second sale or expense.
 
 The left navigation opens each module. Select the financial year and unit in the top selectors. All units means the entity view, not a separate company. Scroll the left navigation or the main workspace if a button is outside the visible area. Reports have their own date selectors where shown: change them and refresh before reading totals.
 
@@ -20,7 +20,7 @@ Posting always requires review. Previewing, uploading, changing a schedule or ex
 
 1. Download the RijuBooks-Windows ZIP supplied for the matching build and extract all files. Do not run the application from inside the ZIP.
 2. Find Yathartha.exe, normally under dist in the extracted bundle. The application does not require the end user to install Python.
-3. Read packaged-selftest.json: version should be 0.29.1-dev and passed should be true. The included checksum file identifies the executable supplied by the build.
+3. Read packaged-selftest.json: version should be 0.30.0-dev and passed should be true. The included checksum file identifies the executable supplied by the build.
 4. Use a disposable training book first. Do not practise by adding sample invoices to the live hospital book. Your administrator can start a demo copy with `Yathartha.exe --demo --data training.json`; the JSON training file is not protected for live use.
 5. For normal Windows use, the default book is under `%LOCALAPPDATA%\RijuBooks\books.riju`. Keep the same Windows user/profile for that book.
 6. In Settings & backup choose the external backup folder. Confirm the device is connected and a backup is actually created.
