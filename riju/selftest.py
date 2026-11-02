@@ -296,6 +296,7 @@ def run(output):
             langstarted=time.perf_counter()
             for _ in range(100):
                 interpretation=offline_language.interpret(core.empty_state(),'Settled monthly premises rental INR5000 by NEFT at Kammanahalli on 18 June 2026','JP','2026-04-01')
+            language_seconds=time.perf_counter()-langstarted
             if interpretation['account']!='4530' or interpretation['branch']!='KM' or interpretation['date']!='2026-06-18':raise ValueError('Packaged offline interpretation failed')
             try:offline_language.interpret(core.empty_state(),'Paid INR500 rent net of TDS by bank','JP','2026-04-01')
             except ValueError:pass
@@ -344,6 +345,19 @@ def run(output):
             ap.save_vendor(apbook,dict(name='Updated packaged vendor',credit_days='45',active=True),supplier['id']);apvault.save(apbook)
             if apvault.load()['ap']['vendors'][0]['credit_days']!=45 or ap.invoice(apbook,apinvoice['id'])['vendor_name']!='Synthetic packaged vendor':raise ValueError('Packaged vendor edit/history failed')
             result['calendar_vendor_duplicate_preview_fixes_passed']=True
+            from . import ap_bulk
+            bulkbook=core.empty_state();ap.save_vendor(bulkbook,dict(name='Packaged bulk vendor',credit_days='45'))
+            bulkbuffer=io.StringIO();bulkwriter=csv.writer(bulkbuffer);bulkwriter.writerow(ap_bulk.HEADERS)
+            for i in range(100):bulkwriter.writerow(['Packaged bulk vendor','PACK-AP-BULK-'+str(i),'2026-04-01','2026-04-02','2026-04-02','','Receipt date','','JP','100','2000','1100','Synthetic source/tax review',''])
+            bulkwriter.writerow(['Packaged bulk vendor','PACK-AP-BULK-0','2026-04-01','2026-04-02','2026-04-02','','Receipt date','','JP','100','2000','1100','Duplicate source excluded',''])
+            bulkbatch=ap_bulk.stage(bulkbook,bulkbuffer.getvalue().encode(),'packaged-ap.csv');ap_bulk.review(bulkbook,bulkbatch['id'],[100],False,'Duplicate rejected',False);ap_bulk.review(bulkbook,bulkbatch['id'],list(range(100)),True,'Reviewed all vendor/invoice/period/tax sources',True);ap_bulk.post(bulkbook,bulkbatch['id'])
+            if len(bulkbook['ap']['invoices'])!=100 or core.balances(bulkbook,'2026-04-30')['2000']!=-1000000 or ap_bulk.batch(bulkbook,bulkbatch['id'])['status']!='PROCESSED':raise ValueError('Packaged AP bulk registration failed')
+            for suffix in ('xlsx','csv'):ap_bulk.template(root/('ap-bulk-template.'+suffix),bulkbook)
+            bulkpack=ap_bulk.snapshot(bulkbook,bulkbatch['id']);financial_reports.export_xlsx(bulkpack,root/'ap-bulk-review.xlsx');financial_reports.export_pdf(bulkpack,root/'ap-bulk-review.pdf')
+            bulkvault=Vault(root/'ap-bulk.riju');bulkvault.save(bulkbook)
+            if bulkvault.load()!=bulkbook:raise ValueError('Packaged AP bulk persistence failed')
+            result['ap_bulk_invoice_import_passed']=True
+
 
             resetvault=Vault(root/'reset.riju');resetstate=core.empty_state();core.post(resetstate,'2026-04-01','Synthetic test entry to clear',[dict(account='1000',branch='JP',debit=10000,credit=0),dict(account='4000',branch='JP',debit=0,credit=10000)]);resetvault.save(resetstate)
             resetoriginal=resetvault.path.read_bytes();resetfolder=root/'reset-backup';resetfolder.mkdir();clean,resetbackup=resetvault.start_clean_books(resetfolder,'START CLEAN BOOKS')
@@ -351,7 +365,7 @@ def run(output):
             result['verified_clean_books_reset_passed']=True
 
 
-            result['offline_model_version']=local_model.VERSION;result['offline_model_digest']=local_model.digest();result['offline_language_100_drafts_seconds']=round(time.perf_counter()-langstarted,4)
+            result['offline_model_version']=local_model.VERSION;result['offline_model_digest']=local_model.digest();result['offline_language_100_drafts_seconds']=round(language_seconds,4)
 
 
 

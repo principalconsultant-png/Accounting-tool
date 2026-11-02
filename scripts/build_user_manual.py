@@ -69,6 +69,8 @@ def main():
     p=argparse.ArgumentParser();p.add_argument('--output',default='dist/user-documents');args=p.parse_args();root=Path(__file__).resolve().parents[1];out=Path(args.output);out.mkdir(parents=True,exist_ok=True)
     build_pdf(root/'docs/USER_TRAINING_GUIDE.md',out/'RijuBooks-User-Training-Guide.pdf');(out/'USER_TRAINING_GUIDE.md').write_text((root/'docs/USER_TRAINING_GUIDE.md').read_text(encoding='utf-8'),encoding='utf-8')
     for kind in ('xlsx','csv'):receipt_import.template(out/('RijuBooks-Sales-Receipts-Template.'+kind))
+    from riju import ap_bulk
+    for kind in ('xlsx','csv'):ap_bulk.template(out/('Yathartha-AP-Bulk-Invoices-Template.'+kind))
     reference=root/'docs/ACCOUNT_POSTING_REFERENCE.md'
     if reference.exists():
         build_pdf(reference,out/'Yathartha-Account-Posting-Reference.pdf',compact=True);(out/'ACCOUNT_POSTING_REFERENCE.md').write_text(reference.read_text(encoding='utf-8'),encoding='utf-8')

@@ -30,6 +30,7 @@ from .service_revenue_ui import ServiceRevenueUI
 from .bulk_import_ui import BulkImportUI
 from .gst_completion_ui import GstCompletionUI
 from .receipt_import_ui import ReceiptImportUI
+from .ap_bulk_ui import ApBulkUI
 from .ap_ui import ApUI
 from .checks_ui import ChecksUI
 from .statements_ui import StatementsUI
@@ -42,7 +43,7 @@ SAGE='#E8F0FC'; SAFFRON='#FFE3BF'; MUTED='#566B85'
 BRAND_SAFFRON='#D97716'; BRAND_BLUE='#154C8A'
 SAFFRON_HOVER='#F2D5B5'; SAGE_HOVER='#D4E3F8'; BLUE='#E7EDF7'; BORDER='#DCE2DC'
 
-class App(ReceiptImportUI,ApUI,ChecksUI,StatementsUI,GstCompletionUI,BulkImportUI,ServiceRevenueUI,CwipUI,TaxDepreciationUI,FixedAssetsUI,CashFlowUI,TdsUI,RcmUI,GstUI,TaxUI,HistoryUI,BankUI,OperationsUI,LedgerUI,FoundationUI,tk.Tk):
+class App(ApBulkUI,ReceiptImportUI,ApUI,ChecksUI,StatementsUI,GstCompletionUI,BulkImportUI,ServiceRevenueUI,CwipUI,TaxDepreciationUI,FixedAssetsUI,CashFlowUI,TdsUI,RcmUI,GstUI,TaxUI,HistoryUI,BankUI,OperationsUI,LedgerUI,FoundationUI,tk.Tk):
     def __init__(self,vault):
         super().__init__()
         self.vault=vault
@@ -435,6 +436,7 @@ class App(ReceiptImportUI,ApUI,ChecksUI,StatementsUI,GstCompletionUI,BulkImportU
             return self.state['queue'][t.index(t.selection()[0])]
         def review():
             q=selected()
+            if q.get('kind')=='ap_bulk':self.ap_bulk_review(q['id']);return
             if q.get('kind')=='standard_sales':self.receipt_import_review(q['id']);return
             if q.get('kind')=='bulk':self.show('Bulk import review');return
             dialog=tk.Toplevel(self); dialog.title('Review '+q['filename']); dialog.geometry('1050x600')
@@ -453,6 +455,7 @@ class App(ReceiptImportUI,ApUI,ChecksUI,StatementsUI,GstCompletionUI,BulkImportU
                 self.table(('Date','Narration','Branch','Debit account','Credit account','Amount'),[(r['date'],r['narration'],r['branch'],r['debit_account'],r['credit_account'],core.rupees(r['amount'])) for r in q['rows']],parent=dialog)
         def approve():
             q=selected()
+            if q.get('kind')=='ap_bulk':self.ap_bulk_review(q['id']);return
             if q.get('kind')=='standard_sales':self.receipt_import_review(q['id']);return
             if q['status']!='PENDING_REVIEW': raise ValueError('Only pending files can be posted.')
             if not messagebox.askyesno('Approve import',f'Have you reviewed all {len(q["rows"])} rows? Post them together?',parent=self): return

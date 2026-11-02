@@ -1,6 +1,6 @@
 # Yathartha — Bookkeeping Training and User Guide
 
-Development version 0.30.0-dev | Guide updated 2 November 2026 | Windows | INR
+Development version 0.31.0-dev | Guide updated 2 November 2026 | Windows | INR
 
 Audience: a new bookkeeper, an accountant reviewing the work, and the person delivering the books to the hospital. This guide explains both the workflow and the bookkeeping behind it. Use the matching development executable; screen names refer to that version. Dates shown in examples are practice dates, not instructions to post into live books.
 
@@ -20,11 +20,11 @@ Posting always requires review. Previewing, uploading, changing a schedule or ex
 
 1. Download the RijuBooks-Windows ZIP supplied for the matching build and extract all files. Do not run the application from inside the ZIP.
 2. Find Yathartha.exe, normally under dist in the extracted bundle. The application does not require the end user to install Python.
-3. Read packaged-selftest.json: version should be 0.30.0-dev and passed should be true. The included checksum file identifies the executable supplied by the build.
+3. Read packaged-selftest.json: version should be 0.31.0-dev and passed should be true. The included checksum file identifies the executable supplied by the build.
 4. Use a disposable training book first. Do not practise by adding sample invoices to the live hospital book. Your administrator can start a demo copy with `Yathartha.exe --demo --data training.json`; the JSON training file is not protected for live use.
 5. For normal Windows use, the default book is under `%LOCALAPPDATA%\RijuBooks\books.riju`. Keep the same Windows user/profile for that book.
 6. In Settings & backup choose the external backup folder. Confirm the device is connected and a backup is actually created.
-7. When an upgrade banner appears, configure the external backup first. The original-format book must be retained before the upgraded file is saved. Older executables cannot open format 21 books.
+7. When an upgrade banner appears, configure the external backup first. The original-format book must be retained before the upgraded file is saved. Older executables cannot open format 22 books.
 
 The existing Windows DPAPI storage remains in this build. New portable encryption/recovery and mailbox ingestion were deferred. There is no new password/recovery-key setup. A copy of a DPAPI file by itself is not a proven replacement-computer recovery method; keep the original Windows profile and follow the existing recovery arrangement. Do not discard the original book/profile when testing a newer executable.
 
@@ -476,3 +476,42 @@ Now open AP Vendor Invoices, set As at 2026-11-02 and Forecast through 2026-11-3
 Save the source sales file, source bank statement, reviewed import summary, AP register/reconciliation, ledgers, BRS and the three financial statements. Compare your results with Worked-Example-Financial-Reports.xlsx/PDF. Confirm the external backup. For actual accountant-ready presentation, complete Statement review mappings/disclosures and other required tax, asset and source review; this small example demonstrates workflow and arithmetic, not complete statutory financial statements.
 
 **Final check:** sales 2,000; administration expense 1,000; profit 1,000; bank 51,400; cash 200; AP 600; assets and liabilities/equity both 51,600; actual net operating cash 1,600; future AP outflow 600. If your figures differ, trace source vouchers and duplicate imports before posting any unsupported balancing journal. To replay the exercise, use another disposable book; importing the same receipts into this completed book must remain blocked as duplicates.
+
+## 27. AP bulk invoices: upload the same fields instead of typing each invoice
+
+In AP Vendor Invoices, Upload bulk invoices is next to Enter invoice. Download Bulk invoice Excel template or Bulk invoice CSV template. The Excel template has Invoices, Vendors, Units, Accounts and Instructions sheets. A template exported from your local book includes lookup snapshots of its active vendors/units/accounts; the public blank template contains no customer's vendor data. These lookups help selection but do not create or edit masters automatically.
+
+One row is one vendor invoice. Preserve the column headings (case/spacing/punctuation are normalised; recognised prior headings are supported). Excel uses sheet Invoices; a single-sheet workbook is also accepted. If a different workbook has multiple sheets and no Invoices sheet, select the exact source sheet when asked. Use literal values, not formulas, with actual Excel dates or YYYY-MM-DD strings. Invoice IDs should be text to preserve leading zeros.
+
+| Column | What to enter | Default / source rule |
+| --- | --- | --- |
+| Vendor Name | Saved vendor legal/source name | Must resolve to one active Vendor master record; no silent vendor creation |
+| Vendor Invoice Number | Supplier's invoice reference | Same vendor/invoice fiscal-year duplicate check as manual entry, across units |
+| Invoice Date | Date printed on supplier invoice | Required |
+| Invoice Received Date | Actual receipt date | Required |
+| Accrual Accounting Date | Reviewed booking date | Required; ordinary period/source guards apply |
+| Credit Period Calendar Days | Agreed whole days | Blank uses vendor default captured at validation |
+| Credit Period Starts At | Receipt date or Invoice date | Blank means Receipt date |
+| Scheduled Payment Date | Planned date | Blank uses computed contractual due date |
+| Operating Unit | Active code or exact unit name | Required |
+| Net Amount Payable to Vendor INR | Net vendor liability | Positive INR, no more than two decimals |
+| Trade Payables Ledger | Vendor liability code | Default 2000; it is not a GST/TDS payable ledger |
+| New Accrual / Cost Asset Ledger | Genuine debit account | Required for a new accrual, e.g. 1100 for medicines kept in stock |
+| Accounting Review Basis | Source/accounting/tax review evidence | Required per invoice |
+| Existing GST/TDS/CWIP Accrual Voucher (optional) | Original unpaid source voucher ID | Blank creates a new simple accrual; a valid link registers its payable without reposting |
+
+The earlier spreadsheet heading Tax payables ledger is recognised as the vendor Trade payables column with a warning. The actual ledger still must be grouped Trade payables; the importer will not treat a GST/TDS liability as vendor AP. For separately accounted GST/TDS/retention/CWIP, first post the correct source in its dedicated workflow and link it, as with manual entry. The import does not infer tax from the total amount or supplier name.
+
+The XLSX pre-fills Receipt date and 2000 for 1,000 input rows. Those defaults alone are placeholders and are ignored until actual invoice fields are entered; no sample invoice is preloaded or posted. Credit days remain blank so each vendor's default can apply rather than forcing every supplier to 45 days. The cost ledger is deliberately blank so medicines are not accidentally booked to Administration. Add additional source rows if needed within normal import limits.
+
+1. Add/correct vendors in Vendor master and check the intended cost, payable and unit mappings. Prepare the source file with the same values you would enter manually.
+2. Select Upload bulk invoices and choose the XLSX/CSV. Upload retains source row, original field values, filename/digest and all valid/invalid/duplicate rows, but posts nothing.
+3. Review valid totals and flagged issues. Select a row to read its error; use View selected invoice for every original/resolved field. Show flagged rows only helps isolate errors. The table includes named accounts, credit basis and contractual/scheduled dates.
+4. Reject duplicates/invalid rows with a reason; no posting-review checkbox is needed for rejection. Keep them in history and correct the source, rather than changing an invoice number to bypass a duplicate. A cancelled prior invoice also retains its identity.
+5. If a vendor/account/default was corrected, use Revalidate after master changes. Previous approvals clear for fresh review while explicit rejections stay rejected. Changed vendor defaults cannot silently change already-reviewed values at posting. Corrected external source data should be uploaded as a new file revision.
+6. Tick the vendor/source/period/accounting/tax review confirmation, then Approve all valid invoices or approve selected rows with a reason. Bulk approval respects explicit rejections. Every source row needs an approval/rejection decision.
+7. Select Preview invoice journals. Check account code/name and debit/credit amounts. New invoices post Dr cost/asset / Cr AP; existing source links do not repeat their accrual. Approve AP action registers the approved batch atomically. If a selected source becomes invalid or duplicated, no part of that attempted batch posts.
+8. Confirm PROCESSED in Review bulk invoice batches. The AP register now lists the invoices and computes their due/overdue status and cash-outflow forecast using the same logic as manual entries. Uploading does not mark them paid or create a bank payment.
+9. Export Review Excel/PDF if required and process actual payments later through Mark selected invoices paid. Import queue also routes these batches to their AP review screen. Cancel unused batch is available only before posting, with a reason; processed invoices use the normal AP/source correction controls.
+
+Duplicate checks cover already registered/manual/cancelled invoices, repeated rows and other queued AP files using the same vendor and invoice fiscal year. A renamed file cannot force a second copy. Registering an existing source must fit its unregistered payable capacity. Never upload the same invoice as a new accrual if it was already posted elsewhere; link the original unpaid voucher once.

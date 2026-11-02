@@ -101,8 +101,9 @@ def enter_invoice(s,v):
             if code not in accounts or accounts[code]['kind'] not in ('Asset','Expense') or s['account_details'][code]['group'] in ('Cash and bank','Payment clearing','Patient control','GST input','CWIP','Accumulated depreciation') or code in ('1130',) or not s['account_details'][code]['active']:raise ValueError('New AP allocation must be an active genuine cost/asset ledger. GST, CWIP and special controls require their source workflow.')
             allocations.append(dict(account=code,branch=branch,debit=n,credit=0))
         if sum(l['debit'] for l in allocations)!=amount:raise ValueError('Cost allocations must equal the net amount payable; review all gross/tax components before posting.')
-        source=core.post(s,posted,'Vendor invoice '+ref+' | '+supplier['name'],allocations+[dict(account=payable,branch=branch,debit=0,credit=amount)],metadata={'type':'Journal','reference':ref,'payee':supplier['name']})['id']
+        source=core.post(s,posted,'Vendor invoice '+ref+' | '+supplier['name'],allocations+[dict(account=payable,branch=branch,debit=0,credit=amount)],metadata={'type':'Journal','reference':ref,'payee':supplier['name']},source=v.get('source'))['id']
     r=dict(id=uid(),vendor=supplier['id'],vendor_name=supplier['name'],reference=ref,invoice_date=invdate,received_date=received,accounting_date=posted,credit_days=days,due_basis=v['due_basis'],due_date=due,payment_date=planned,branch=branch,amount=amount,payable=payable,voucher=source,mode='Linked source' if v.get('existing_voucher') else 'New accrual',basis=v['basis'].strip(),allocations=allocations)
+    if v.get('source'):r['import_source']=copy.deepcopy(v['source'])
     data(s)['invoices'].append(r);core.add_audit(s,'AP_INVOICE_REGISTERED',r);return r
 
 @atomic
@@ -262,3 +263,9 @@ def cancel_invoice(s,key,on,reason,confirmed=False):
     if not confirmed or not reason.strip():raise ValueError('Review invoice cancellation and enter the source reason.')
     if sum(x['voucher']==r['voucher'] for x in data(s)['invoices'])!=1:raise ValueError('This accrual supports multiple registered invoices. Use the original source correction workflow; cancelling one row cannot reverse the whole shared source.')
     v=core.reverse(s,r['voucher'],day(on));core.add_audit(s,'AP_INVOICE_CANCELLED',dict(invoice=key,voucher=v['id'],reason=reason.strip()));return v
+
+@atomic
+def enter_invoice_batch(s,entries):
+    """One atomic transaction for reviewed rows, sharing the single-invoice engine."""
+    if not entries:raise ValueError('Select at least one reviewed AP invoice.')
+    return [enter_invoice.__wrapped__(s,values) for values in entries]

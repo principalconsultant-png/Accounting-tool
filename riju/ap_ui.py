@@ -9,7 +9,8 @@ class ApUI:
     def ap_invoices(self):
         self.note('Register vendor invoices once: accrual debits cost/asset and credits Trade payables on the accounting date. Actual payment debits payable and credits the chosen cash/bank. Payment schedules affect forecast only; this tool does not send money to a bank.')
         bar=self.bar();self.ap_on=self.field(bar,'As at',datetime.now(history.INDIA).date().isoformat(),width=12)
-        self.button(bar,'Refresh AP',self.refresh_ap,True);self.button(bar,'Add vendor',self.ap_vendor);self.button(bar,'Vendor master',lambda:self.show('Vendor master'));self.button(bar,'Enter invoice',self.ap_enter)
+        self.button(bar,'Refresh AP',self.refresh_ap,True);self.button(bar,'Add vendor',self.ap_vendor);self.button(bar,'Vendor master',lambda:self.show('Vendor master'));self.button(bar,'Enter invoice',self.ap_enter);self.button(bar,'Upload bulk invoices',self.upload_bulk_invoices,True)
+        bar=self.bar();self.button(bar,'Bulk invoice Excel template',lambda:self.ap_bulk_template('xlsx'));self.button(bar,'Bulk invoice CSV template',lambda:self.ap_bulk_template('csv'));self.button(bar,'Review bulk invoice batches',self.ap_bulk_batches)
         bar=self.bar();self.button(bar,'Mark selected invoices paid',self.ap_payment,True);self.button(bar,'Extend payment date',self.ap_extend);self.button(bar,'Reverse selected payment',self.ap_reverse_payment);self.button(bar,'Cancel selected invoice',self.ap_cancel_invoice)
         self.ap_summary=ttk.Label(self.content,text='',wraplength=1050);self.ap_summary.pack(anchor='w')
         self.ap_table=self.table(('Vendor','Invoice','Unit','Received','Contractual due','Scheduled payment','Outstanding INR','Status','Accrual voucher'),[],height=9);self.ap_table.configure(selectmode='extended')

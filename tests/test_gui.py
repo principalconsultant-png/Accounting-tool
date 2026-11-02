@@ -1002,3 +1002,28 @@ class CleanBooksDesktopTests(unittest.TestCase):
                 with patch('riju.app.messagebox.askyesno',return_value=True),patch('riju.app.filedialog.askdirectory',return_value=str(folder)),patch('riju.app.simpledialog.askstring',return_value='START CLEAN BOOKS'),patch('riju.app.messagebox.showinfo'):app.start_clean_books()
                 self.assertFalse(app.state['vouchers']);self.assertFalse(app.state['ap']['vendors']);self.assertEqual(app.current,'Overview');self.assertEqual(app.branch.get(),'All operating units');self.assertFalse(Vault(v.path,demo=True).load()['vouchers']);self.assertTrue(list(folder.iterdir()))
             finally:app.destroy()
+
+@unittest.skipUnless(os.environ.get('DISPLAY') or os.environ.get('RIJU_GUI_TEST'),'Display required')
+class ApBulkDesktopTests(unittest.TestCase):
+    def test_upload_next_to_enter_review_duplicate_and_post_with_names(self):
+        from riju.app import App
+        from riju import ap,ap_bulk
+        from test_ap_bulk import raw,invoice
+        from tkinter import ttk
+        helper=TaxDepreciationDesktopTests()
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);app=App(Vault(root/'book.json',demo=True))
+            try:
+                ap.save_vendor(app.state,dict(name='Bulk training vendor',credit_days='45'));app.show('AP Vendor Invoices');buttons=[w.cget('text') for w in helper.walk(app.content) if isinstance(w,ttk.Button)];self.assertEqual(buttons[buttons.index('Enter invoice')+1],'Upload bulk invoices')
+                for kind in ('xlsx','csv'):
+                    with patch('riju.ap_bulk_ui.filedialog.asksaveasfilename',return_value=str(root/('template.'+kind))),patch('riju.ap_bulk_ui.messagebox.showinfo'):app.ap_bulk_template(kind)
+                    self.assertTrue((root/('template.'+kind)).exists())
+                source=root/'invoices.csv';source.write_bytes(raw([invoice(),invoice()]))
+                with patch('riju.ap_bulk_ui.filedialog.askopenfilename',return_value=str(source)):app.upload_bulk_invoices()
+                form=helper.form(app)
+                with patch('riju.ap_bulk_ui.simpledialog.askstring',return_value='Duplicate excluded'):helper.press(form,'Reject flagged rows')
+                # First checkbox filters rows, second confirms source/tax review.
+                helper.reviewed(form)
+                with patch('riju.ap_bulk_ui.simpledialog.askstring',return_value='Vendor/source/accounting review complete'):helper.press(form,'Approve all valid invoices')
+                helper.press(form,'Preview invoice journals');app.update();preview=helper.form(app);table=next(w for w in helper.walk(preview) if isinstance(w,ttk.Treeview));self.assertTrue(any('Medicine inventory' in table.item(k)['values'] for k in table.get_children()));helper.press(preview,'Approve AP action');app.update();self.assertEqual(len(app.state['ap']['invoices']),1);self.assertEqual(len(app.state['vouchers']),1);self.assertEqual(app.state['queue'][0]['status'],'PROCESSED')
+            finally:app.destroy()

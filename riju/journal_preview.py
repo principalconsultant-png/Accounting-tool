@@ -22,7 +22,8 @@ def render(app,parent,before,candidate,result):
     vouchers=candidate['vouchers'][len(before['vouchers']):];linked=False
     if not vouchers and isinstance(result,dict):
         key=result.get('voucher') or result.get('voucher_id')
-        vouchers=[v for v in candidate['vouchers'] if v['id']==key];linked=bool(vouchers)
+        keys={key}|{v['id'] for v in result.get('linked_source_journals',[])}
+        vouchers=[v for v in candidate['vouchers'] if v['id'] in keys];linked=bool(vouchers)
     ttk.Label(journal,text='Existing source only — this action does not post this journal again.' if linked else 'Review these new journal lines before approval.' if vouchers else 'No journal is posted by this action.',wraplength=950).pack(anchor='w')
     names={a['code']:a['name'] for a in candidate['accounts']};rows=[]
     for v in vouchers:
