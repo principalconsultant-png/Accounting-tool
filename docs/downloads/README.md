@@ -13,3 +13,5 @@ Bulk AP invoice templates: Yathartha-AP-Bulk-Invoices-Template.xlsx and .csv mir
 Chapter 28 covers T-form balance sheets and embedded client-left/AXIOM-right report logo setup, replacement and PDF/Excel exports. Actual client/AXIOM images must be selected locally.
 
 AP bulk review now highlights invalid/duplicate rows and keeps the source-row reason and original entered values visible. Chapter 27 explains source corrections versus master revalidation.
+
+Reusable Excel bank converter: Yathartha-Excel-Bank-Converter.zip contains a VBA module, setup XLSX, installation guide and synthetic acceptance statement. No client bank data. Install once in Windows desktop Excel and save as XLSM. VBA is source-reviewed but requires native Excel compile/run acceptance; it was not executed in the build environment.

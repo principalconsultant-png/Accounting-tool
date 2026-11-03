@@ -1,0 +1,39 @@
+YATHARTHA — EXCEL BANK STATEMENT CONVERTER
+
+For Windows desktop Excel (not Excel in a browser). HDFC-style original .xls/.xlsx statements with separate withdrawal, deposit and running balance columns. No Excel/VBA references need to be added. The provided .xlsx is an instruction workbook, not a preinstalled macro-enabled workbook.
+
+ONE-TIME SETUP
+1. Extract this ZIP to a folder on your computer.
+2. Open Bank-Converter-Setup.xlsx in desktop Excel.
+3. File > Save As > Excel Macro-Enabled Workbook (*.xlsm). Name it Bank-Converter.xlsm.
+4. Press Alt+F11. Select VBAProject (Bank-Converter.xlsm) in the left Project Explorer. Choose File > Import File, then select BankStatementConverter.bas. If Project Explorer is hidden, press Ctrl+R. Do not import the module into your bank statement.
+5. Choose Debug > Compile VBAProject. If Excel reports an error, stop and share the exact error and highlighted line.
+6. Close the VBA editor. Press Alt+F8, select InstallConverterButton, then Run. Save the workbook. A conversion button is added to the first sheet. You can also run ConvertBankStatement directly from Alt+F8.
+7. On later openings enable this workbook's macros only if you trust the extracted source. Do not globally enable all macros or change Trust access to the VBA project object model. If your organisation blocks macros, follow its normal policy.
+
+EACH USE
+1. Open your saved Bank-Converter.xlsm. Close the original statement if you have it open elsewhere.
+2. Click Convert original bank statement (or Alt+F8 > ConvertBankStatement > Run).
+3. Select the ORIGINAL .xls/.xlsx bank statement, then select the destination folder when asked. The converter opens the source read-only, with source macros disabled and links not updated. It never saves the source.
+4. Read the completion message and READ-ME.txt in the new dated output folder. Conversion stops on unsupported columns, invalid financial rows, unsupported amounts, zero movements, ambiguous debit/credit or balance disagreement. If saving fails, the output folder can be incomplete; do not import it.
+5. Choose EITHER the monthly Bank-YYYY-MM.csv files OR Bank-Combined.csv. Do not import both. Monthly files are recommended, earliest first. Do not import periods already in your book.
+6. In Yathartha > Bank reconciliation, select the correct bank ledger and scope > Import statement. Select a CSV. Use ISO date format, Oldest first, Header row 1, Auto column mapping. Copy the exact period/opening/closing from Import-balances.csv.
+7. Validate & preview rows, review, then Approve statement import. Reconcile existing book transactions; bank imports do not automatically classify or post them.
+
+OUTPUTS
+- Bank-Combined.csv — all transactions.
+- Bank-YYYY-MM.csv — one file per month containing transactions.
+- Import-balances.csv — row counts, first/last transaction dates and balances for each file.
+- Source-row-audit.csv — original Excel row for every transaction, with converted movement/balance.
+- READ-ME.txt — missing-field counts and signed debit/credit normalisation notes.
+
+DATES AND AMOUNTS
+Text dates DD/MM/YY, DD/MM/YYYY, DD-MM-YYYY or YYYY-MM-DD and genuine Excel date cells are supported. Two-digit text years mean 2000–2099. CSV dates are YYYY-MM-DD. Amounts must have at most two decimals; INR signs, DR/CR suffixes, signed-amount-only layouts, PDF and scanned statements are not supported by this module. Indian comma grouping and negative/parenthesised numeric amounts are accepted. Exactly one source debit/credit field may be nonzero. A negative withdrawal becomes a positive credit, preserving the bank movement and recording the change in READ-ME. Every running balance must then agree.
+
+Source order is retained if chronological and balanced; exact reverse order is used only if that validates every row. The source is never sorted arbitrarily, including transactions on the same date. The opening balance is derived from first balance minus first net movement; compare it and the closing balance with the bank's printed summary. Monthly periods use actual first/last transaction dates; they do not assert that days absent from the source are covered. No transaction descriptions are invented. Text beginning with =, +, - or @ receives a leading apostrophe in CSV to avoid spreadsheet formula interpretation. Check these rare text changes if matching by exact narrative/reference.
+
+SYNTHETIC PRACTICE FILE
+Synthetic-HDFC-Statement.xlsx contains seven invented transactions, one per month April–October 2026. It contains no client data. Expected: seven transactions, opening INR 1000.00, closing INR 1250.00, seven monthly files, one negative withdrawal normalised to a credit of INR 75.00. Run this practice file before converting a real statement.
+
+VERIFICATION LIMIT
+The supplied bank data, date/amount conversions and resulting CSV balances were checked using Yathartha's actual Python import parser. The VBA source has been reviewed but cannot be executed or compiled in this environment because Microsoft Excel is not installed. Run Debug > Compile VBAProject and the included synthetic practice file as the first acceptance check in Windows desktop Excel before using new statements. No live book or original bank file has been modified. Client bank data is not included in this reusable converter package.
