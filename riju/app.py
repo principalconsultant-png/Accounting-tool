@@ -31,6 +31,7 @@ from .bulk_import_ui import BulkImportUI
 from .gst_completion_ui import GstCompletionUI
 from .receipt_import_ui import ReceiptImportUI
 from .ap_bulk_ui import ApBulkUI
+from .petty_cash_ui import PettyCashUI
 from .ap_ui import ApUI
 from .checks_ui import ChecksUI
 from .statements_ui import StatementsUI
@@ -43,7 +44,7 @@ SAGE='#E8F0FC'; SAFFRON='#FFE3BF'; MUTED='#566B85'
 BRAND_SAFFRON='#D97716'; BRAND_BLUE='#154C8A'
 SAFFRON_HOVER='#F2D5B5'; SAGE_HOVER='#D4E3F8'; BLUE='#E7EDF7'; BORDER='#DCE2DC'
 
-class App(ApBulkUI,ReceiptImportUI,ApUI,ChecksUI,StatementsUI,GstCompletionUI,BulkImportUI,ServiceRevenueUI,CwipUI,TaxDepreciationUI,FixedAssetsUI,CashFlowUI,TdsUI,RcmUI,GstUI,TaxUI,HistoryUI,BankUI,OperationsUI,LedgerUI,FoundationUI,tk.Tk):
+class App(PettyCashUI,ApBulkUI,ReceiptImportUI,ApUI,ChecksUI,StatementsUI,GstCompletionUI,BulkImportUI,ServiceRevenueUI,CwipUI,TaxDepreciationUI,FixedAssetsUI,CashFlowUI,TdsUI,RcmUI,GstUI,TaxUI,HistoryUI,BankUI,OperationsUI,LedgerUI,FoundationUI,tk.Tk):
     def __init__(self,vault):
         super().__init__()
         self.vault=vault
@@ -107,7 +108,7 @@ class App(ApBulkUI,ReceiptImportUI,ApUI,ChecksUI,StatementsUI,GstCompletionUI,Bu
         nav=ttk.Frame(self.nav_canvas,padding=(12,14));nav_window=self.nav_canvas.create_window((0,0),window=nav,anchor='nw')
         nav.bind('<Configure>',lambda e:self.nav_canvas.configure(scrollregion=self.nav_canvas.bbox('all')))
         self.nav_canvas.bind('<Configure>',lambda e:self.nav_canvas.itemconfigure(nav_window,width=e.width))
-        self.pages={'Overview':self.overview,'Ledger A/c':self.ledger_accounts,'Work volume':self.work_volume,'Journal studio':self.studio,'Sales receipt':self.sales_receipt,'AP Vendor Invoices':self.ap_invoices,'Vendor master':self.vendor_master,'Service revenue':self.service_revenue,'FX receipts':self.fx_receipts,'Vouchers':self.vouchers,
+        self.pages={'Overview':self.overview,'Ledger A/c':self.ledger_accounts,'Work volume':self.work_volume,'Journal studio':self.studio,'Sales receipt':self.sales_receipt,'AP Vendor Invoices':self.ap_invoices,'Vendor master':self.vendor_master,'Petty cash':self.petty_cash_page,'Service revenue':self.service_revenue,'FX receipts':self.fx_receipts,'Vouchers':self.vouchers,
                     'Chart of accounts':self.accounts,'Tax setup':self.taxes,'TDS accounting':self.tds_accounting,'GST accounting':self.gst_accounting,'GST cash & filing':self.gst_cash_filing,'GST reverse charge':self.reverse_charge,'Setup & periods':self.setup,'Saved drafts':self.saved_drafts,'Financial reports':self.reports,'Statement review':self.statement_page,'Checks & questions':self.accounting_check_page,'Cash flow setup':self.cash_flow_setup,
                     'Import queue':self.imports,'Bulk import review':self.bulk_imports,'Bank reconciliation':self.banking,
                     'Assets & depreciation':self.assets,'Tax depreciation':self.tax_depreciation,'CWIP & commissioning':self.cwip_projects,'Settings & backup':self.settings,'Change history':self.history}
@@ -440,6 +441,7 @@ class App(ApBulkUI,ReceiptImportUI,ApUI,ChecksUI,StatementsUI,GstCompletionUI,Bu
             q=selected()
             if q.get('kind')=='ap_bulk':self.ap_bulk_review(q['id']);return
             if q.get('kind')=='standard_sales':self.receipt_import_review(q['id']);return
+            if q.get('petty_cash'):self.petty_cash_review(q['id']);return
             if q.get('kind')=='bulk':self.show('Bulk import review');return
             dialog=tk.Toplevel(self); dialog.title('Review '+q['filename']); dialog.geometry('1050x600')
             if q.get('kind')=='daily_sales':
@@ -459,6 +461,7 @@ class App(ApBulkUI,ReceiptImportUI,ApUI,ChecksUI,StatementsUI,GstCompletionUI,Bu
             q=selected()
             if q.get('kind')=='ap_bulk':self.ap_bulk_review(q['id']);return
             if q.get('kind')=='standard_sales':self.receipt_import_review(q['id']);return
+            if q.get('petty_cash'):self.petty_cash_review(q['id']);return
             if q['status']!='PENDING_REVIEW': raise ValueError('Only pending files can be posted.')
             if not messagebox.askyesno('Approve import',f'Have you reviewed all {len(q["rows"])} rows? Post them together?',parent=self): return
             def action(s):

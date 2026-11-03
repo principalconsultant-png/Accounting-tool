@@ -384,6 +384,18 @@ def run(output):
             if len(vendorbook['ap']['vendors'])!=100 or vendorbook['vouchers']:raise ValueError('Packaged vendor bulk master mismatch')
             for kind in ('xlsx','csv'):vendor_import.template(root/('vendor-master-template.'+kind))
             result['vendor_master_bulk_import_passed']=True
+            from . import petty_cash
+            pettybook=core.empty_state()
+            cashentry=dict(date='2026-09-01',reference='PACK-PC-1',branch='JP',category='Office',treatment='Expense',account='4590',amount='10',narration='Synthetic packaged cash expense',basis='Reviewed actual synthetic cash evidence and tax')
+            petty_cash.record(pettybook,cashentry,True)
+            pettycsv=io.StringIO();writer=csv.writer(pettycsv);writer.writerow(petty_cash.HEADERS);writer.writerow([cashentry[k] for k in petty_cash.FIELDS]);cashentry['reference']='PACK-PC-2';writer.writerow([cashentry[k] for k in petty_cash.FIELDS])
+            pettyraw=pettycsv.getvalue().encode();parsed=petty_cash.read_source(pettyraw,'synthetic-petty.csv');pettyq=petty_cash.stage(pettybook,pettyraw,'synthetic-petty.csv',parsed,confirmed=True)
+            if [r['review'] for r in pettyq['rows']]!=['DUPLICATE','PENDING']:raise ValueError('Packaged cash duplicate/valid review mismatch')
+            bulk_import.review_row(pettybook,pettyq['id'],0,False,'Existing cash entry rejected');bulk_import.review_row(pettybook,pettyq['id'],1,True,'Reviewed cash source');bulk_import.approve(pettybook,pettyq['id'])
+            if core.balances(pettybook,'2026-09-30')['1000']!=-2000:raise ValueError('Packaged petty cash total mismatch')
+            for kind in ('xlsx','csv'):petty_cash.template(root/('petty-cash-template.'+kind))
+            cashpack=petty_cash.register_pack(pettybook,'2026-09-01','2026-09-30');financial_reports.export_xlsx(cashpack,root/'petty-register.xlsx');financial_reports.export_pdf(cashpack,root/'petty-register.pdf')
+            result['petty_cash_manual_bulk_passed']=True
 
 
             resetvault=Vault(root/'reset.riju');resetstate=core.empty_state();core.post(resetstate,'2026-04-01','Synthetic test entry to clear',[dict(account='1000',branch='JP',debit=10000,credit=0),dict(account='4000',branch='JP',debit=0,credit=10000)]);resetvault.save(resetstate)

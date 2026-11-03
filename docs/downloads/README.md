@@ -1,6 +1,6 @@
 # Yathartha user guide and receipt templates
 
-Current version: 0.33.0-dev. Download Yathartha-0.33.0-Guide-and-Templates.zip for the updated PDF, editable source, blank templates and verified worked-example source/reports.
+Current version: 0.34.0-dev. Download Yathartha-0.34.0-Guide-and-Templates.zip for the updated PDF, editable source, blank templates and verified worked-example source/reports.
 
 The guide explains calendar controls, the visible editable Vendor master, rejecting duplicates before confirming/approving valid receipts, and named journal previews. Its complete daily-sales-to-financial-reports walkthrough and practice files are included. Examples are TRAINING ONLY, not live transactions.
 
@@ -17,3 +17,5 @@ AP bulk review now highlights invalid/duplicate rows and keeps the source-row re
 Reusable Excel bank converter: Yathartha-Excel-Bank-Converter.zip contains a VBA module, setup XLSX, installation guide and synthetic acceptance statement. No client bank data. Install once in Windows desktop Excel and save as XLSM. VBA is source-reviewed but requires native Excel compile/run acceptance; it was not executed in the build environment.
 
 Vendor master bulk upload templates: Yathartha-Vendor-Master-Template.xlsx / .csv. Four columns mirror manual vendor creation. Guide Chapter29 covers review/duplicates/selected creation. Public templates contain no client data.
+
+Petty cash templates: Yathartha-Petty-Cash-Template.xlsx / .csv. Chapter30 covers single cash transactions, separate funding, original category/date report mapping, source review and ledger/report effects. Public templates are blank; original client cash reports are not included.

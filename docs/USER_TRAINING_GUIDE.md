@@ -1,6 +1,6 @@
 # Yathartha — Bookkeeping Training and User Guide
 
-Development version 0.33.0-dev | Guide updated 2 November 2026 | Windows | INR
+Development version 0.34.0-dev | Guide updated 3 November 2026 | Windows | INR
 
 Audience: a new bookkeeper, an accountant reviewing the work, and the person delivering the books to the hospital. This guide explains both the workflow and the bookkeeping behind it. Use the matching development executable; screen names refer to that version. Dates shown in examples are practice dates, not instructions to post into live books.
 
@@ -20,7 +20,7 @@ Posting always requires review. Previewing, uploading, changing a schedule or ex
 
 1. Download the RijuBooks-Windows ZIP supplied for the matching build and extract all files. Do not run the application from inside the ZIP.
 2. Find Yathartha.exe, normally under dist in the extracted bundle. The application does not require the end user to install Python.
-3. Read packaged-selftest.json: version should be 0.33.0-dev and passed should be true. The included checksum file identifies the executable supplied by the build.
+3. Read packaged-selftest.json: version should be 0.34.0-dev and passed should be true. The included checksum file identifies the executable supplied by the build.
 4. Use a disposable training book first. Do not practise by adding sample invoices to the live hospital book. Your administrator can start a demo copy with `Yathartha.exe --demo --data training.json`; the JSON training file is not protected for live use.
 5. For normal Windows use, the default book is under `%LOCALAPPDATA%\RijuBooks\books.riju`. Keep the same Windows user/profile for that book.
 6. In Settings & backup choose the external backup folder. Confirm the device is connected and a backup is actually created.
@@ -552,3 +552,44 @@ Click **Upload bulk vendors**, select the CSV/XLSX, and review the source rows. 
 Click **Select all new vendors**, or select specific NEW rows using Ctrl/Shift, then **Save selected new vendors**. Only the selected new vendors are saved; invalid and duplicate rows are not saved or overwritten. A late duplicate causes the whole selected group to stop without a partial save. The success message returns you to Vendor master, where new vendors are immediately visible and editable. Closing the preview without saving makes no changes.
 
 This import creates new masters only. To change an existing vendor's terms, reference, name or active status, use **Edit selected vendor**. Posted invoice snapshots and credit terms stay intact. Correct invalid source rows in the file and upload again; previously saved vendors will appear as duplicates. No imported row creates or updates bank details, GST/TDS registrations or accounting balances. After the vendors are saved, use AP Vendor Invoices to enter or bulk-upload invoices; revalidate an already-pending invoice batch if it was blocked only by a missing master.
+
+
+## 30. Petty cash expenses, cash funding and historical bulk reports
+
+Open **Petty cash** on the left navigation. This page records actual cash disbursements and funding through 1000 Cash. It provides manual entry, standard Excel/CSV bulk upload, direct category-by-date matrix upload, saved batch review and a dated cash register with Excel/PDF exports. Cash funding and sales receipts are different events: never count the same cash twice.
+
+### Choose the accounting treatment before posting
+
+| Treatment | Debit | Credit | Reporting effect |
+|---|---|---|---|
+| Expense | Genuine reviewed expense ledger | 1000 Cash | Expense in P&L and lower cash |
+| Stock purchase | Inventory asset, such as 1100 Medicine inventory | 1000 Cash | Inventory asset; no automatic medicine cost of sales |
+| Staff advance | Reviewed Other assets staff-advance ledger | 1000 Cash | Advance asset, not salary expense |
+| Liability settlement | Existing credited Other liabilities salary/payroll ledger | 1000 Cash | Clears an accrued liability; no second expense |
+| Cash top-up | 1000 Cash | Genuine bank/cash, funding liability or equity source | Funding/transfer; not new sales or expense |
+
+Use Chart of accounts to create/select suitable staff-advance and salaries-payable ledgers if they are missing. Account numbers in a customised book can differ. Salary settlement checks credited balances at the payment date and later recorded settlements, including combined bulk rows. If the salary was never accrued, review payroll recognition first; the report label alone is not proof of an existing liability. Vendor-invoice payments belong in AP Vendor Invoices, and GST/TDS settlements belong in their dedicated pages. This simple petty-cash workflow does not calculate GST/TDS or input-tax splits.
+
+### Enter one actual cash transaction
+
+Click **Record cash expense / top-up**. Select the actual historical payment/receipt date with the calendar; the date is blank initially so today's data-entry date is not assumed. Enter a stable unique voucher reference, operating unit, category, treatment, counterpart account, amount, description/payee and accounting review basis. Confirm the source/tax/no-duplicate review. Click **Preview petty cash journal**, inspect the named accounts and date, then **Approve petty cash journal**. The journal updates the cash ledger and financial reports, and the register refreshes. Corrections retain history through Vouchers reversal and a new correction reference.
+
+Example training expense: 2026-09-01, PC-TRAIN-001, JP, Office, Expense, 4590 Administration, INR 100, Office supplies, with a reviewed cash-voucher basis. Journal: Dr Administration100, Cr Cash100. Example funding: actual INR1000 withdrawal transferred to petty cash: choose Cash top-up, counterpart1010 Bank; journal Dr Cash1000, Cr Bank1000. Match that bank movement to the withdrawal in bank reconciliation. Individual cash purchases do not each appear on the bank statement. If the withdrawal was already posted, do not post another top-up.
+
+### Standard row-by-row bulk template
+
+Click **Excel template** or **CSV template**. Excel uses the Expenses worksheet and includes Accounts/Units snapshots and Instructions; public blank templates contain no client data. Each row must contain all nine headings: Date, Voucher Reference, Operating Unit, Category, Treatment, Counterpart Ledger, Amount INR, Description, Accounting Review Basis. Use true Excel dates or YYYY-MM-DD, positive amounts and literal values. Blank rows are ignored. Each actual transaction/category/date needs its own stable reference; changing an amount or filename must not be used to bypass duplicate detection. Importing a previously manually entered unit/date/reference is blocked.
+
+Click **Upload bulk petty cash**, choose the file and confirm review to stage it. Staging does not post. Rows already contain their unit/treatment/account/basis; the matrix defaults do not override them. Invalid/duplicate rows show their reasons in red/amber and a full explanation above the table. Reject flagged rows with a reason or cancel the unused batch, correct the source and reupload. Approve selected valid rows or **Approve all valid rows**, then **Preview cash journals** and approve. Every row must have an explicit approval/rejection; a late validation failure rolls back the entire selected group. Posted sources stay in the saved batch and change history.
+
+### Upload the original category-by-date report
+
+The supported matrix has a Date row containing actual dated columns, category labels in that row's Date-label column, Expense Details, category rows and Total. Each nonzero category/date cell becomes one cash-outflow source item. The exact cell coordinate is retained for tracing. The importer does not execute formulas; expense amount cells must be literal reviewed values. Formula summary cells, blank/zero cells, opening balance, Cash Received, daily totals, closing balance and cumulative expenses are excluded from journals.
+
+Choose the operating unit explicitly, a stable report reference (for example PC-2026-09), and a shared accounting review basis. Review every proposed category treatment and counterpart ledger in the scrollable mapping panel. Suggestions are editable proposals, not a final accounting conclusion: provisions/food, consumables, medicines and salary labels require actual source review. Staff advances/salary-payable mappings stay blank until an appropriate ledger is selected. Confirm and stage. Review source cells and errors, reject or correct flagged rows, approve valid items and inspect journals before posting. Mapping corrections require cancelling the unused batch and reuploading; saved defaults help the next report but do not silently change an existing staged source.
+
+### Reconcile physical cash and generate reports
+
+The source warning shows its opening, receipts, computed cash outflow and closing when literal source controls can be checked. These controls never create funding/opening entries. A negative physical-cash opening/closing means custody/funding or staff-paid items need investigation; no balancing figure is invented. Starting a new book requires reviewed opening balances through the normal setup, not a second opening journal from the monthly report. If Cash Received is patient cash already recorded in Sales receipt, do not enter a top-up. If staff personally paid an expense, review the genuine reimbursement/funding liability instead of treating unsupported negative physical cash as normal.
+
+Refresh the register for the correct dates/unit and export Excel/PDF. Expenses affect P&L; stock/advances remain assets; salary settlements reduce liabilities. All posted movements update Balance sheet/T form. Cash flow uses its reviewed cash/equivalent definition: a transfer from included bank to included cash nets to zero, while actual disbursements are classified by their genuine counterpart. Reconcile the cash custodian's records separately from bank reconciliation. Only real bank movements, such as a funding withdrawal, belong in bank matching.

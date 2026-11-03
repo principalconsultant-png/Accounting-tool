@@ -11,4 +11,4 @@ class UserManualTests(unittest.TestCase):
             path=Path(d)/'manual.pdf';build_pdf(source,path);doc=PdfReader(path);text=' '.join(' '.join(page.extract_text() for page in doc.pages).split())
             for topic in ('AP Vendor Invoices','Credit period','no_separate_tax','Mark selected invoices paid','Approve all valid rows','Guided training exercises','Suggested training session','10,000','End-to-end worked example','51,600','WALK-AP-001'):
                 self.assertTrue(topic in text,topic)
-            self.assertGreater(len(doc.pages),20);self.assertEqual(len(doc.outline),29)
+            self.assertGreater(len(doc.pages),20);self.assertEqual(len(doc.outline),30)

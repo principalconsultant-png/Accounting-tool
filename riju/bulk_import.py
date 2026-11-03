@@ -21,9 +21,12 @@ def _queue(s,qid):
     return q
 
 def _known(s,exclude=None):
-    return {r['key'] for q in s['queue'] if q.get('kind')=='bulk' and q['id']!=exclude for r in q['rows'] if r.get('key') and r['review'] not in ('REJECTED','INVALID','DUPLICATE')}
+    return {a['payload']['key'] for a in s['audit'] if a['action']=='PETTY_CASH_RECORDED'} | {r['key'] for q in s['queue'] if q.get('kind')=='bulk' and q['id']!=exclude for r in q['rows'] if r.get('key') and r['review'] not in ('REJECTED','INVALID','DUPLICATE')}
 
 def _validate(s,kind,r):
+    if r.get('petty_treatment') is not None:
+        from . import petty_cash
+        petty_cash.validate(s,r)
     from .tax import day
     day(r['date'])
     if not r['reference'].strip() or not r['narration'].strip():raise ValueError('Reference and narration are required.')
@@ -115,8 +118,12 @@ def approve(s,qid):
         if r.get('journal_id') and any(a['journal_id']==r['journal_id'] and a['branch']==r['branch'] and a['date']==r['date'] for a in selected) and r['review']!='APPROVED':raise ValueError('Review every row of a compound journal consistently; partial group approval is blocked.')
     posted=[]
     for key,rows in groups.items():
+        if q.get('petty_cash'):
+            for row in rows:
+                from . import petty_cash
+                petty_cash.validate(c,row)
         lines=[line for r in rows for line in _lines(r)];reference=' / '.join(r['reference'] for r in rows)
-        v=core.post(c,key[1],' | '.join(r['narration'] for r in rows),lines,opening=q['type']=='Opening',metadata={'reference':reference},source=dict(kind='bulk_import',document_id=qid,record_id=_hash([r['key'] for r in rows]),row_count=len(rows)))
+        v=core.post(c,key[1],' | '.join(r['narration'] for r in rows),lines,opening=q['type']=='Opening',metadata={'reference':reference,**({'type':'Receipt' if rows[0].get('petty_treatment')=='Cash top-up' else 'Payment'} if q.get('petty_cash') else {})},source=dict(kind='bulk_import',document_id=qid,record_id=_hash([r['key'] for r in rows]),row_count=len(rows)))
         for r in rows:r['voucher']=v['id']
         posted.append(v['id'])
     q['status']='PROCESSED';core.add_audit(c,'BULK_IMPORT_APPROVED',dict(batch=qid,vouchers=posted,approved=len(selected),rejected=len(q['rows'])-len(selected)));s.clear();s.update(c);return posted
