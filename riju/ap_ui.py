@@ -31,10 +31,41 @@ class ApUI:
         return keys
     def vendor_master(self):
         self.note('Saved AP vendors. Edit name, credit days, reference or active status here. Vendor ID remains stable. Posted invoices retain their original vendor/source snapshot and credit terms; edits apply to new invoices.')
-        bar=self.bar();self.button(bar,'Add vendor',self.ap_vendor,True);self.button(bar,'Edit selected vendor',self.ap_edit_vendor)
+        bar=self.bar();self.button(bar,'Add vendor',self.ap_vendor,True);self.button(bar,'Edit selected vendor',self.ap_edit_vendor);self.button(bar,'Upload bulk vendors',self.upload_vendor_master,True)
+        templates=self.bar();self.button(templates,'Vendor template — Excel',lambda:self.vendor_master_template('xlsx'));self.button(templates,'Vendor template — CSV',lambda:self.vendor_master_template('csv'))
         self.vendor_table=self.table(('Vendor ID','Vendor name','Default credit days','Reference','Active'),[],height=12)
         for v in ap.data(self.state)['vendors']:self.vendor_table.insert('','end',iid=v['id'],values=(v['id'],v['name'],v['credit_days'],v['reference'],'Yes' if v.get('active',True) else 'No'))
         self.vendor_table.bind('<Double-1>',lambda e:self.guarded(self.ap_edit_vendor))
+    def vendor_master_template(self,kind):
+        from . import vendor_import
+        path=filedialog.asksaveasfilename(parent=self,initialfile='Yathartha-Vendor-Master-Template.'+kind,defaultextension='.'+kind,filetypes=[(kind.upper(),'*.'+kind)])
+        if path:vendor_import.template(path);messagebox.showinfo('Vendor template saved',str(path)+'\nUse the Vendors sheet. The template mirrors individual vendor entry; no vendors have been created.',parent=self)
+    def upload_vendor_master(self):
+        from . import vendor_import
+        path=filedialog.askopenfilename(parent=self,title='Upload vendor master',filetypes=[('Vendor CSV / Excel','*.csv *.xlsx')])
+        if not path:return
+        from pathlib import Path
+        plan=vendor_import.preview(self.state,Path(path).read_bytes(),Path(path).name)
+        win=tk.Toplevel(self);win.title('Review bulk vendor master — '+plan['filename']);win.geometry('1180x650');win.transient(self)
+        counts={k:sum(r['status']==k for r in plan['rows']) for k in ('NEW','INVALID','DUPLICATE')}
+        ttk.Label(win,text=str(counts)+' | Ignored default-only rows '+str(plan['ignored'])+'\nSelect NEW rows to create vendors. Existing masters are never overwritten. No journals or opening balances are created.',wraplength=1130,padding=8).pack(anchor='w')
+        detail=ttk.Label(win,text='Select a row for its full validation reason.',wraplength=1130,padding=8);detail.pack(anchor='w',fill='x')
+        table=self.table(('Row','Vendor name','Credit days','Reference','Active','Status','Reason / correction'),[],parent=win,height=12);table.configure(selectmode='extended');table.column('Row',width=55,stretch=False);table.column('Reason / correction',width=350);table.column('Vendor name',width=220)
+        table.tag_configure('INVALID',background='#FCE8E6',foreground='#8B1A12');table.tag_configure('DUPLICATE',background='#FFF1CB',foreground='#754600')
+        for i,r in enumerate(plan['rows']):
+            raw=r['raw'];v=r.get('values',{});table.insert('','end',iid=str(i),tags=(r['status'],),values=(r['source_row'],raw.get('name',''),v.get('credit_days',raw.get('credit_days','')),raw.get('reference',''),'Yes' if v.get('active') is True else 'No' if v.get('active') is False else raw.get('active',''),r['status'],r['error'] or 'Ready to create new vendor'))
+        def selected(event=None):
+            if table.selection():
+                r=plan['rows'][int(table.selection()[0])];detail.configure(text='Source row '+str(r['source_row'])+' | '+r['raw'].get('name','')+' | '+r['status']+': '+(r['error'] or 'Ready to create new vendor'),foreground='#9C261B' if r['status']!='NEW' else '#154C8A')
+        table.bind('<<TreeviewSelect>>',selected)
+        def selectnew():
+            table.selection_set([str(i) for i,r in enumerate(plan['rows']) if r['status']=='NEW']);selected()
+        def save():
+            indices=[int(i) for i in table.selection()];created=self.commit(lambda s:vendor_import.save_selected(s,plan,indices));win.destroy();self.show('Vendor master');messagebox.showinfo('Vendor master imported',str(len(created))+' new vendor(s) saved. Existing vendors were not changed. No journal entries were posted.',parent=self)
+        bar=ttk.Frame(win);bar.pack(fill='x',pady=10);self.button(bar,'Select all new vendors',selectnew);self.button(bar,'Save selected new vendors',save,True);self.button(bar,'Close without saving',win.destroy)
+        target=next((str(i) for i,r in enumerate(plan['rows']) if r['status']!='NEW'),None)
+        if target is not None:table.selection_set(target);table.see(target);selected()
+
     def ap_edit_vendor(self):
         if not self.vendor_table.selection():raise ValueError('Select a vendor in Vendor master to edit.')
         self.ap_vendor(self.vendor_table.selection()[0])

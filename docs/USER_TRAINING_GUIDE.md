@@ -1,6 +1,6 @@
 # Yathartha — Bookkeeping Training and User Guide
 
-Development version 0.32.1-dev | Guide updated 2 November 2026 | Windows | INR
+Development version 0.33.0-dev | Guide updated 2 November 2026 | Windows | INR
 
 Audience: a new bookkeeper, an accountant reviewing the work, and the person delivering the books to the hospital. This guide explains both the workflow and the bookkeeping behind it. Use the matching development executable; screen names refer to that version. Dates shown in examples are practice dates, not instructions to post into live books.
 
@@ -20,7 +20,7 @@ Posting always requires review. Previewing, uploading, changing a schedule or ex
 
 1. Download the RijuBooks-Windows ZIP supplied for the matching build and extract all files. Do not run the application from inside the ZIP.
 2. Find Yathartha.exe, normally under dist in the extracted bundle. The application does not require the end user to install Python.
-3. Read packaged-selftest.json: version should be 0.32.1-dev and passed should be true. The included checksum file identifies the executable supplied by the build.
+3. Read packaged-selftest.json: version should be 0.33.0-dev and passed should be true. The included checksum file identifies the executable supplied by the build.
 4. Use a disposable training book first. Do not practise by adding sample invoices to the live hospital book. Your administrator can start a demo copy with `Yathartha.exe --demo --data training.json`; the JSON training file is not protected for live use.
 5. For normal Windows use, the default book is under `%LOCALAPPDATA%\RijuBooks\books.riju`. Keep the same Windows user/profile for that book.
 6. In Settings & backup choose the external backup folder. Confirm the device is connected and a backup is actually created.
@@ -532,3 +532,23 @@ Example: after importing daily sales, posting vendor invoices, recording actual 
 Click **Report logos** in Financial reports, or **Report logos — client / AXIOM** in Settings & backup. Choose / replace Client logo (left) and AXIOM logo (right), then Done. Use PNG or JPEG, maximum 5 MB and 16 million pixels. A transparent PNG usually prints best. The app preserves image proportions. You can replace only the client logo when preparing a different client's book, retain AXIOM on the right, or remove either image. Check the preview and export a PDF before sharing.
 
 Logos are embedded in this client book and its backups, not linked to the image's original location. They are not a global setting: configure them in each client's separate book. Refresh a report after changing images. Generated PDF headers repeat logos on every page; Excel sheets include them at the top. Financial report packs (including P&L, balance sheet, cash flow and reviewed statements) use the same branding. CSV is text only. Older exported files are unchanged; generate fresh files to apply replacements. Original logo files are not bundled in public downloads; choose your own images in the app.
+
+
+## 29. Bulk upload the vendor master
+
+Use this before importing AP invoices for a new client. Open **Vendor master** from the left navigation. Click **Vendor template — Excel** or **Vendor template — CSV**. Fill the template without changing its headings; for Excel, use the Vendors worksheet. There is no macro to install. The public blank template contains no client names.
+
+| Column | What to enter |
+|---|---|
+| Vendor Name | Required. Exact legal/source name that will be used on invoices. |
+| Default Credit Period Calendar Days | Whole calendar days, 0–3650. Blank defaults to 30; zero means immediate terms. |
+| Vendor Code / Source Reference | Optional text identifier. Preserve leading zeroes by keeping this column formatted as text. |
+| Active | Yes or No. Blank defaults to Yes. Inactive masters remain saved but cannot be used for new AP invoices. |
+
+Example practice row: Training Medicine Supplier, 45, TRAIN-001, Yes. This creates one active vendor with a 45-day default credit period; it creates no opening balance, invoice, payment or journal.
+
+Click **Upload bulk vendors**, select the CSV/XLSX, and review the source rows. NEW rows are eligible for creation. INVALID rows show a correction reason in red; DUPLICATE rows are amber. The selected row's full explanation is above the table. Duplicate checks include vendors already saved, their historical names and earlier rows in the same file. Spelling variants must not be used to create a second master for the same supplier.
+
+Click **Select all new vendors**, or select specific NEW rows using Ctrl/Shift, then **Save selected new vendors**. Only the selected new vendors are saved; invalid and duplicate rows are not saved or overwritten. A late duplicate causes the whole selected group to stop without a partial save. The success message returns you to Vendor master, where new vendors are immediately visible and editable. Closing the preview without saving makes no changes.
+
+This import creates new masters only. To change an existing vendor's terms, reference, name or active status, use **Edit selected vendor**. Posted invoice snapshots and credit terms stay intact. Correct invalid source rows in the file and upload again; previously saved vendors will appear as duplicates. No imported row creates or updates bank details, GST/TDS registrations or accounting balances. After the vendors are saved, use AP Vendor Invoices to enter or bulk-upload invoices; revalidate an already-pending invoice batch if it was blocked only by a missing master.

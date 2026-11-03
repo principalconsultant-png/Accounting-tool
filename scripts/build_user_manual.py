@@ -71,6 +71,8 @@ def main():
     for kind in ('xlsx','csv'):receipt_import.template(out/('RijuBooks-Sales-Receipts-Template.'+kind))
     from riju import ap_bulk
     for kind in ('xlsx','csv'):ap_bulk.template(out/('Yathartha-AP-Bulk-Invoices-Template.'+kind))
+    from riju import vendor_import
+    for kind in ('xlsx','csv'):vendor_import.template(out/('Yathartha-Vendor-Master-Template.'+kind))
     reference=root/'docs/ACCOUNT_POSTING_REFERENCE.md'
     if reference.exists():
         build_pdf(reference,out/'Yathartha-Account-Posting-Reference.pdf',compact=True);(out/'ACCOUNT_POSTING_REFERENCE.md').write_text(reference.read_text(encoding='utf-8'),encoding='utf-8')
