@@ -33,6 +33,7 @@ from .receipt_import_ui import ReceiptImportUI
 from .ap_bulk_ui import ApBulkUI
 from .petty_cash_ui import PettyCashUI
 from .bank_workbench_ui import BankWorkbenchUI
+from .business_pulse_ui import BusinessPulseUI
 from .ap_ui import ApUI
 from .checks_ui import ChecksUI
 from .statements_ui import StatementsUI
@@ -45,7 +46,7 @@ SAGE='#E8F0FC'; SAFFRON='#FFE3BF'; MUTED='#566B85'
 BRAND_SAFFRON='#D97716'; BRAND_BLUE='#154C8A'
 SAFFRON_HOVER='#F2D5B5'; SAGE_HOVER='#D4E3F8'; BLUE='#E7EDF7'; BORDER='#DCE2DC'
 
-class App(BankWorkbenchUI,PettyCashUI,ApBulkUI,ReceiptImportUI,ApUI,ChecksUI,StatementsUI,GstCompletionUI,BulkImportUI,ServiceRevenueUI,CwipUI,TaxDepreciationUI,FixedAssetsUI,CashFlowUI,TdsUI,RcmUI,GstUI,TaxUI,HistoryUI,BankUI,OperationsUI,LedgerUI,FoundationUI,tk.Tk):
+class App(BusinessPulseUI,BankWorkbenchUI,PettyCashUI,ApBulkUI,ReceiptImportUI,ApUI,ChecksUI,StatementsUI,GstCompletionUI,BulkImportUI,ServiceRevenueUI,CwipUI,TaxDepreciationUI,FixedAssetsUI,CashFlowUI,TdsUI,RcmUI,GstUI,TaxUI,HistoryUI,BankUI,OperationsUI,LedgerUI,FoundationUI,tk.Tk):
     def __init__(self,vault):
         super().__init__()
         self.vault=vault
@@ -380,6 +381,7 @@ class App(BankWorkbenchUI,PettyCashUI,ApBulkUI,ReceiptImportUI,ApUI,ChecksUI,Sta
         self.button(pack_actions,'Financial pack — Excel',lambda:self.export_financial_pack('xlsx'))
         self.button(pack_actions,'Financial pack — PDF',lambda:self.export_financial_pack('pdf'))
         self.button(pack_actions,'Report logos',self.report_logos)
+        self.button(pack_actions,'Business Pulse — Monthly Performance',self.business_pulse,True)
         self.financial_holder=ttk.Frame(self.content);self.financial_holder.pack(fill='both',expand=True)
         self.refresh_financial_report()
 

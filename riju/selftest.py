@@ -407,6 +407,17 @@ def run(output):
             result['bank_side_by_side_reconciliation_passed']=True
 
 
+            from . import business_pulse,business_pulse_exports
+            pulsebook=core.empty_state()
+            core.post(pulsebook,'2026-04-02','Synthetic pulse receipt',[dict(account='1000',branch='JP',debit=12500,credit=0),dict(account='4000',branch='JP',debit=0,credit=12500)])
+            business_pulse.save_month(pulsebook,dict(month='2026-04',branch='ALL',visits='',new_patients=0,books_reviewed=True,basis='Synthetic complete month'))
+            pulsepack=business_pulse.snapshot(pulsebook,2026,'2026-04-30')
+            pulserows={r['key']:r['values'][0] for r in pulsepack['rows']}
+            if pulserows['visits']!=1 or pulserows['arpp']!=12500 or pulserows['new_patients']!=0 or len(pulsebook['vouchers'])!=1:raise ValueError('Packaged monthly metric calculation failed')
+            business_pulse_exports.export_xlsx(pulsepack,root/'business-pulse.xlsx');business_pulse_exports.export_pdf(pulsepack,root/'business-pulse.pdf')
+            business_pulse.input_template(root/'business-pulse-inputs.xlsx')
+            result['business_pulse_report_passed']=True
+
             resetvault=Vault(root/'reset.riju');resetstate=core.empty_state();core.post(resetstate,'2026-04-01','Synthetic test entry to clear',[dict(account='1000',branch='JP',debit=10000,credit=0),dict(account='4000',branch='JP',debit=0,credit=10000)]);resetvault.save(resetstate)
             resetoriginal=resetvault.path.read_bytes();resetfolder=root/'reset-backup';resetfolder.mkdir();clean,resetbackup=resetvault.start_clean_books(resetfolder,'START CLEAN BOOKS')
             if clean['vouchers'] or resetbackup.read_bytes()!=resetoriginal or resetvault.load()!=clean or len(Vault(resetbackup).load()['vouchers'])!=1:raise ValueError('Packaged verified clean-books reset failed')

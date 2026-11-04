@@ -77,6 +77,10 @@ def main():
     for kind in ('xlsx','csv'):petty_cash.template(out/('Yathartha-Petty-Cash-Template.'+kind))
     from riju import bank_workbench
     for kind in ('xlsx','csv'):bank_workbench.payment_template(out/('Yathartha-Invoice-Payments-Template.'+kind))
+    from scripts.build_business_pulse_example import build as build_pulse_example
+    build_pulse_example(out)
+    from riju import business_pulse
+    for kind in ('xlsx','csv'):business_pulse.input_template(out/('Yathartha-Business-Pulse-Monthly-Inputs.'+kind))
     reference=root/'docs/ACCOUNT_POSTING_REFERENCE.md'
     if reference.exists():
         build_pdf(reference,out/'Yathartha-Account-Posting-Reference.pdf',compact=True);(out/'ACCOUNT_POSTING_REFERENCE.md').write_text(reference.read_text(encoding='utf-8'),encoding='utf-8')
