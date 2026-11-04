@@ -405,6 +405,14 @@ def run(output):
             if outcome['new_journals']!=2 or reconciliation.outstanding(reconbook,'1010')[0]:raise ValueError('Packaged checkbox reconciliation engine mismatch')
             for kind in ('xlsx','csv'):bank_workbench.payment_template(root/('invoice-payment-template.'+kind))
             result['bank_side_by_side_reconciliation_passed']=True
+            chargebook=core.empty_state()
+            core.post(chargebook,'2026-04-03','Synthetic gross bank receipt',[dict(account='1010',branch='JP',debit=10000,credit=0),dict(account='4000',branch='JP',debit=0,credit=10000)],metadata={'type':'Receipt','reference':'NET1'})
+            chargest=reconciliation.import_statement(chargebook,b'date,narration,reference,debit,credit,balance\n2026-04-03,Net after charges,NET1,0,99,99\n','net-bank.csv','1010','ALL','2026-04-01','2026-04-30','0','99')
+            chargechoices=bank_workbench.sources(chargebook,'1010','ALL','Sales receipts')
+            bank_workbench.reconcile(chargebook,'1010',chargest['id'],'Sales receipts',None,chargest['row_ids'],[x['id'] for x in chargechoices],'Synthetic charge evidence',100)
+            if reconciliation.outstanding(chargebook,'1010')[0] or core.balances(chargebook,'2026-04-30')['4560']!=100:raise ValueError('Packaged bank-charge reconciliation failed')
+            result['bank_charge_difference_passed']=True
+
 
 
             from . import business_pulse,business_pulse_exports

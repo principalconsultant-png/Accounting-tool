@@ -237,6 +237,35 @@ def _settle_pool(s,banks,parts,fees):
     return matches
 
 
+def _match_charged_books(s,banks,bookkeys,account,scope,fees,basis):
+    if len(banks)!=1:raise ValueError('For bank charges against posted bank entries/invoice payments, select one bank transaction at a time.')
+    live=banks[0];books=[b for b in bank.outstanding(s,account,scope)[1] if b['key'] in bookkeys]
+    if len(books)!=len(bookkeys):raise ValueError('Selected book movements changed. Refresh before posting charges.')
+    if live['branch']!='ALL' and any(b['branch']!=live['branch'] for b in books):raise ValueError('Bank charges and selected sources must belong to the statement operating unit.')
+    weights=defaultdict(int)
+    for b in books:weights[b['branch']]+=abs(b['remaining'])
+    allocations=bank._split(fees,weights);lines=[]
+    for branch,amount in allocations.items():
+        if amount:lines.extend([dict(account='4560',branch=branch,debit=amount,credit=0),dict(account=account,branch=branch,debit=0,credit=amount)])
+    voucher=core.post(s,live['date'],'Reviewed reconciliation bank charges '+live['reference']+' | '+basis,lines,metadata=dict(type='Payment',reference=live['reference'],bank_account=account,source='Bank charges'))
+    charges=[dict(b,remaining=b['amount']) for b in bank.book_items(s,account,scope) if b['voucher']==voucher['id']]
+    return [bank._record_match(s,[live],books+charges,'adjustment',voucher['id'])]
+
+
+def channel(row,side):
+    """Structured source channels first; bank channels are narration search aids only."""
+    if side=='source':
+        code=row.get('channel')
+        if code in ('1110','1120','1000'):return {'1110':'UPI','1120':'Card','1000':'Cash'}[code]
+        if row.get('mode') in ('upi','card','cash'):return row['mode'].title() if row['mode']!='upi' else 'UPI'
+    text=(row.get('narration','')+' '+row.get('label','')+' '+row.get('reference','')).casefold()
+    if 'upi' in text:return 'UPI'
+    if any(t in text for t in ('card','terminal','pos ')):return 'Card'
+    if 'cash' in text:return 'Cash'
+    if any(t in text for t in ('neft','rtgs','imps')):return 'Bank transfer'
+    return 'Other'
+
+
 @ap.atomic
 def reconcile(s,account,sid,kind,doc_id,bank_ids,source_ids,basis,fees_minor=0,allow_date_difference=False):
     if not basis.strip():raise ValueError('Enter the reconciliation/source review basis.')
@@ -251,7 +280,7 @@ def reconcile(s,account,sid,kind,doc_id,bank_ids,source_ids,basis,fees_minor=0,a
     selected=[available[k] for k in source_ids]
     if any(x['status']=='BLOCKED' for x in selected):raise ValueError(next(x['error'] for x in selected if x['status']=='BLOCKED'))
     if any((x['amount']>0)!=(banks[0]['remaining']>0) for x in selected):raise ValueError('Deposit sources and invoice withdrawals must be reconciled separately.')
-    if type(fees_minor)!=int or fees_minor<0 or fees_minor and banks[0]['remaining']<0:raise ValueError('Fees must be nonnegative INR and apply only to incoming settlement deposits.')
+    if type(fees_minor)!=int or fees_minor<0:raise ValueError('Reviewed bank charges must be nonnegative INR.')
     bt=sum(b['remaining'] for b in banks);st=sum(x['amount'] for x in selected)
     if st-fees_minor!=bt:raise ValueError('Selected source '+core.rupees(st)+' minus reviewed fees '+core.rupees(fees_minor)+' does not equal bank '+core.rupees(bt)+'. No rounding or balancing entry is guessed.')
     for x in selected:
@@ -281,12 +310,14 @@ def reconcile(s,account,sid,kind,doc_id,bank_ids,source_ids,basis,fees_minor=0,a
                 if not item:raise ValueError('Selected receipt clearing line is missing or already settled.')
                 parts.append(dict(x,kind='clearing',clearing_key=item['key']))
     matches=[]
-    if bookkeys:matches.extend(_match_bank_legs(s,bank_ids,bookkeys,account,scope))
+    if bookkeys and not parts and fees_minor:
+        matches.extend(_match_charged_books(s,banks,bookkeys,account,scope,fees_minor,basis))
+    elif bookkeys:matches.extend(_match_bank_legs(s,bank_ids,bookkeys,account,scope))
     if parts:
         remaining=[b for b in bank.outstanding(s,account,scope)[0] if b['id'] in bank_ids]
         if not remaining or any(b['remaining']<=0 for b in remaining):raise ValueError('Only positive settlement deposits can receive clearing receipts.')
         matches.extend(_settle_pool(s,remaining,parts,fees_minor))
-    elif fees_minor:raise ValueError('Fees require selected unsettled sales clearing receipts. Use a reviewed adjustment for an existing bank journal.')
+
     if any(b['id'] in bank_ids for b in bank.outstanding(s,account,scope)[0]):raise ValueError('Selected bank transactions are not fully reconciled. Nothing saved.')
     core.add_audit(s,'BANK_WORKBENCH_RECONCILED',dict(bank_ids=bank_ids,source_ids=source_ids,report=doc_id,kind=kind,review_basis=basis,fees_minor=fees_minor,matches=[m['id'] for m in matches],new_vouchers=len(s['vouchers'])-before,allow_date_difference=allow_date_difference))
     return dict(bank_transactions=len(bank_ids),source_transactions=len(source_ids),bank_total_INR=core.rupees(bt),source_total_INR=core.rupees(st),reviewed_fees_INR=core.rupees(fees_minor),difference_INR='0.00',new_journals=len(s['vouchers'])-before,matches=len(matches))

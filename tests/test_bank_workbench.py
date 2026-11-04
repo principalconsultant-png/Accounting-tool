@@ -85,6 +85,24 @@ class BankWorkbenchTests(unittest.TestCase):
         with self.assertRaises(ValueError):w.reconcile(self.s,'1010',None,'All book movements',None,st['row_ids'],[x['id'] for x in rows],'Review branch scope')
         self.assertEqual(before,self.s)
 
+    def test_invoice_withdrawal_charge_and_undo_reverses_charge_only(self):
+        inv=self.invoice();self.statement('2026-04-05,Supplier plus fee,UTR-PAY,101,0,899\n','899');doc=w.upload(self.s,paymentraw([self.payment()]),'payment-fee.csv','Invoice payments')
+        result=self.reconcile('Invoice payments',doc,fees_minor=100);self.assertEqual(result['new_journals'],2);self.assertEqual(ap.position(self.s,inv)['remaining'],0);self.assertEqual(core.balances(self.s,'2026-04-30')['4560'],100);self.assertFalse(bank.outstanding(self.s,'1010')[0])
+        match=self.s['matches'][-1];self.assertEqual(match['kind'],'adjustment');bank.undo_match(self.s,match['id'],'Charge needs correction','2026-04-06');self.assertEqual(core.balances(self.s,'2026-04-30')['4560'],0);self.assertEqual(len(self.s['ap']['payments']),1)
+    def test_existing_gross_deposit_net_charge_matches_without_revenue_repost(self):
+        core.post(self.s,'2026-04-03','Gross receipt',pair('1010','4000',10000),metadata={'type':'Receipt','reference':'GROSS'})
+        self.statement('2026-04-03,Net receipt,GROSS,0,99,1099\n','1099');before=len(self.s['vouchers']);result=self.reconcile('Sales receipts',fees_minor=100)
+        self.assertEqual(result['new_journals'],1);self.assertEqual(len(self.s['vouchers']),before+1);self.assertFalse(bank.outstanding(self.s,'1010')[0]);self.assertEqual(core.balances(self.s,'2026-04-30')['4000'],-10000)
+    def test_charge_mismatch_or_wrong_direction_rolls_back(self):
+        self.invoice();self.statement('2026-04-05,Supplier,UTR-PAY,99,0,901\n','901');doc=w.upload(self.s,paymentraw([self.payment()]),'payment.csv','Invoice payments');before=copy.deepcopy(self.s)
+        for fee in (-100,100):
+            with self.assertRaises(ValueError):self.reconcile('Invoice payments',doc,fees_minor=fee)
+            self.assertEqual(before,self.s)
+    def test_source_channel_uses_structured_account_before_party_text(self):
+        self.assertEqual(w.channel(dict(channel='1120',label='UPI company'),'source'),'Card')
+        self.assertEqual(w.channel(dict(channel='1110',label='Patient'),'source'),'UPI')
+        self.assertEqual(w.channel(dict(narration='UPI SETTLEMENT'),'bank'),'UPI');self.assertEqual(w.channel(dict(narration='TERMINAL 1 CARDS'),'bank'),'Card')
+
 
 @unittest.skipUnless(os.environ.get('DISPLAY') or os.environ.get('RIJU_GUI_TEST'),'Display required')
 class BankWorkbenchDesktopTests(unittest.TestCase):
@@ -155,4 +173,31 @@ class BankWorkbenchDesktopTests(unittest.TestCase):
                 for label,value in [('Statement from','2026-04-01'),('Through','2026-04-30'),('Bank opening INR (optional)','0'),('Bank closing INR (optional)','100')]:helper.fill(form,label,value)
                 helper.press(form,'Validate & preview rows');app.update();preview=helper.form(app);helper.press(preview,'Approve statement import');app.update();self.assertEqual(app.wb_account(),'1005');self.assertEqual(len(app.wb_bank_rows),1);self.assertEqual(bank.statement(app.state,app.wb_statement_id())['bank_account'],'1005');self.assertEqual(app._bank_account(),'1010')
                 app.show('Chart of accounts');app.update();app.wb_refresh();self.assertEqual(len(app.wb_bank_rows),1);app.close_bank_workbench();self.assertEqual(app.current,'Chart of accounts')
+            finally:app.destroy()
+
+    def test_independent_header_filters_clear_checks_and_charge_preview(self):
+        from unittest.mock import patch
+        from riju.app import App
+        from riju.storage import Vault
+        from test_gui import TaxDepreciationDesktopTests
+        helper=TaxDepreciationDesktopTests()
+        with tempfile.TemporaryDirectory() as d:
+            app=App(Vault(Path(d)/'book.json',demo=True))
+            try:
+                st=bank.import_statement(app.state,b'date,narration,reference,debit,credit,balance\n2026-04-03,UPI settlement,U1,0,99,99\n2026-04-04,CARD settlement,C1,0,50,149\n','bank.csv','1010','ALL','2026-04-01','2026-04-30','0','149');app.brs_selected_statement=st['id']
+                doc=w.upload(app.state,salesraw([salesrow(receipt_date='2026-04-02',receipt_no='UPI-A',consultation='100',cash='',upi='100',total='100'),salesrow(receipt_date='2026-04-02',receipt_no='CARD-B',consultation='50',cash='',card='50',total='50')]),'sales.csv','Sales receipts')
+                app.show('Bank reconciliation');app.open_bank_workbench();app.update();app.wb_prior_doc=doc['id'];app.wb_change_kind();self.assertEqual(len(app.wb_bank_rows),2);self.assertEqual(len(app.wb_source_rows),2)
+                app.wb_channels['bank'].set('UPI');self.assertEqual(len(app.wb_bank_rows),1);self.assertEqual(len(app.wb_source_rows),2)
+                app.wb_channels['source'].set('UPI');self.assertEqual(len(app.wb_source_rows),1)
+                app.wb_filter_dialog('bank','Reference');form=next(w for w in app.wb_window.winfo_children() if w.winfo_class()=='Toplevel')
+                import tkinter.ttk as ttk
+                entry=next(x for x in form.winfo_children() if isinstance(x,ttk.Entry));entry.insert(0,'missing');helper.press(form,'Apply filter');self.assertFalse(app.wb_bank_rows);self.assertEqual(len(app.wb_source_rows),1)
+                app.wb_reset_filters('bank');app.wb_channels['bank'].set('UPI');bid=next(iter(app.wb_bank_rows));sid=next(iter(app.wb_source_rows));app.wb_toggle('bank',bid);app.wb_toggle('source',sid);before=len(app.state['vouchers']);app.wb_use_charge();self.assertEqual(app.wb_fees.get(),'1.00');self.assertEqual(len(app.state['vouchers']),before);self.assertIn('DIFFERENCE ₹0.00',app.wb_totals.cget('text'))
+                app.wb_confirm.set(True);app.wb_reconcile();preview=helper.form(app);self.assertEqual(len(app.state['vouchers']),before)
+                app.wb_channels['source'].set('All')
+                with patch('riju.app.messagebox.showerror') as error:helper.press(preview,'Confirm reconcile')
+                self.assertTrue(error.called);self.assertEqual(len(app.state['vouchers']),before);preview.destroy()
+                app.wb_channels['source'].set('UPI');app.wb_toggle('bank',bid);app.wb_toggle('source',sid);app.wb_use_charge();app.wb_confirm.set(True);app.wb_reconcile();preview=helper.form(app)
+                with patch('riju.bank_workbench_ui.messagebox.showinfo'):helper.press(preview,'Confirm reconcile')
+                self.assertEqual(core.balances(app.state,'2026-04-30')['4560'],100);self.assertFalse(app.wb_bank_checks);self.assertEqual(app.wb_fees.get(),'0');self.assertFalse(app.wb_confirm.get())
             finally:app.destroy()

@@ -9,3 +9,10 @@
 Local regression suite561 passes with one Windows-only skip, including checkbox/keyboard/clear/upload/template/preview/commit and stale preview, two-bank mixed-channel fees, many-to-many AP, pending source protection, original-date conflict, undo/persistence and fifty receipts in one source batch. Packaged executable self-test exercises readonly source upload, receipt/settlement/match and payment templates. Native result recorded in BUILD_TRACKER.md. Client banks/reports are not committed; public templates are blank. No main merge/release/new encryption or actual client posting.
 
 Standalone workspace regression: launch from navigation and banking button; reopening lifts the same window; close/reopen and refresh must not touch destroyed widgets. Import a statement for a second bank in the workspace and confirm the main bank selector is unchanged; navigate to Chart of accounts while the workspace stays open, refresh, then close without changing the root page. Full existing checkbox/source/journal workflow must still pass.
+
+
+## Header filters and charge differences (0.36.1)
+
+Filter bank UPI and source UPI independently. Click Date/Reference/Amount/Party/Unit/Status headers, apply contains filters and clear each panel independently. Filter changes must clear checks, fees and accounting confirmation. Bank narration channels are search hints; source clearing method is authoritative.
+
+Select UPI gross100 / bank deposit99, choose Use difference as bank charges (1), inspect the preview and confirm. Verify Dr4560=1 and clearing fully settled. Repeat invoice payment100 / bank withdrawal101: vendor receives100 and Dr4560=1, with no duplicate payment. Existing gross bank receipt100 / deposit99 must match through a charge adjustment without reposting revenue. Smaller withdrawals/larger deposits must not create negative charges. Mismatched fees fail atomically. Undo a charge match: charge reverses, original AP payment remains. Existing multi-deposit clearing-fee behaviour remains.
