@@ -72,7 +72,7 @@ class BankWorkbenchUI:
         self.wb_totals=ttk.Label(parent,text='',padding=7);self.wb_totals.pack(anchor='w')
         parent.bind('<Configure>',lambda e:[label.configure(wraplength=max(260,e.width-24)) for label in (self.wb_info,self.wb_detail,self.wb_totals)])
         charges=ttk.Frame(parent);charges.pack(fill='x')
-        self.wb_fees=self.field(charges,'Reviewed bank charges INR','0',width=14);self.wb_fees.trace_add('write',lambda *args:self.wb_update_totals())
+        ttk.Label(charges,text='Reviewed bank charges INR').pack(side='left',padx=(0,5));self.wb_fees=tk.StringVar(value='0');ttk.Entry(charges,textvariable=self.wb_fees,width=14).pack(side='left',padx=(0,8));self.wb_fees.trace_add('write',lambda *args:self.wb_update_totals())
         self.wb_charge_button=self.button(charges,'Use difference as bank charges',self.wb_use_charge)
         ttk.Label(charges,text='Dr 4560 Bank charges; journal shown before confirmation.').pack(side='left',padx=8)
         panes=ttk.Panedwindow(parent,orient='horizontal',width=850);panes.pack(fill='both',expand=True)
@@ -83,10 +83,10 @@ class BankWorkbenchUI:
         self.wb_source_table=self.table(('Check','Date','Remaining INR','Party / invoice / channel','Unit','Receipt / transfer','Action / status'),[],parent=right,height=8)
         for side,frame,table in (('bank',left,self.wb_bank_table),('source',right,self.wb_source_table)):
             header=ttk.Frame(frame);header.pack(fill='x',before=table.master)
-            self.wb_channels[side]=self.field(header,'Channel filter','All',['All','UPI','Card','Cash','Bank transfer','Other'],width=16)
+            ttk.Label(header,text='Channel').pack(side='left',padx=(0,5));self.wb_channels[side]=tk.StringVar(value='All');ttk.Combobox(header,textvariable=self.wb_channels[side],values=['All','UPI','Card','Cash','Bank transfer','Other'],state='readonly',width=13).pack(side='left',padx=(0,8))
             self.wb_channels[side].trace_add('write',lambda *args:self.wb_refresh())
             self.button(header,'Clear filters',lambda side=side:self.wb_reset_filters(side))
-            ttk.Label(header,text='Click a column header to filter.').pack(side='left',padx=5)
+            ttk.Label(header,text='Click header to filter.').pack(side='left',padx=5)
             for col in table['columns']:
                 if col!='Check':table.heading(col,command=lambda side=side,col=col:self.wb_filter_dialog(side,col))
         self.wb_check_images=[]
@@ -137,7 +137,7 @@ class BankWorkbenchUI:
             if not self.wb_accept('source',x,(x['date'],core.rupees(x['amount']),x['label'],x['branch'],x['reference'],status)):continue
             self.wb_source_rows[x['id']]=x
             self.wb_source_table.insert('','end',iid=x['id'],image=self.wb_check_images[0],tags=('BLOCKED',) if x['status']=='BLOCKED' else ('new',) if x['kind'] in ('new_sale','new_payment') else (),values=('☐',x['date'],core.rupees(x['amount']),x['label'],x['branch'],x['reference'],status))
-        self.wb_info.configure(text=str(len(self.wb_bank_rows))+' unmatched bank transaction(s) | '+str(len(self.wb_source_rows))+' visible outstanding source transaction(s). Negative = bank withdrawal/payment; positive = deposit/collection. Amber needs an accounting entry; red is blocked. A full posted bank transfer may cover several invoices.')
+        self.wb_info.configure(text=str(len(self.wb_bank_rows))+' bank row(s) | '+str(len(self.wb_source_rows))+' source row(s). Deposits +; payments −. Amber: new journal. Red: blocked.')
         for side,table in (('bank',self.wb_bank_table),('source',self.wb_source_table)):
             for col in table['columns']:
                 if col!='Check':table.heading(col,text=col+(' ▼ '+self.wb_filters[side][col] if self.wb_filters[side].get(col) else ' ▾'))
