@@ -6,11 +6,59 @@ from tkinter import ttk,filedialog,messagebox
 from . import bank_workbench as work,reconciliation as bank,core,ledgers,receipt_import
 
 class BankWorkbenchUI:
+    def bank_side_by_side(self):
+        if getattr(self,'wb_window',None) is not None and self.wb_window.winfo_exists():self.open_bank_workbench();return
+        if getattr(self,'current','')!='Bank reconciliation':self.show('Bank reconciliation')
+        self.open_bank_workbench()
+    def open_bank_workbench(self):
+        previous=getattr(self,'wb_window',None)
+        if previous is not None and previous.winfo_exists():previous.lift();previous.focus_set();return
+        win=tk.Toplevel(self);self.wb_window=win;win.title('Yathartha — Reconcile side by side');win.transient(self)
+        sw,sh=win.winfo_screenwidth(),win.winfo_screenheight();width,height=int(sw*.96),int(sh*.94)
+        win.geometry(f'{width}x{height}+{max(0,(sw-width)//2)}+{max(0,(sh-height)//2)}');win.minsize(int(sw*.88),int(sh*.88))
+        try:win.state('zoomed')
+        except tk.TclError:pass
+        outer=ttk.Frame(win,padding=10);outer.pack(fill='both',expand=True)
+        bar=ttk.Frame(outer);bar.pack(fill='x',pady=(0,5))
+        choices=[a['code']+' · '+a['name'] for a in bank.bank_accounts(self.state)];selected=self._bank_account() if hasattr(self,'brs_bank') else '1010'
+        self.wb_bank_account=tk.StringVar(value=next((c for c in choices if c.split(' · ')[0]==selected),choices[0]))
+        ttk.Label(bar,text='Bank').pack(side='left');bankpick=ttk.Combobox(bar,textvariable=self.wb_bank_account,values=choices,state='readonly',width=25);bankpick.pack(side='left',padx=(5,12));bankpick.bind('<<ComboboxSelected>>',lambda e:self.wb_reload_context())
+        ttk.Label(bar,text='New statement scope').pack(side='left');self.wb_scope=tk.StringVar(value=self.brs_scope.get() if hasattr(self,'brs_scope') else 'All operating units');ttk.Combobox(bar,textvariable=self.wb_scope,values=['All operating units',*self.branches.values()],state='readonly',width=21).pack(side='left',padx=(5,12))
+        ttk.Label(bar,text='Statement').pack(side='left');self.wb_statement=tk.StringVar();self.wb_statement_combo=ttk.Combobox(bar,textvariable=self.wb_statement,state='readonly',width=44);self.wb_statement_combo.pack(side='left',padx=5)
+        self.wb_selected_statement=getattr(self,'brs_selected_statement',None);self.wb_statements={};self.button(bar,'Load',self.wb_load_statement);self.button(bar,'Close',self.close_bank_workbench)
+        self.wb_reload_context(refresh=False);self.build_bank_workbench(outer);win.protocol('WM_DELETE_WINDOW',self.close_bank_workbench)
+    def close_bank_workbench(self):
+        win=getattr(self,'wb_window',None)
+        if win is None or not win.winfo_exists():return
+        account=self.wb_bank_account.get();sid=self.wb_statement_id();win.destroy();self.wb_window=None
+        self.brs_selected_statement=sid
+        if hasattr(self,'brs_bank'):self.brs_bank.set(account)
+        if getattr(self,'current','')=='Bank reconciliation':self.show('Bank reconciliation')
+    def wb_account(self):return self.wb_bank_account.get().split(' · ')[0]
+    def wb_statement_id(self):return self.wb_statements.get(self.wb_statement.get())
+    def wb_reload_context(self,refresh=True):
+        account=self.wb_account();selected=getattr(self,'wb_selected_statement',None)
+        self.wb_statements={'All imported transactions':None,**{s['id'][:8]+' | '+s['start']+' to '+s['through']+' | '+s['filename']+' ['+s['status']+']':s['id'] for s in reversed(self.state.get('bank_statements',[])) if s['bank_account']==account}}
+        self.wb_statement_combo.configure(values=list(self.wb_statements));self.wb_statement.set(next((label for label,key in self.wb_statements.items() if key==selected),'All imported transactions'))
+        if refresh:self.wb_refresh()
+    def wb_load_statement(self):
+        self.wb_selected_statement=self.wb_statement_id();self.wb_reload_context()
+    def wb_import_bank(self):
+        scope='ALL' if self.wb_scope.get()=='All operating units' else self.branch_names[self.wb_scope.get()]
+        def loaded(imported):self.wb_selected_statement=imported['id'];self.wb_reload_context()
+        self.import_bank_statement(account=self.wb_account(),scope=scope,after_import=loaded,parent=self.wb_window)
+    def wb_after_change(self):
+        if getattr(self,'current','')=='Bank reconciliation' and hasattr(self,'brs_bank_table') and self.brs_bank_table.winfo_exists():self.refresh_bank_tables()
+        else:self.wb_refresh()
+    def wb_options(self):
+        if self.wb_advanced.winfo_manager():self.wb_advanced.pack_forget()
+        else:self.wb_advanced.pack(fill='x',pady=5)
+
     def build_bank_workbench(self,parent):
         self.wb_bank_checks=set();self.wb_source_checks=set();self.wb_bank_rows={};self.wb_source_rows={}
         bar=ttk.Frame(parent);bar.pack(fill='x')
-        self.button(bar,'Upload bank statement',self.import_bank_statement,True);self.button(bar,'Upload sales report',lambda:self.wb_upload('Sales receipts'));self.button(bar,'Upload invoice payments',lambda:self.wb_upload('Invoice payments'))
-        self.button(bar,'Automatically reconcile selected',self.wb_reconcile,True)
+        self.button(bar,'Upload bank statement',self.wb_import_bank,True);self.button(bar,'Upload sales report',lambda:self.wb_upload('Sales receipts'));self.button(bar,'Upload invoice payments',lambda:self.wb_upload('Invoice payments'))
+        self.button(bar,'Automatically reconcile selected',self.wb_reconcile,True);self.button(bar,'Options / templates',self.wb_options)
         bar=ttk.Frame(parent);bar.pack(fill='x')
         prior=getattr(self,'wb_prior_kind','Sales receipts');self.wb_kind=self.field(bar,'Compare bank against',prior,['Sales receipts','Invoice payments','All book movements'],width=21)
         self.wb_report=self.field(bar,'Source report','All posted sources',['All posted sources'],width=33);self.wb_document_choices={};self.wb_report_combo=bar.winfo_children()[-1].winfo_children()[-1]
@@ -42,10 +90,11 @@ class BankWorkbenchUI:
         self.wb_bank_table.bind('<ButtonRelease-1>',lambda e:self.wb_click(e,'bank'));self.wb_source_table.bind('<ButtonRelease-1>',lambda e:self.wb_click(e,'source'))
         self.wb_bank_table.bind('<space>',lambda e:self.wb_space('bank'));self.wb_source_table.bind('<space>',lambda e:self.wb_space('source'))
         self.wb_source_table.bind('<<TreeviewSelect>>',self.wb_source_detail)
-        bar=ttk.Frame(parent);bar.pack(fill='x');self.wb_fees=self.field(bar,'Reviewed settlement fees INR','0',width=14);self.wb_basis=self.field(bar,'Reconciliation / source review basis','Reviewed selected bank/source dates, references and amounts.',width=58)
+        self.wb_advanced=ttk.Frame(parent)
+        bar=ttk.Frame(self.wb_advanced);bar.pack(fill='x');self.wb_fees=self.field(bar,'Reviewed settlement fees INR','0',width=14);self.wb_basis=self.field(bar,'Reconciliation / source review basis','Reviewed selected bank/source dates, references and amounts.',width=58)
         self.wb_fees.trace_add('write',lambda *args:self.wb_update_totals())
-        self.wb_allow_dates=tk.BooleanVar(value=False);ttk.Checkbutton(parent,text='Allow a reviewed date/reference timing difference (correct mistaken payment dates in AP first)',variable=self.wb_allow_dates).pack(anchor='w')
-        bar=ttk.Frame(parent);bar.pack(fill='x');self.button(bar,'Sales Excel template',lambda:self.wb_template('sales','xlsx'));self.button(bar,'Invoice payment Excel template',lambda:self.wb_template('payments','xlsx'));self.button(bar,'Invoice payment CSV template',lambda:self.wb_template('payments','csv'));self.button(bar,'Sales CSV template',lambda:self.wb_template('sales','csv'))
+        self.wb_allow_dates=tk.BooleanVar(value=False);ttk.Checkbutton(self.wb_advanced,text='Allow a reviewed date/reference timing difference (correct mistaken payment dates in AP first)',variable=self.wb_allow_dates).pack(anchor='w')
+        bar=ttk.Frame(self.wb_advanced);bar.pack(fill='x');self.button(bar,'Sales Excel template',lambda:self.wb_template('sales','xlsx'));self.button(bar,'Invoice payment Excel template',lambda:self.wb_template('payments','xlsx'));self.button(bar,'Invoice payment CSV template',lambda:self.wb_template('payments','csv'));self.button(bar,'Sales CSV template',lambda:self.wb_template('sales','csv'))
         self.wb_change_kind()
     def wb_change_kind(self):
         self.wb_prior_kind=self.wb_kind.get();docs=work.documents(self.state,self.wb_kind.get());self.wb_document_choices={'All posted sources':None,**{d['id'][:8]+' | '+d['filename']:d['id'] for d in docs}}
@@ -59,16 +108,16 @@ class BankWorkbenchUI:
             for item in table.get_children():table.set(item,'Check','☐');table.item(item,image=self.wb_check_images[0])
         self.wb_update_totals()
     def wb_refresh(self):
-        if not hasattr(self,'wb_bank_table'):return
+        if not hasattr(self,'wb_bank_table') or not self.wb_bank_table.winfo_exists():return
         self.wb_bank_checks.clear();self.wb_source_checks.clear();self.wb_bank_table.delete(*self.wb_bank_table.get_children());self.wb_source_table.delete(*self.wb_source_table.get_children());self.wb_bank_rows={};self.wb_source_rows={}
-        sid=self._statement_id();s=bank.statement(self.state,sid) if sid else None;scope=s['scope'] if s else 'ALL';rows,_=bank.outstanding(self.state,self._bank_account(),scope)
+        sid=self.wb_statement_id();s=bank.statement(self.state,sid) if sid else None;scope=s['scope'] if s else 'ALL';rows,_=bank.outstanding(self.state,self.wb_account(),scope)
         term=self.wb_find.get().strip().casefold().replace(',','')
         for b in rows:
             if term and term not in (' '.join([b['date'],b['narration'],b['reference'],core.rupees(b['remaining']),str(abs(b['remaining']))])).casefold().replace(',',''):continue
             if s and b['id'] not in s['row_ids']:continue
             self.wb_bank_rows[b['id']]=b;self.wb_bank_table.insert('','end',iid=b['id'],image=self.wb_check_images[0],values=('☐',b['date'],core.rupees(b['remaining']),b['narration'],b['reference'],'Partial' if b['remaining']!=b['amount'] else 'Unmatched'))
         doc=self.wb_document_choices.get(self.wb_report.get());self.wb_prior_doc=doc
-        rows=work.sources(self.state,self._bank_account(),scope,self.wb_kind.get(),doc,s['through'] if s else None)
+        rows=work.sources(self.state,self.wb_account(),scope,self.wb_kind.get(),doc,s['through'] if s else None)
         for x in rows:
             if term and term not in (' '.join([x['date'],x['reference'],x['label'],x['branch'],core.rupees(x['amount']),str(abs(x['amount']))])).casefold().replace(',',''):continue
             self.wb_source_rows[x['id']]=x;status=x['error'] if x['status']=='BLOCKED' else x.get('status_override','Posted bank movement' if x['kind']=='book' else 'Unsettled receipt')
@@ -98,17 +147,17 @@ class BankWorkbenchUI:
         except ValueError:fees=0;label='Enter valid fees'
         self.wb_totals.configure(text='BANK selected '+str(len(self.wb_bank_checks))+' = '+core.rupees(bt)+' | SOURCE selected '+str(len(self.wb_source_checks))+' = '+core.rupees(st)+' | Fees '+core.rupees(fees)+' | DIFFERENCE '+label)
     def wb_upload(self,kind):
-        path=filedialog.askopenfilename(parent=self,title='Upload '+kind,filetypes=[('Source CSV / Excel','*.csv *.xlsx')])
+        path=filedialog.askopenfilename(parent=self.wb_window,title='Upload '+kind,filetypes=[('Source CSV / Excel','*.csv *.xlsx')])
         if not path:return
-        doc=self.commit(lambda s:work.upload(s,Path(path).read_bytes(),Path(path).name,kind));self.wb_prior_doc=doc['id'];self.wb_kind.set(kind);self.wb_change_kind();messagebox.showinfo('Source report loaded',str(len(doc['rows']))+' source rows loaded for review. Upload created no sales/payment journal and no bank match. Select corresponding bank/source rows and review reconciliation.',parent=self)
+        doc=self.commit(lambda s:work.upload(s,Path(path).read_bytes(),Path(path).name,kind));self.wb_prior_doc=doc['id'];self.wb_kind.set(kind);self.wb_change_kind();messagebox.showinfo('Source report loaded',str(len(doc['rows']))+' source rows loaded for review. Upload created no sales/payment journal and no bank match. Select corresponding bank/source rows and review reconciliation.',parent=self.wb_window)
     def wb_template(self,kind,ext):
-        filename='Yathartha-Invoice-Payments-Template' if kind=='payments' else 'RijuBooks-Sales-Receipts-Template';path=filedialog.asksaveasfilename(parent=self,initialfile=filename+'.'+ext,defaultextension='.'+ext,filetypes=[(ext.upper(),'*.'+ext)])
+        filename='Yathartha-Invoice-Payments-Template' if kind=='payments' else 'RijuBooks-Sales-Receipts-Template';path=filedialog.asksaveasfilename(parent=self.wb_window,initialfile=filename+'.'+ext,defaultextension='.'+ext,filetypes=[(ext.upper(),'*.'+ext)])
         if path:(work.payment_template if kind=='payments' else receipt_import.template)(path)
     def wb_reconcile(self):
         if not self.wb_confirm.get():raise ValueError('Confirm bank/source/accounting review before reconciliation.')
-        args=(self._bank_account(),self._statement_id(),self.wb_kind.get(),self.wb_document_choices.get(self.wb_report.get()),list(self.wb_bank_checks),list(self.wb_source_checks),self.wb_basis.get().strip(),bank.amount(self.wb_fees.get()),self.wb_allow_dates.get())
+        args=(self.wb_account(),self.wb_statement_id(),self.wb_kind.get(),self.wb_document_choices.get(self.wb_report.get()),list(self.wb_bank_checks),list(self.wb_source_checks),self.wb_basis.get().strip(),bank.amount(self.wb_fees.get()),self.wb_allow_dates.get())
         before=copy.deepcopy(self.state);candidate=copy.deepcopy(before);result=work.reconcile(candidate,*args)
-        win=tk.Toplevel(self);win.title('Confirm selected bank reconciliation');win.geometry('1080x680');win.transient(self)
+        win=tk.Toplevel(self);win.title('Confirm selected bank reconciliation');win.geometry('1080x680');win.transient(self.wb_window)
         ttk.Label(win,text='Bank '+result['bank_total_INR']+' | Source '+result['source_total_INR']+' | Fees '+result['reviewed_fees_INR']+' | Difference 0.00\n'+str(result['bank_transactions'])+' bank row(s), '+str(result['source_transactions'])+' source row(s), '+str(result['new_journals'])+' new journal(s). Confirm only after reviewing the entries below.',wraplength=1020,padding=10).pack(anchor='w')
         names={a['code']:a['name'] for a in candidate['accounts']};vouchers=candidate['vouchers'][len(before['vouchers']):]
         self.table(('Date','Voucher','Unit','Account','Ledger name','Debit INR','Credit INR'),[(v['date'],v['id'],l['branch'],l['account'],names.get(l['account'],''),core.rupees(l['debit']),core.rupees(l['credit'])) for v in vouchers for l in v['lines']],parent=win,height=12)
@@ -116,5 +165,5 @@ class BankWorkbenchUI:
         def approve():
             if self.state!=before:raise ValueError('Books changed after preview. Refresh and review the reconciliation again.')
             def save(s):s.clear();s.update(copy.deepcopy(candidate))
-            self.commit(save);win.destroy();self.refresh_bank_tables();messagebox.showinfo('Reconciliation completed',str(result['bank_transactions'])+' selected bank transaction(s) fully reconciled. Difference 0.00.',parent=self)
+            self.commit(save);win.destroy();self.wb_after_change();messagebox.showinfo('Reconciliation completed',str(result['bank_transactions'])+' selected bank transaction(s) fully reconciled. Difference 0.00.',parent=self)
         self.button(win,'Confirm reconcile',approve,True)

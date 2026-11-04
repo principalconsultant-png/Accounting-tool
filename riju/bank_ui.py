@@ -10,7 +10,7 @@ from . import reconciliation as r,brs_exports,ledgers,foundation,activity,bank_t
 
 class BankUI:
     def banking(self):
-        self.note('Upload bank and source reports, tick corresponding rows side by side, check totals and reconcile. Existing matches, adjustments and BRS remain on the advanced tabs.')
+        self.note('Open Reconcile side by side for a large comparison workspace. Bank transactions, adjustments, match history and BRS remain available below.')
         accounts=r.bank_accounts(self.state)
         choices=[a['code']+' · '+a['name'] for a in accounts]
         prior=self.brs_bank.get().split(' · ')[0] if hasattr(self,'brs_bank') else '1010'
@@ -19,6 +19,7 @@ class BankUI:
         self.button(top,'Load bank',lambda:self.show('Bank reconciliation'),True)
         self.button(top,'Import statement',self.import_bank_statement)
         self.button(top,'CSV template',self.bank_template)
+        self.button(top,'Reconcile side by side',self.open_bank_workbench,True)
         account=self.brs_bank.get().split(' · ')[0]
         statements=[s for s in self.state.get('bank_statements',[]) if s['bank_account']==account]
         names={'All imported transactions':None,**{s['id'][:8]+' · '+s['start']+' to '+s['through']+' · '+s['filename']+' ['+s['status']+']':s['id'] for s in reversed(statements)}}
@@ -28,7 +29,7 @@ class BankUI:
         self.brs_only_open=tk.BooleanVar(value=True);ttk.Checkbutton(row,text='Show unmatched / partial only',variable=self.brs_only_open,command=self.refresh_bank_tables).pack(side='left',padx=8)
         tabs=ttk.Notebook(self.content,width=850);tabs.pack(fill='both',expand=True);self.brs_tabs=tabs
         self.brs_frames={}
-        for key,label in [('workbench','Reconcile side by side'),('bank','Bank transactions'),('books','Book movements'),('matches','Match history'),('report','BRS / handover'),('calendar','Business calendar')]:
+        for key,label in [('bank','Bank transactions'),('books','Book movements'),('matches','Match history'),('report','BRS / handover'),('calendar','Business calendar')]:
             f=ttk.Frame(tabs,padding=10);tabs.add(f,text=label);self.brs_frames[key]=f
         self.brs_bank_table=self.table(('ID','Date','Value date','Narration','Reference','Bank debit','Bank credit','Unmatched INR','Status'),[],parent=self.brs_frames['bank'],height=9);self.brs_bank_table.configure(selectmode='extended')
         actions=ttk.Frame(self.brs_frames['bank']);actions.pack(fill='x',pady=8)
@@ -53,7 +54,6 @@ class BankUI:
         self.brs_report_table=self.table(('Reconciliation line','INR'),[],parent=self.brs_frames['report'],height=8)
         self.brs_report_table.column('Reconciliation line',width=650)
         self._calendar_tab(self.brs_frames['calendar'])
-        self.build_bank_workbench(self.brs_frames['workbench'])
         self.refresh_bank_tables()
 
     def reload_bank_statement(self):
@@ -104,11 +104,11 @@ class BankUI:
         path=filedialog.asksaveasfilename(initialfile='bank-statement-template.csv',defaultextension='.csv',parent=self)
         if path:Path(path).write_text('date,value_date,narration,reference,debit,credit,balance\n2026-04-02,2026-04-02,Patient deposit,UTR-TEST,0,1000,1000\n2026-04-03,2026-04-03,Bank charges,FEE-TEST,50,0,950\n',encoding='utf-8')
 
-    def import_bank_statement(self):
-        path=filedialog.askopenfilename(filetypes=[('Bank statements','*.csv *.xlsx *.ofx'),('CSV','*.csv'),('Excel','*.xlsx'),('OFX','*.ofx')],parent=self)
+    def import_bank_statement(self,account=None,scope=None,after_import=None,parent=None):
+        path=filedialog.askopenfilename(filetypes=[('Bank statements','*.csv *.xlsx *.ofx'),('CSV','*.csv'),('Excel','*.xlsx'),('OFX','*.ofx')],parent=parent or self)
         if not path:return
-        raw=Path(path).read_bytes();account=self._bank_account();scope='ALL' if self.brs_scope.get()=='All operating units' else self.branch_names[self.brs_scope.get()]
-        dialog=tk.Toplevel(self);dialog.title('Review bank statement import');dialog.geometry(f'{min(1020,self.winfo_screenwidth()-80)}x{min(760,self.winfo_screenheight()-100)}');dialog.transient(self);dialog.grab_set()
+        raw=Path(path).read_bytes();account=account or self._bank_account();scope=scope if scope is not None else ('ALL' if self.brs_scope.get()=='All operating units' else self.branch_names[self.brs_scope.get()])
+        dialog=tk.Toplevel(parent or self);dialog.title('Review bank statement import');dialog.geometry(f'{min(1020,self.winfo_screenwidth()-80)}x{min(760,self.winfo_screenheight()-100)}');dialog.transient(parent or self);dialog.grab_set()
         canvas=tk.Canvas(dialog,highlightthickness=0);vertical=ttk.Scrollbar(dialog,orient='vertical',command=canvas.yview);horizontal=ttk.Scrollbar(dialog,orient='horizontal',command=canvas.xview)
         canvas.configure(yscrollcommand=vertical.set,xscrollcommand=horizontal.set)
         vertical.pack(side='right',fill='y');horizontal.pack(side='bottom',fill='x');canvas.pack(fill='both',expand=True)
@@ -179,7 +179,9 @@ class BankUI:
             rows={b['id']:b for b in r.bank_rows(temp,account)}
             self.table(('Date','Narration','Reference','Debit','Credit','Running balance'),[(rows[k]['date'],rows[k]['narration'],rows[k]['reference'],ledgers.number(rows[k]['debit'],True),ledgers.number(rows[k]['credit'],True),'' if rows[k]['balance'] is None else ledgers.number(rows[k]['balance'],True)) for k in s['row_ids']],parent=preview,height=12)
             def approve():
-                imported=self.commit(lambda state:r.import_statement(state,raw,**args));self.brs_selected_statement=imported['id'];preview.destroy();dialog.destroy();self.show('Bank reconciliation')
+                imported=self.commit(lambda state:r.import_statement(state,raw,**args));preview.destroy();dialog.destroy()
+                if after_import:after_import(imported)
+                else:self.brs_selected_statement=imported['id'];self.show('Bank reconciliation')
             self.button(preview,'Approve statement import',approve,True)
         self.button(f,'Validate & preview rows',review,True)
 

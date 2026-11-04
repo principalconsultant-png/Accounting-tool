@@ -1,6 +1,6 @@
 # Yathartha user guide and receipt templates
 
-Current version: 0.35.0-dev. Download Yathartha-0.35.0-Guide-and-Templates.zip for the updated PDF, editable source, blank templates and verified worked-example source/reports.
+Current version: 0.35.1-dev. Download Yathartha-0.35.1-Guide-and-Templates.zip for the updated PDF, editable source, blank templates and verified worked-example source/reports.
 
 The guide explains calendar controls, the visible editable Vendor master, rejecting duplicates before confirming/approving valid receipts, and named journal previews. Its complete daily-sales-to-financial-reports walkthrough and practice files are included. Examples are TRAINING ONLY, not live transactions.
 
@@ -21,3 +21,5 @@ Vendor master bulk upload templates: Yathartha-Vendor-Master-Template.xlsx / .cs
 Petty cash templates: Yathartha-Petty-Cash-Template.xlsx / .csv. Chapter30 covers single cash transactions, separate funding, original category/date report mapping, source review and ledger/report effects. Public templates are blank; original client cash reports are not included.
 
 Rebuilt banking workbench: Yathartha-Invoice-Payments-Template.xlsx / .csv contain the nine actual-payment source fields. Sales upload uses the existing Sales-Receipts template. Chapter31 covers side-by-side checkboxes, totals, readonly source reports and atomic reconciliation previews. No client source documents are included.
+
+Reconcile side by side now opens as a separate large window under Bank reconciliation. It has independent bank/statement selectors and Options / templates; guide Chapter31 reflects the new screen.

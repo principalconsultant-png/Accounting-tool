@@ -100,7 +100,7 @@ class BankWorkbenchDesktopTests(unittest.TestCase):
             try:
                 core.post(app.state,'2026-04-01','Opening bank',pair('1010','3000',100000),opening=True)
                 st=bank.import_statement(app.state,b'date,narration,reference,debit,credit,balance\n2026-04-03,UPI,B1,0,100,1100\n','bank.csv','1010','ALL','2026-04-01','2026-04-30','1000','1100');app.brs_selected_statement=st['id'];app.show('Bank reconciliation')
-                self.assertEqual(app.brs_tabs.tab(app.brs_tabs.select(),'text'),'Reconcile side by side');self.assertTrue(app.wb_bank_table.winfo_exists());app.update();self.assertGreater(app.wb_bank_table.master.master.winfo_width(),200);self.assertGreater(app.wb_source_table.master.master.winfo_width(),200);path=root/'sales.csv';path.write_bytes(salesraw([salesrow(receipt_date='2026-04-02',receipt_no='GUI-SALE',consultation='100',cash='',upi='100',total='100')]))
+                self.assertEqual(app.brs_tabs.tab(app.brs_tabs.select(),'text'),'Bank transactions');self.assertNotIn('workbench',app.brs_frames);app.open_bank_workbench();self.assertTrue(app.wb_bank_table.winfo_exists());app.update();self.assertGreater(app.wb_bank_table.master.master.winfo_width(),200);self.assertGreater(app.wb_source_table.master.master.winfo_width(),200);path=root/'sales.csv';path.write_bytes(salesraw([salesrow(receipt_date='2026-04-02',receipt_no='GUI-SALE',consultation='100',cash='',upi='100',total='100')]))
                 with patch('riju.bank_workbench_ui.filedialog.askopenfilename',return_value=str(path)),patch('riju.bank_workbench_ui.messagebox.showinfo'):app.wb_upload('Sales receipts')
                 app.update();self.assertEqual(len(app.wb_source_rows),1);bankid=next(iter(app.wb_bank_rows));sourceid=next(iter(app.wb_source_rows));app.wb_toggle('bank',bankid);app.wb_toggle('source',sourceid);self.assertEqual(app.wb_bank_table.set(bankid,'Check'),'☑');self.assertIn('DIFFERENCE ₹0.00',app.wb_totals.cget('text'));app.wb_confirm.set(True);app.wb_reconcile();app.update();preview=helper.form(app);self.assertEqual(len(app.state['vouchers']),1)
                 with patch('riju.bank_workbench_ui.messagebox.showinfo'):helper.press(preview,'Confirm reconcile')
@@ -115,7 +115,7 @@ class BankWorkbenchDesktopTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             root=Path(d);app=App(Vault(root/'book.json',demo=True))
             try:
-                core.post(app.state,'2026-04-03','Existing receipt',pair('1010','4000',10000),metadata={'type':'Receipt','reference':'B1'});st=bank.import_statement(app.state,b'date,narration,reference,debit,credit,balance\n2026-04-03,Receipt,B1,0,100,100\n','bank.csv','1010','ALL','2026-04-01','2026-04-30','0','100');app.brs_selected_statement=st['id'];app.show('Bank reconciliation');bid=next(iter(app.wb_bank_rows));key=next(iter(app.wb_source_rows));app.wb_bank_table.selection_set(bid);app.wb_space('bank');app.wb_source_table.selection_set(key);app.wb_space('source');app.wb_clear();self.assertFalse(app.wb_bank_checks);app.wb_toggle('bank',bid);app.wb_toggle('source',key)
+                core.post(app.state,'2026-04-03','Existing receipt',pair('1010','4000',10000),metadata={'type':'Receipt','reference':'B1'});st=bank.import_statement(app.state,b'date,narration,reference,debit,credit,balance\n2026-04-03,Receipt,B1,0,100,100\n','bank.csv','1010','ALL','2026-04-01','2026-04-30','0','100');app.brs_selected_statement=st['id'];app.show('Bank reconciliation');app.open_bank_workbench();app.update();bid=next(iter(app.wb_bank_rows));key=next(iter(app.wb_source_rows));app.wb_bank_table.selection_set(bid);app.wb_space('bank');app.wb_source_table.selection_set(key);app.wb_space('source');app.wb_clear();self.assertFalse(app.wb_bank_checks);app.wb_toggle('bank',bid);app.wb_toggle('source',key)
                 for kind in ('sales','payments'):
                     for ext in ('xlsx','csv'):
                         with patch('riju.bank_workbench_ui.filedialog.asksaveasfilename',return_value=str(root/(kind+'.'+ext))):app.wb_template(kind,ext)
@@ -123,4 +123,36 @@ class BankWorkbenchDesktopTests(unittest.TestCase):
                 app.wb_confirm.set(True);app.wb_reconcile();preview=helper.form(app);core.post(app.state,'2026-04-04','Changed books',pair('4590','1010',100))
                 with patch('riju.app.messagebox.showerror') as error:helper.press(preview,'Confirm reconcile')
                 self.assertTrue(error.called);self.assertFalse(app.state['matches']);preview.destroy()
+            finally:app.destroy()
+
+    def test_separate_navigation_window_large_area_reopen_and_close(self):
+        from riju.app import App
+        from riju.storage import Vault
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as d:
+            app=App(Vault(Path(d)/'book.json',demo=True))
+            try:
+                app.nav_buttons['Reconcile side by side'].invoke();app.update();win=app.wb_window
+                self.assertTrue(win.winfo_exists());self.assertEqual(app.current,'Bank reconciliation');self.assertNotIn('workbench',app.brs_frames)
+                self.assertGreaterEqual(win.winfo_width()*win.winfo_height(),.75*win.winfo_screenwidth()*win.winfo_screenheight())
+                self.assertGreater(app.wb_bank_table.winfo_height(),win.winfo_height()*.45);self.assertGreater(app.wb_source_table.master.master.winfo_width(),200)
+                self.assertFalse(app.wb_advanced.winfo_manager());app.wb_options();app.update();self.assertTrue(app.wb_advanced.winfo_manager());app.wb_options();app.open_bank_workbench();self.assertIs(app.wb_window,win)
+                app.close_bank_workbench();app.update();self.assertIsNone(app.wb_window);app.refresh_bank_tables();app.open_bank_workbench();app.update();self.assertTrue(app.wb_window.winfo_exists())
+            finally:app.destroy()
+    def test_standalone_bank_import_uses_own_context_and_survives_navigation(self):
+        from unittest.mock import patch
+        from riju.app import App
+        from riju.storage import Vault
+        from test_gui import TaxDepreciationDesktopTests
+        helper=TaxDepreciationDesktopTests()
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);app=App(Vault(root/'book.json',demo=True))
+            try:
+                foundation.save_account(app.state,'1005','Second synthetic bank','Asset','Cash and bank');app.show('Bank reconciliation');app.open_bank_workbench();app.update();app.wb_bank_account.set('1005 · Second synthetic bank');app.wb_scope.set('JP Nagar');app.wb_reload_context();self.assertEqual(app._bank_account(),'1010');self.assertEqual(app.wb_account(),'1005')
+                path=root/'bank.csv';path.write_bytes(b'date,narration,reference,debit,credit,balance\n2026-04-03,Second bank receipt,B1,0,100,100\n')
+                with patch('riju.bank_ui.filedialog.askopenfilename',return_value=str(path)):app.wb_import_bank()
+                form=helper.form(app)
+                for label,value in [('Statement from','2026-04-01'),('Through','2026-04-30'),('Bank opening INR (optional)','0'),('Bank closing INR (optional)','100')]:helper.fill(form,label,value)
+                helper.press(form,'Validate & preview rows');app.update();preview=helper.form(app);helper.press(preview,'Approve statement import');app.update();self.assertEqual(app.wb_account(),'1005');self.assertEqual(len(app.wb_bank_rows),1);self.assertEqual(bank.statement(app.state,app.wb_statement_id())['bank_account'],'1005');self.assertEqual(app._bank_account(),'1010')
+                app.show('Chart of accounts');app.update();app.wb_refresh();self.assertEqual(len(app.wb_bank_rows),1);app.close_bank_workbench();self.assertEqual(app.current,'Chart of accounts')
             finally:app.destroy()

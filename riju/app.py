@@ -117,6 +117,8 @@ class App(BankWorkbenchUI,PettyCashUI,ApBulkUI,ReceiptImportUI,ApUI,ChecksUI,Sta
         for name in self.pages:
             b=ttk.Button(nav,text=name,style='Nav.TButton',command=lambda n=name:self.show(n))
             b.pack(fill='x',pady=2);self.nav_buttons[name]=b
+            if name=='Bank reconciliation':
+                child=ttk.Button(nav,text='  Reconcile side by side',style='Nav.TButton',command=lambda:self.guarded(self.bank_side_by_side));child.pack(fill='x',pady=2);self.nav_buttons['Reconcile side by side']=child
         ttk.Label(nav,text='ONE ENTITY · BRANCH BOOKS\nOffline · No external AI calls',style='Sub.TLabel',wraplength=175).pack(side='bottom',pady=8)
         workspace=ttk.Frame(body);workspace.pack(side='left',fill='both',expand=True)
         self.page_canvas=tk.Canvas(workspace,bg=BG,highlightthickness=0)
