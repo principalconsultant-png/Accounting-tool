@@ -10,7 +10,7 @@ from . import reconciliation as r,brs_exports,ledgers,foundation,activity,bank_t
 
 class BankUI:
     def banking(self):
-        self.note('Reconcile the selected bank statement, including withdrawals and deposits. Shared-account statements cover all branches independently of the global report selector. Every match/adjustment needs review; closing a statement locks that bank period until explicitly reopened.')
+        self.note('Upload bank and source reports, tick corresponding rows side by side, check totals and reconcile. Existing matches, adjustments and BRS remain on the advanced tabs.')
         accounts=r.bank_accounts(self.state)
         choices=[a['code']+' · '+a['name'] for a in accounts]
         prior=self.brs_bank.get().split(' · ')[0] if hasattr(self,'brs_bank') else '1010'
@@ -26,9 +26,9 @@ class BankUI:
         self.brs_statement_names=names;self.brs_statement=self.field(row,'Statement / reporting period',next((k for k,v in names.items() if v==selected),'All imported transactions'),list(names),width=69)
         self.button(row,'Load statement',self.reload_bank_statement)
         self.brs_only_open=tk.BooleanVar(value=True);ttk.Checkbutton(row,text='Show unmatched / partial only',variable=self.brs_only_open,command=self.refresh_bank_tables).pack(side='left',padx=8)
-        tabs=ttk.Notebook(self.content);tabs.pack(fill='both',expand=True);self.brs_tabs=tabs
+        tabs=ttk.Notebook(self.content,width=850);tabs.pack(fill='both',expand=True);self.brs_tabs=tabs
         self.brs_frames={}
-        for key,label in [('bank','Bank transactions'),('books','Book movements'),('matches','Match history'),('report','BRS / handover'),('calendar','Business calendar')]:
+        for key,label in [('workbench','Reconcile side by side'),('bank','Bank transactions'),('books','Book movements'),('matches','Match history'),('report','BRS / handover'),('calendar','Business calendar')]:
             f=ttk.Frame(tabs,padding=10);tabs.add(f,text=label);self.brs_frames[key]=f
         self.brs_bank_table=self.table(('ID','Date','Value date','Narration','Reference','Bank debit','Bank credit','Unmatched INR','Status'),[],parent=self.brs_frames['bank'],height=9);self.brs_bank_table.configure(selectmode='extended')
         actions=ttk.Frame(self.brs_frames['bank']);actions.pack(fill='x',pady=8)
@@ -53,6 +53,7 @@ class BankUI:
         self.brs_report_table=self.table(('Reconciliation line','INR'),[],parent=self.brs_frames['report'],height=8)
         self.brs_report_table.column('Reconciliation line',width=650)
         self._calendar_tab(self.brs_frames['calendar'])
+        self.build_bank_workbench(self.brs_frames['workbench'])
         self.refresh_bank_tables()
 
     def reload_bank_statement(self):
@@ -90,6 +91,8 @@ class BankUI:
             self.brs_report_label.configure(text=label)
             for key,text in brs_exports.SUMMARY:self.brs_report_table.insert('','end',values=(text,'Not supplied' if report[key] is None else ledgers.number(report[key],True)))
         else:self.brs_report_label.configure(text='Select an imported statement with its bank-verified opening and closing balances to prepare a formal BRS. Legacy deposits remain available for matching on the first tabs.')
+
+        self.wb_refresh()
 
     def _selected_banks(self):return [self.brs_bank_data[i]['id'] for i in self.brs_bank_table.selection()]
     def _one_bank(self):

@@ -396,6 +396,15 @@ def run(output):
             for kind in ('xlsx','csv'):petty_cash.template(root/('petty-cash-template.'+kind))
             cashpack=petty_cash.register_pack(pettybook,'2026-09-01','2026-09-30');financial_reports.export_xlsx(cashpack,root/'petty-register.xlsx');financial_reports.export_pdf(cashpack,root/'petty-register.pdf')
             result['petty_cash_manual_bulk_passed']=True
+            from . import bank_workbench
+            reconbook=core.empty_state()
+            bankstatement=reconciliation.import_statement(reconbook,b'date,narration,reference,debit,credit,balance\n2026-04-03,Synthetic UPI,BW1,0,100,100\n','workbench-bank.csv','1010','ALL','2026-04-01','2026-04-30','0','100')
+            salescsv=io.StringIO();writer=csv.writer(salescsv);writer.writerow(receipt_import.HEADERS);salesrow=dict.fromkeys(receipt_import.HEADERS,'');salesrow.update(receipt_date='2026-04-02',branch='JP',receipt_no='PACK-WB-1',record_type='earned',tax_mode='no_separate_tax',consultation='100',upi='100',total='100');writer.writerow([salesrow[k] for k in receipt_import.HEADERS])
+            report=bank_workbench.upload(reconbook,salescsv.getvalue().encode(),'workbench-sales.csv','Sales receipts');choices=bank_workbench.sources(reconbook,'1010','ALL','Sales receipts',report['id'],'2026-04-30')
+            outcome=bank_workbench.reconcile(reconbook,'1010',bankstatement['id'],'Sales receipts',report['id'],bankstatement['row_ids'],[x['id'] for x in choices],'Reviewed packaged source and bank')
+            if outcome['new_journals']!=2 or reconciliation.outstanding(reconbook,'1010')[0]:raise ValueError('Packaged checkbox reconciliation engine mismatch')
+            for kind in ('xlsx','csv'):bank_workbench.payment_template(root/('invoice-payment-template.'+kind))
+            result['bank_side_by_side_reconciliation_passed']=True
 
 
             resetvault=Vault(root/'reset.riju');resetstate=core.empty_state();core.post(resetstate,'2026-04-01','Synthetic test entry to clear',[dict(account='1000',branch='JP',debit=10000,credit=0),dict(account='4000',branch='JP',debit=0,credit=10000)]);resetvault.save(resetstate)

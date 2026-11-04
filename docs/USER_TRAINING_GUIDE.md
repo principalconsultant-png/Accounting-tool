@@ -1,6 +1,6 @@
 # Yathartha — Bookkeeping Training and User Guide
 
-Development version 0.34.0-dev | Guide updated 3 November 2026 | Windows | INR
+Development version 0.35.0-dev | Guide updated 4 November 2026 | Windows | INR
 
 Audience: a new bookkeeper, an accountant reviewing the work, and the person delivering the books to the hospital. This guide explains both the workflow and the bookkeeping behind it. Use the matching development executable; screen names refer to that version. Dates shown in examples are practice dates, not instructions to post into live books.
 
@@ -20,7 +20,7 @@ Posting always requires review. Previewing, uploading, changing a schedule or ex
 
 1. Download the RijuBooks-Windows ZIP supplied for the matching build and extract all files. Do not run the application from inside the ZIP.
 2. Find Yathartha.exe, normally under dist in the extracted bundle. The application does not require the end user to install Python.
-3. Read packaged-selftest.json: version should be 0.34.0-dev and passed should be true. The included checksum file identifies the executable supplied by the build.
+3. Read packaged-selftest.json: version should be 0.35.0-dev and passed should be true. The included checksum file identifies the executable supplied by the build.
 4. Use a disposable training book first. Do not practise by adding sample invoices to the live hospital book. Your administrator can start a demo copy with `Yathartha.exe --demo --data training.json`; the JSON training file is not protected for live use.
 5. For normal Windows use, the default book is under `%LOCALAPPDATA%\RijuBooks\books.riju`. Keep the same Windows user/profile for that book.
 6. In Settings & backup choose the external backup folder. Confirm the device is connected and a backup is actually created.
@@ -593,3 +593,53 @@ Choose the operating unit explicitly, a stable report reference (for example PC-
 The source warning shows its opening, receipts, computed cash outflow and closing when literal source controls can be checked. These controls never create funding/opening entries. A negative physical-cash opening/closing means custody/funding or staff-paid items need investigation; no balancing figure is invented. Starting a new book requires reviewed opening balances through the normal setup, not a second opening journal from the monthly report. If Cash Received is patient cash already recorded in Sales receipt, do not enter a top-up. If staff personally paid an expense, review the genuine reimbursement/funding liability instead of treating unsupported negative physical cash as normal.
 
 Refresh the register for the correct dates/unit and export Excel/PDF. Expenses affect P&L; stock/advances remain assets; salary settlements reduce liabilities. All posted movements update Balance sheet/T form. Cash flow uses its reviewed cash/equivalent definition: a transfer from included bank to included cash nets to zero, while actual disbursements are classified by their genuine counterpart. Reconcile the cash custodian's records separately from bank reconciliation. Only real bank movements, such as a funding withdrawal, belong in bank matching.
+
+
+## 31. Bank reconciliation with side-by-side checkboxes
+
+Open **Bank reconciliation**. The first tab is now **Reconcile side by side**: bank transactions on the left and selected sales/invoice-payment sources on the right. Each row has a visible Tick checkbox. Click the box, or select a row and press Space, to toggle it. Selections on one side do not clear the other side. The bank total, source total, fees and difference update immediately. The primary Automatically reconcile selected button and review confirmation sit above the lists. The centre divider is draggable, each list has its own scrollbars, and the amount is beside the date. The older Bank transactions, Book movements, Match history, BRS / handover and Business calendar tabs remain available for advanced cases.
+
+### Upload and choose the source
+
+1. Select the correct INR bank ledger and new-statement scope. Shared statements use All operating units; exclusive statements use the genuine unit. Click **Upload bank statement**. CSV/XLSX/OFX parsing, saved layouts and verified opening/closing balances work as before. Original XLS requires conversion first. Check the exact dates: May2026 must end31May2026, not31May2027. Approve the bank import, then select its Statement / reporting period and Load statement.
+2. Click **Upload sales report** for the existing standard Sales receipt CSV/XLSX (Receipts worksheet). The template still contains receipt date/number, unit, party, earned service categories, payment splits and tax treatment. Select Sales receipts in Compare bank against. The file is loaded only for reconciliation review; uploading alone creates no receipt journal.
+3. Alternatively click **Upload invoice payments** and choose the new payment template (Payments worksheet). Include paid amounts only; invoices still unpaid are omitted. Select Invoice payments in Compare bank against. The report never creates a new vendor invoice: the invoice must already be registered in AP.
+4. Select the uploaded Source report and click **Load source / refresh**. All posted sources can be used without uploading the same records again. Exact file reupload reuses its saved source document. Source rows, errors, filename and SHA256 remain in local history. Source files do not become bank transactions, and uploading does not match/post anything.
+5. Find text / amount searches dates, names, descriptions, references and amounts on both sides; click Find. Applying filters/refresh clears checks, so review the new visible selection. Clear checks removes all ticks. Unmatched/partial bank transactions and outstanding source rows are shown; fully reconciled items disappear from this working list and remain in Match history.
+
+### Invoice payment report headers
+
+| Header | Required content |
+|---|---|
+| Vendor Name | Exact saved legal/source vendor name or its saved historical name. |
+| Invoice Number | Registered vendor invoice number, preserving leading zeroes as text. |
+| Invoice Date | Actual invoice date, identifying the correct invoice/fiscal year. |
+| Actual Payment Date | Historical transfer/payment date, not today's data-entry date. |
+| Operating Unit | Code matching the registered invoice, e.g. JP or KM. |
+| Bank Ledger | Actual selected INR bank account code, e.g.1010. |
+| Paid Amount INR | Positive amount paid for this invoice, including actual partial payments. |
+| Transfer Reference | Actual full bank UTR/cheque/transfer reference. |
+| Accounting Review Basis | Payment evidence/source review explanation; the screen also records a reviewed reconciliation basis. |
+
+Use true Excel dates or YYYY-MM-DD, literal values and the exact headings. Several invoices paid in a single transfer share payment date, bank and reference; select all related rows. A single invoice paid on separate dates uses separate rows and actual transfer references. Duplicate invoice/transfer identities within one file are blocked. Existing AP payment bank legs may represent several invoices and are displayed once with the related invoice references, preventing double selection of the same ledger movement.
+
+### Tick and reconcile
+
+Tick the bank transaction(s) on the left and corresponding receipt/payment transaction(s) on the right. One-to-one, one-to-many and many-to-many totals are supported. Work with deposits or withdrawals in one action; unrelated incoming/outgoing amounts must not be netted. Negative displayed values mean a withdrawal/payment; positive values mean a deposit/collection.
+
+For example, one bank withdrawal INR1000 settling invoices400+600 is checked against both unrecorded invoice-payment rows. An existing combined AP transfer is instead one bank-ledger source row, labelled with its included invoices. A bank deposit INR1500 can be checked against several UPI/card receipts totalling1500. Already-posted bank receipts match directly. Unsettled UPI/card/cash receipt parts create a clearing-to-bank settlement on each actual bank date, preserving individual source allocations. Cash/clearing availability, units and receipt dates are checked; receipts cannot fund a bank deposit before they exist.
+
+If the bank net is lower because of an actual documented settlement fee, enter the exact **Reviewed settlement fees INR**. Source gross minus fee must equal bank net. The fee posts to4560 Bank and payment processing charges, without guessed GST input. Do not use fees as a balancing plug. Fees on already-posted bank journals and tax-bearing fee splits use the existing reviewed adjustment/settlement workflows.
+
+Tick the source/date/unit/accounting review confirmation and click **Automatically reconcile selected**. A preview shows the totals, exact zero difference, number of new journals and named debit/credit accounts. Check the actual dates and references, then **Confirm reconcile**. The action is atomic: a mismatch, locked period, missing invoice, insufficient payable/cash, duplicate, date conflict or changed book after preview saves no partial result. Posted-bank allocations prefer transfer references and dates rather than the order of mouse clicks. Matched rows disappear; undo/reopen remain in Match history and BRS / handover under existing date/period controls.
+
+### Understand when journals will be created
+
+- Existing posted bank movement: create match links only; no second sale, expense or payment journal.
+- Selected sales receipt not recorded yet: after confirming earned-service/tax/payment review, create its normal complete Sales receipt entry once, including all its service/payment splits. Only the selected bank/clearing parts are reconciled; other parts remain outstanding. New receipts are posted together in one reviewed source batch. A pending Sales receipt import must be completed/corrected there first.
+- UPI/card/cash collection already recorded but not banked: post only the reviewed clearing-to-bank settlement (plus explicit fees if supplied), not revenue again.
+- Selected invoice payment not recorded yet: create the ordinary AP payment with the report's actual historical date and reference, then match its bank credit. The AP invoice must exist, be accrued before payment and have sufficient dated outstanding capacity. Several invoices in one transfer become a grouped AP payment.
+
+Amber source rows need an accounting entry and are visible in the preview. Red rows are blocked; select a row to read the full reason above the lists. A previously recorded payment with a conflicting date must be corrected in AP rather than paid twice. If a bank journal exists but has not been allocated to AP, link the exact existing voucher in AP first. If existing manual sales use unrelated receipt references, do not upload them as new sales to force a match: use All posted sources/review the original receipt first, because the tool cannot infer that two unrelated reference numbers represent the same business event.
+
+A book date outside the bank business-day tolerance needs review. Correct a mistaken data-entry date first. Genuine cheque/settlement timing differences can use **Allow a reviewed date/reference timing difference**, which is recorded in history; it does not rewrite the source date. Complete bank reconciliation in BRS / handover after reviewing all residual items and balances. This checkbox workflow matches selected transactions; it does not automatically classify every unmatched bank line or certify the monthly BRS.

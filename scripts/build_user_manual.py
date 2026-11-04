@@ -75,6 +75,8 @@ def main():
     for kind in ('xlsx','csv'):vendor_import.template(out/('Yathartha-Vendor-Master-Template.'+kind))
     from riju import petty_cash
     for kind in ('xlsx','csv'):petty_cash.template(out/('Yathartha-Petty-Cash-Template.'+kind))
+    from riju import bank_workbench
+    for kind in ('xlsx','csv'):bank_workbench.payment_template(out/('Yathartha-Invoice-Payments-Template.'+kind))
     reference=root/'docs/ACCOUNT_POSTING_REFERENCE.md'
     if reference.exists():
         build_pdf(reference,out/'Yathartha-Account-Posting-Reference.pdf',compact=True);(out/'ACCOUNT_POSTING_REFERENCE.md').write_text(reference.read_text(encoding='utf-8'),encoding='utf-8')
