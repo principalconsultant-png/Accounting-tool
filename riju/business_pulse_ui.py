@@ -34,7 +34,7 @@ class BusinessPulseUI:
         self.pulse_status.configure(text=pack['entity']+' | FY '+str(pack['year'])+'–'+str(pack['year']+1)+' | '+pack['scope']+' | Through '+pack['through']+' | Amounts '+pack['scale']+'; ARPP INR; counts #\n'+('DRAFT: metric mappings not reviewed. ' if not pack['policy']['reviewed'] else '')+'Months with no posted data/future dates are N/A. Provisional months have not been marked complete.')
         from datetime import datetime
         def cell(row,col,text,bg,fg=pulse.INK,bold=False,width=10,span=1):
-            label=tk.Label(self.pulse_grid,text=text,bg=bg,fg=fg,font=('Segoe UI',9,'bold' if bold else 'normal'),width=width,anchor='w' if col==0 else 'center',padx=5,pady=7,wraplength=220 if col==0 else 90,relief='flat',borderwidth=1);label.grid(row=row,column=col,columnspan=span,sticky='nsew',padx=1,pady=1);return label
+            label=tk.Label(self.pulse_grid,text=text,bg=bg,fg=fg,font=('Segoe UI',9,'bold' if bold else 'normal'),width=width,anchor='w' if col==0 else 'center',padx=5,pady=7,wraplength=160 if col==0 else 90,relief='flat',borderwidth=1);label.grid(row=row,column=col,columnspan=span,sticky='nsew',padx=1,pady=1);return label
         cell(0,0,'CRITICAL BUSINESS METRICS',pulse.PALETTE[0],'white',True,29)
         for i,m in enumerate(pack['months'],1):cell(0,i,datetime.strptime(m,'%Y-%m').strftime('%b %y'),pulse.PALETTE[0],'white',True)
         cell(1,0,'Month coverage','#EEF2F6',width=29)
