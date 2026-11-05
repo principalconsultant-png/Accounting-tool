@@ -1,5 +1,7 @@
 # यथार्थः · Yathartha
 
+**Monthly operating SOP:** [Step-by-step bookkeeping, posting and reconciliation SOP](docs/MONTHLY_BOOKKEEPING_SOP.md) covers sales, invoices, bank statements, payroll, petty cash, loan repayments and month-end checks, with the accounting effect of each action.
+
 **Daily Business Register:** Reports includes a saved SQLite consolidation of daily Revenue, receipt-count Sales Units/patients, Collections, booked Opex including salary/petty expense, booked Capex and closing Cash + Bank. Source drilldown, exclusions and unposted-source gaps support the table. The database is protected inside the book, with Excel/PDF/CSV and optional full SQLite exports. See [definitions and steps](docs/DAILY_BUSINESS_REGISTER.md).
 
 **Guided bank transactions:** Record bank transaction on Bank reconciliation and the standalone workspace provides explicit loan principal/interest/fees, charges, cash movements, own-bank transfers and reviewed third-party purpose. Preview and confirm one journal plus bank match. See [bank accounting guide](docs/BANK_TRANSACTION_GUIDE.md).
