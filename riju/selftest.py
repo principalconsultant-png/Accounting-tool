@@ -419,6 +419,18 @@ def run(output):
             bank_entries.record(entrybook,entryst['row_ids'][0],dict(category='Loan repayment / EMI',branch='JP',account='2400',bank_account='1010',principal='100',interest='9',fees='1',interest_account='4580',reviewed=True,basis='Synthetic lender breakup'))
             if core.balances(entrybook,'2026-04-30')['2400']!=-90000 or reconciliation.outstanding(entrybook,'1010')[0]:raise ValueError('Packaged loan bank entry failed')
             result['guided_bank_transaction_passed']=True
+            from . import daily_consolidation
+            dailybook=core.empty_state()
+            core.post(dailybook,'2026-04-02','Synthetic daily receipt',[dict(account='1000',branch='JP',debit=12500,credit=0),dict(account='4000',branch='JP',debit=0,credit=12500)],metadata={'type':'Receipt','reference':'DAILY1'})
+            daily_consolidation.refresh(dailybook,'2026-04-01','2026-04-30')
+            dailyrows=daily_consolidation.pack(dailybook,'2026-04-01','2026-04-30')['rows']
+            if dailyrows[1][1:4]!=[12500,1,12500]:raise ValueError('Packaged daily database metrics failed')
+            dailyvault=Vault(root/'daily-database.riju');dailyvault.save(dailybook);dailyloaded=dailyvault.load();dailydb,dailymeta,dailystale=daily_consolidation.saved(dailyloaded)
+            try:
+                if dailystale or dailydb.execute('SELECT COUNT(*) FROM daily_metrics').fetchone()[0]!=120:raise ValueError('Packaged daily database persistence failed')
+            finally:dailydb.close()
+            result['daily_consolidation_database_passed']=True
+
 
 
 

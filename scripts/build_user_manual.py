@@ -78,6 +78,9 @@ def main():
     from riju import bank_workbench
     for kind in ('xlsx','csv'):bank_workbench.payment_template(out/('Yathartha-Invoice-Payments-Template.'+kind))
     build_pdf(root/'docs/BANK_TRANSACTION_GUIDE.md',out/'Yathartha-Bank-Transactions-Guide.pdf')
+    build_pdf(root/'docs/DAILY_BUSINESS_REGISTER.md',out/'Yathartha-Daily-Business-Register-Guide.pdf')
+    from scripts.build_daily_register_example import build as build_daily_example
+    build_daily_example(out)
     from scripts.build_business_pulse_example import build as build_pulse_example
     build_pulse_example(out)
     from riju import business_pulse
