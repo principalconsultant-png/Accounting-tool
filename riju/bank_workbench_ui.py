@@ -75,6 +75,9 @@ class BankWorkbenchUI:
         ttk.Label(charges,text='Reviewed bank charges INR').pack(side='left',padx=(0,5));self.wb_fees=tk.StringVar(value='0');ttk.Entry(charges,textvariable=self.wb_fees,width=14).pack(side='left',padx=(0,8));self.wb_fees.trace_add('write',lambda *args:self.wb_update_totals())
         self.wb_charge_button=self.button(charges,'Use difference as bank charges',self.wb_use_charge)
         ttk.Label(charges,text='Dr 4560 Bank charges; journal shown before confirmation.').pack(side='left',padx=8)
+        self.wb_partial_cash=tk.BooleanVar(value=False)
+        def partial_changed():self.wb_confirm.set(False);self.wb_update_totals()
+        ttk.Checkbutton(parent,text='Partial cash deposit: allocate available receipts across deposit dates; leave undeposited cash outstanding (charges must be zero)',variable=self.wb_partial_cash,command=partial_changed).pack(anchor='w')
         panes=ttk.Panedwindow(parent,orient='horizontal',width=850);panes.pack(fill='both',expand=True)
         left=ttk.Frame(panes,width=400,height=260);right=ttk.Frame(panes,width=400,height=260);left.pack_propagate(False);right.pack_propagate(False);panes.add(left,weight=1);panes.add(right,weight=1)
         ttk.Label(left,text='BANK STATEMENT — select actual deposit(s) or withdrawal(s)').pack(anchor='w')
@@ -108,6 +111,7 @@ class BankWorkbenchUI:
         bar=ttk.Frame(self.wb_advanced);bar.pack(fill='x');self.button(bar,'Sales Excel template',lambda:self.wb_template('sales','xlsx'));self.button(bar,'Invoice payment Excel template',lambda:self.wb_template('payments','xlsx'));self.button(bar,'Invoice payment CSV template',lambda:self.wb_template('payments','csv'));self.button(bar,'Sales CSV template',lambda:self.wb_template('sales','csv'))
         self.wb_change_kind()
     def wb_change_kind(self):
+        self.wb_partial_cash.set(False)
         self.wb_prior_kind=self.wb_kind.get();docs=work.documents(self.state,self.wb_kind.get());self.wb_document_choices={'All posted sources':None,**{d['id'][:8]+' | '+d['filename']:d['id'] for d in docs}}
         self.wb_report_combo.configure(values=list(self.wb_document_choices));prior=getattr(self,'wb_prior_doc',None);self.wb_report.set(next((label for label,key in self.wb_document_choices.items() if key==prior),'All posted sources'))
         if hasattr(self,'wb_bank_table'):self.wb_refresh()
@@ -164,7 +168,8 @@ class BankWorkbenchUI:
         bt=sum(self.wb_bank_rows[k]['remaining'] for k in self.wb_bank_checks if k in self.wb_bank_rows);st=sum(self.wb_source_rows[k]['amount'] for k in self.wb_source_checks if k in self.wb_source_rows)
         try:fees=bank.amount(self.wb_fees.get()) if hasattr(self,'wb_fees') else 0;difference=st-fees-bt;label=core.rupees(difference)
         except ValueError:fees=0;label='Enter valid fees'
-        self.wb_totals.configure(text='BANK selected '+str(len(self.wb_bank_checks))+' = '+core.rupees(bt)+' | SOURCE selected '+str(len(self.wb_source_checks))+' = '+core.rupees(st)+' | Fees '+core.rupees(fees)+' | DIFFERENCE '+label)
+        suffix=(' | Selected cash left undeposited '+core.rupees(st-bt)+' (subject to deposit-date availability)' if self.wb_partial_cash.get() and st>=bt>0 and fees==0 else ' | DIFFERENCE '+label)
+        self.wb_totals.configure(text='BANK selected '+str(len(self.wb_bank_checks))+' = '+core.rupees(bt)+' | SOURCE selected '+str(len(self.wb_source_checks))+' = '+core.rupees(st)+' | Fees '+core.rupees(fees)+suffix)
     def wb_accept(self,side,row,values):
         choice=self.wb_channels[side].get()
         if choice!='All' and work.channel(row,side)!=choice:return False
@@ -200,12 +205,12 @@ class BankWorkbenchUI:
         if path:(work.payment_template if kind=='payments' else receipt_import.template)(path)
     def wb_reconcile(self):
         if not self.wb_confirm.get():raise ValueError('Confirm bank/source/accounting review before reconciliation.')
-        args=(self.wb_account(),self.wb_statement_id(),self.wb_kind.get(),self.wb_document_choices.get(self.wb_report.get()),list(self.wb_bank_checks),list(self.wb_source_checks),self.wb_basis.get().strip(),bank.amount(self.wb_fees.get()),self.wb_allow_dates.get())
-        def signature():return (self.wb_account(),self.wb_statement_id(),self.wb_kind.get(),self.wb_document_choices.get(self.wb_report.get()),tuple(sorted(self.wb_bank_checks)),tuple(sorted(self.wb_source_checks)),self.wb_basis.get().strip(),self.wb_fees.get(),self.wb_allow_dates.get(),self.wb_confirm.get())
+        args=(self.wb_account(),self.wb_statement_id(),self.wb_kind.get(),self.wb_document_choices.get(self.wb_report.get()),list(self.wb_bank_checks),list(self.wb_source_checks),self.wb_basis.get().strip(),bank.amount(self.wb_fees.get()),self.wb_allow_dates.get(),self.wb_partial_cash.get())
+        def signature():return (self.wb_account(),self.wb_statement_id(),self.wb_kind.get(),self.wb_document_choices.get(self.wb_report.get()),tuple(sorted(self.wb_bank_checks)),tuple(sorted(self.wb_source_checks)),self.wb_basis.get().strip(),self.wb_fees.get(),self.wb_allow_dates.get(),self.wb_confirm.get(),self.wb_partial_cash.get())
         reviewed_selection=signature()
         before=copy.deepcopy(self.state);candidate=copy.deepcopy(before);result=work.reconcile(candidate,*args)
         win=tk.Toplevel(self);win.title('Confirm selected bank reconciliation');win.geometry('1080x680');win.transient(self.wb_window)
-        ttk.Label(win,text='Bank '+result['bank_total_INR']+' | Source '+result['source_total_INR']+' | Fees '+result['reviewed_fees_INR']+' | Difference 0.00\n'+str(result['bank_transactions'])+' bank row(s), '+str(result['source_transactions'])+' source row(s), '+str(result['new_journals'])+' new journal(s). Confirm only after reviewing the entries below.',wraplength=1020,padding=10).pack(anchor='w')
+        ttk.Label(win,text='Bank '+result['bank_total_INR']+' | Source '+result['source_total_INR']+' | Fees '+result['reviewed_fees_INR']+' | Difference 0.00\n'+str(result['bank_transactions'])+' bank row(s), '+str(result['source_transactions'])+' source row(s), '+str(result['new_journals'])+' new journal(s). Cash left undeposited '+result['cash_remaining_INR']+'. Confirm only after reviewing the entries below.',wraplength=1020,padding=10).pack(anchor='w')
         names={a['code']:a['name'] for a in candidate['accounts']};vouchers=candidate['vouchers'][len(before['vouchers']):]
         self.table(('Date','Voucher','Unit','Account','Ledger name','Debit INR','Credit INR'),[(v['date'],v['id'],l['branch'],l['account'],names.get(l['account'],''),core.rupees(l['debit']),core.rupees(l['credit'])) for v in vouchers for l in v['lines']],parent=win,height=12)
         if not vouchers:ttk.Label(win,text='Existing entries only. This records match links and posts no journal.').pack(anchor='w')

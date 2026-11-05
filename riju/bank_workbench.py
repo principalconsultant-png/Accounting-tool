@@ -207,7 +207,7 @@ def _match_bank_legs(s,bank_ids,book_keys,account,scope):
     return matches
 
 
-def _settle_pool(s,banks,parts,fees):
+def _settle_pool(s,banks,parts,fees,partial_cash=False):
     """Split selected clearing lines over bank deposits, preserving every bank date."""
     fee_by_bank=bank._split(fees,{b['id']:b['remaining'] for b in banks}) if fees else {};pool=[dict(p) for p in sorted(parts,key=lambda p:(p['date'],p['clearing_key']))];matches=[]
     for selected in sorted(banks,key=lambda b:(b['date'],b['id'])):
@@ -221,10 +221,14 @@ def _settle_pool(s,banks,parts,fees):
             if p['amount']<=0 or p['date']>live['date']:continue
             if live['branch']!='ALL' and live['branch']!=p['branch']:continue
             take=min(need,p['amount']);alloc.append(dict(key=p['clearing_key'],amount=take,account=p['channel']));bygroup[p['branch'],p['channel']]+=take;p['amount']-=take;need-=take
-        if need:raise ValueError('Selected receipts are not available by bank date '+live['date']+' or differ in unit. Review actual receipt/settlement dates.')
+        if need:
+            eligible=live['remaining']+fee-need
+            later=sum(p['amount'] for p in pool if p['date']>live['date'] and (live['branch']=='ALL' or live['branch']==p['branch']))
+            raise ValueError('Deposit dated '+live['date']+' requires '+core.rupees(live['remaining']+fee)+' including reviewed fees; selected unallocated receipts available by that date for '+('all operating units' if live['branch']=='ALL' else live['branch'])+' total '+core.rupees(eligible)+'. Shortfall '+core.rupees(need)+'. Later receipts '+core.rupees(later)+' cannot fund this earlier deposit. Select the missing earlier receipts, check the deposit date/unit, or review opening cash and other cash movements. Receipts from multiple earlier days are allowed. Nothing saved.')
         branchgross=defaultdict(int)
         for (branch,channel),gross in bygroup.items():
-            if core.balances(s,live['date'],branch)[channel]<gross:raise ValueError('Settlement exceeds dated cash/clearing balance in '+branch+'. Review refunds, cash expenses and prior settlements.')
+            available=core.balances(s,live['date'],branch)[channel]
+            if available<gross:raise ValueError('Deposit '+live['date']+' needs '+core.rupees(gross)+' from '+branch+' / '+channel+', but the dated book balance is '+core.rupees(available)+'. Shortfall '+core.rupees(gross-available)+'. Review cash expenses, refunds, prior deposits and opening balances. Nothing saved.')
             branchgross[branch]+=gross
         branchfees=bank._split(fee,branchgross) if fee else {};lines=[]
         for branch,gross in branchgross.items():
@@ -233,8 +237,9 @@ def _settle_pool(s,banks,parts,fees):
         for (branch,channel),gross in bygroup.items():lines.append(dict(account=channel,branch=branch,debit=0,credit=gross))
         v=core.post(s,live['date'],'Reviewed selected sales settlement '+live['reference'],lines,metadata=dict(type='Transfer',reference=live['reference'],bank_account=live['bank_account'],source='Bank settlement'))
         books=[dict(x,remaining=x['amount']) for x in bank.book_items(s,live['bank_account']) if x['voucher']==v['id']];matches.append(bank._record_match(s,[live],books,'settlement',v['id'],alloc))
-    if any(p['amount'] for p in pool):raise ValueError('Selected receipt allocations were not fully consumed. Nothing reconciled.')
-    return matches
+    remaining=sum(p['amount'] for p in pool)
+    if remaining and not partial_cash:raise ValueError('Selected receipt allocations were not fully consumed. Nothing reconciled.')
+    return matches,remaining
 
 
 def _match_charged_books(s,banks,bookkeys,account,scope,fees,basis):
@@ -267,7 +272,7 @@ def channel(row,side):
 
 
 @ap.atomic
-def reconcile(s,account,sid,kind,doc_id,bank_ids,source_ids,basis,fees_minor=0,allow_date_difference=False):
+def reconcile(s,account,sid,kind,doc_id,bank_ids,source_ids,basis,fees_minor=0,allow_date_difference=False,partial_cash=False):
     if not basis.strip():raise ValueError('Enter the reconciliation/source review basis.')
     if not bank_ids or not source_ids or len(set(bank_ids))!=len(bank_ids) or len(set(source_ids))!=len(source_ids):raise ValueError('Tick one or more bank transactions and corresponding source transactions.')
     statement=bank.statement(s,sid) if sid else None;scope=statement['scope'] if statement else 'ALL'
@@ -282,7 +287,8 @@ def reconcile(s,account,sid,kind,doc_id,bank_ids,source_ids,basis,fees_minor=0,a
     if any((x['amount']>0)!=(banks[0]['remaining']>0) for x in selected):raise ValueError('Deposit sources and invoice withdrawals must be reconciled separately.')
     if type(fees_minor)!=int or fees_minor<0:raise ValueError('Reviewed bank charges must be nonnegative INR.')
     bt=sum(b['remaining'] for b in banks);st=sum(x['amount'] for x in selected)
-    if st-fees_minor!=bt:raise ValueError('Selected source '+core.rupees(st)+' minus reviewed fees '+core.rupees(fees_minor)+' does not equal bank '+core.rupees(bt)+'. No rounding or balancing entry is guessed.')
+    if partial_cash and (kind!='Sales receipts' or bt<=0 or fees_minor or any(not (x['kind']=='clearing' and x.get('channel')=='1000' or x['kind']=='new_sale' and x.get('mode')=='cash') for x in selected)):raise ValueError('Partial cash deposit requires only cash receipts and positive bank deposits, with bank charges zero. Review actual charges separately; cash retained is not an expense.')
+    if st-fees_minor!=bt and not (partial_cash and st>=bt):raise ValueError('Selected source '+core.rupees(st)+' minus reviewed fees '+core.rupees(fees_minor)+' does not equal bank '+core.rupees(bt)+'. No rounding or balancing entry is guessed.')
     for x in selected:
         near=any(bank._date_near(s,x['date'],b['date']) for b in banks)
         if (x['kind'] in ('book','new_payment') or x['kind']=='new_sale' and x.get('mode')=='bank') and not near and not allow_date_difference:raise ValueError('Source date '+x['date']+' / reference differs from the selected bank dates. Correct an entry-date error, or explicitly allow a reviewed timing difference.')
@@ -309,18 +315,18 @@ def reconcile(s,account,sid,kind,doc_id,bank_ids,source_ids,basis,fees_minor=0,a
                 item=next((c for c in bank.clearing_items(s,x['channel'],scope) if c['voucher']==v['id']),None)
                 if not item:raise ValueError('Selected receipt clearing line is missing or already settled.')
                 parts.append(dict(x,kind='clearing',clearing_key=item['key']))
-    matches=[]
+    matches=[];cash_remaining=0
     if bookkeys and not parts and fees_minor:
         matches.extend(_match_charged_books(s,banks,bookkeys,account,scope,fees_minor,basis))
     elif bookkeys:matches.extend(_match_bank_legs(s,bank_ids,bookkeys,account,scope))
     if parts:
         remaining=[b for b in bank.outstanding(s,account,scope)[0] if b['id'] in bank_ids]
         if not remaining or any(b['remaining']<=0 for b in remaining):raise ValueError('Only positive settlement deposits can receive clearing receipts.')
-        matches.extend(_settle_pool(s,remaining,parts,fees_minor))
+        settlements,cash_remaining=_settle_pool(s,remaining,parts,fees_minor,partial_cash);matches.extend(settlements)
 
     if any(b['id'] in bank_ids for b in bank.outstanding(s,account,scope)[0]):raise ValueError('Selected bank transactions are not fully reconciled. Nothing saved.')
-    core.add_audit(s,'BANK_WORKBENCH_RECONCILED',dict(bank_ids=bank_ids,source_ids=source_ids,report=doc_id,kind=kind,review_basis=basis,fees_minor=fees_minor,matches=[m['id'] for m in matches],new_vouchers=len(s['vouchers'])-before,allow_date_difference=allow_date_difference))
-    return dict(bank_transactions=len(bank_ids),source_transactions=len(source_ids),bank_total_INR=core.rupees(bt),source_total_INR=core.rupees(st),reviewed_fees_INR=core.rupees(fees_minor),difference_INR='0.00',new_journals=len(s['vouchers'])-before,matches=len(matches))
+    core.add_audit(s,'BANK_WORKBENCH_RECONCILED',dict(bank_ids=bank_ids,source_ids=source_ids,report=doc_id,kind=kind,review_basis=basis,fees_minor=fees_minor,matches=[m['id'] for m in matches],new_vouchers=len(s['vouchers'])-before,allow_date_difference=allow_date_difference,partial_cash=partial_cash,cash_remaining_minor=cash_remaining))
+    return dict(bank_transactions=len(bank_ids),source_transactions=len(source_ids),bank_total_INR=core.rupees(bt),source_total_INR=core.rupees(st),reviewed_fees_INR=core.rupees(fees_minor),difference_INR='0.00',cash_remaining_INR=core.rupees(cash_remaining),partial_cash=partial_cash,new_journals=len(s['vouchers'])-before,matches=len(matches))
 
 
 def payment_template(path):

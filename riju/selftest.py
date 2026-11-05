@@ -404,6 +404,13 @@ def run(output):
             outcome=bank_workbench.reconcile(reconbook,'1010',bankstatement['id'],'Sales receipts',report['id'],bankstatement['row_ids'],[x['id'] for x in choices],'Reviewed packaged source and bank')
             if outcome['new_journals']!=2 or reconciliation.outstanding(reconbook,'1010')[0]:raise ValueError('Packaged checkbox reconciliation engine mismatch')
             for kind in ('xlsx','csv'):bank_workbench.payment_template(root/('invoice-payment-template.'+kind))
+            cashbook=core.empty_state()
+            for day,amount in [('2026-04-01',3000),('2026-04-08',4000),('2026-04-20',4200)]:
+                core.post(cashbook,day,'Synthetic cash receipt',[dict(account='1000',branch='JP',debit=amount,credit=0),dict(account='4000',branch='JP',debit=0,credit=amount)],metadata=dict(type='Receipt',reference='CASH-'+day))
+            cashst=reconciliation.import_statement(cashbook,b'date,narration,reference,debit,credit,balance\n2026-04-10,Cash deposit,C1,0,70,70\n2026-04-27,Cash deposit,C2,0,30,100\n','cash-bank.csv','1010','ALL','2026-04-01','2026-04-30','0','100')
+            cashchoices=bank_workbench.sources(cashbook,'1010','ALL','Sales receipts')
+            cashresult=bank_workbench.reconcile(cashbook,'1010',cashst['id'],'Sales receipts',None,cashst['row_ids'],[x['id'] for x in cashchoices],'Synthetic fortnightly cash deposits',partial_cash=True)
+            if cashresult['cash_remaining_INR']!=core.rupees(1200) or core.balances(cashbook,'2026-04-30')['1000']!=1200 or reconciliation.outstanding(cashbook,'1010')[0]:raise ValueError('Packaged partial fortnightly cash deposits failed')
             result['bank_side_by_side_reconciliation_passed']=True
             chargebook=core.empty_state()
             core.post(chargebook,'2026-04-03','Synthetic gross bank receipt',[dict(account='1010',branch='JP',debit=10000,credit=0),dict(account='4000',branch='JP',debit=0,credit=10000)],metadata={'type':'Receipt','reference':'NET1'})

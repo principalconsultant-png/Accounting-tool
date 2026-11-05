@@ -34,6 +34,35 @@ class BankWorkbenchTests(unittest.TestCase):
         bankrows={b['id']:b for b in bank.bank_rows(self.s,'1010')}
         for match in self.s['matches']:
             expected='1110' if 'UPI' in bankrows[match['bank_id']]['narration'] else '1120';self.assertEqual({a['account'] for a in match['clearing_allocations']},{expected})
+    def cashrows(self):
+        return [salesrow(receipt_date=day,receipt_no='CASH-'+str(i),branch=branch,consultation=amount,cash=amount,upi='',total=amount) for i,(day,branch,amount) in enumerate([('2026-04-01','JP','30'),('2026-04-08','KM','40'),('2026-04-20','KM','42')])]
+    def test_fortnightly_cash_deposits_use_multiple_days_and_units(self):
+        self.statement('2026-04-10,Cash deposit,D1,0,70,1070\n2026-04-27,Cash deposit,D2,0,42,1112\n','1112');doc=self.sales(self.cashrows());result=self.reconcile('Sales receipts',doc)
+        self.assertEqual(result['matches'],2);self.assertEqual(core.balances(self.s,'2026-04-30')['1000'],0);self.assertFalse(bank.outstanding(self.s,'1010')[0]);self.assertEqual(core.balances(self.s,'2026-04-30')['4000'],-11200)
+    def test_partial_cash_keeps_balance_for_next_deposit_and_undo(self):
+        self.statement('2026-04-10,Cash deposit,D1,0,70,1070\n2026-04-27,Cash deposit,D2,0,30,1100\n','1100');doc=self.sales(self.cashrows());result=self.reconcile('Sales receipts',doc,partial_cash=True)
+        self.assertEqual(result['cash_remaining_INR'],'₹12.00');remaining=self.select('Sales receipts',doc);self.assertEqual(sum(x['amount'] for x in remaining),1200);self.assertEqual(core.balances(self.s,'2026-04-30')['1000'],1200);self.assertEqual(core.balances(self.s,'2026-04-30')['4560'],0)
+        st=bank.import_statement(self.s,b'date,narration,reference,debit,credit,balance\n2026-04-30,Cash deposit,D3,0,12,1112\n','next.csv','1010','ALL','2026-04-30','2026-04-30','1100','1112');self.st=st;self.reconcile('Sales receipts',doc);self.assertFalse(self.select('Sales receipts',doc));self.assertEqual(core.balances(self.s,'2026-04-30')['4000'],-11200)
+        match=self.s['matches'][-1];bank.undo_match(self.s,match['id'],'Reviewed undo','2026-04-30');self.assertEqual(sum(x['amount'] for x in self.select('Sales receipts',doc)),1200);core.verify_audit(self.s)
+    def test_cash_shortfall_explains_date_amount_and_rolls_back(self):
+        self.statement('2026-04-10,Cash deposit,D1,0,80,1080\n2026-04-27,Cash deposit,D2,0,32,1112\n','1112');doc=self.sales(self.cashrows());before=copy.deepcopy(self.s)
+        with self.assertRaisesRegex(ValueError,'2026-04-10.*Shortfall ₹10.00.*Later receipts ₹42.00'):self.reconcile('Sales receipts',doc,partial_cash=True,allow_date_difference=True)
+        self.assertEqual(before,self.s)
+    def test_partial_cash_cannot_reuse_cash_already_spent(self):
+        self.statement('2026-04-10,Cash deposit,D1,0,70,1070\n','1070')
+        core.post(self.s,'2026-04-01','Cash receipt',pair('1000','4000',10000),metadata={'type':'Receipt','reference':'SPENT-CASH'})
+        core.post(self.s,'2026-04-05','Petty cash already spent',pair('4590','1000',4000))
+        before=copy.deepcopy(self.s)
+        with self.assertRaisesRegex(ValueError,'dated book balance is ₹60.00.*Shortfall ₹10.00'):self.reconcile('Sales receipts',partial_cash=True)
+        self.assertEqual(before,self.s)
+
+    def test_partial_cash_rejects_fees_and_noncash_sources(self):
+        self.statement('2026-04-10,Cash deposit,D1,0,70,1070\n','1070');doc=self.sales(self.cashrows());before=copy.deepcopy(self.s)
+        with self.assertRaisesRegex(ValueError,'charges zero'):self.reconcile('Sales receipts',doc,partial_cash=True,fees_minor=100)
+        self.assertEqual(before,self.s)
+        other=self.sales([salesrow(receipt_date='2026-04-01',receipt_no='UPI-PART',consultation='80',cash='',upi='80',total='80')])
+        with self.assertRaisesRegex(ValueError,'only cash receipts'):self.reconcile('Sales receipts',other,partial_cash=True)
+
     def test_existing_sales_no_duplicate_revenue_or_journal(self):
         self.statement('2026-04-03,Direct deposit,B1,0,100,1100\n','1100');row=salesrow(receipt_date='2026-04-03',receipt_no='B1',consultation='100',cash='',upi='',bank='100',total='100');q=ri.stage(self.s,salesraw([row]),'already-sales.csv');ri.review(self.s,q['id'],[0],True,'Reviewed',True);ri.post(self.s,q['id']);doc=self.sales([row]);before=len(self.s['vouchers']);result=self.reconcile('Sales receipts',doc);self.assertEqual(result['new_journals'],0);self.assertEqual(len(self.s['vouchers']),before)
     def test_invoice_report_creates_historical_payment_and_matches(self):
@@ -124,6 +153,24 @@ class BankWorkbenchDesktopTests(unittest.TestCase):
                 with patch('riju.bank_workbench_ui.messagebox.showinfo'):helper.press(preview,'Confirm reconcile')
                 app.update();self.assertFalse(app.wb_bank_rows);self.assertEqual(len(app.state['vouchers']),3)
             finally:app.destroy()
+    def test_partial_cash_preview_keeps_undeposited_amount(self):
+        from unittest.mock import patch
+        from riju.app import App
+        from riju.storage import Vault
+        from test_gui import TaxDepreciationDesktopTests
+        helper=TaxDepreciationDesktopTests()
+        with tempfile.TemporaryDirectory() as d:
+            app=App(Vault(Path(d)/'book.json',demo=True))
+            try:
+                core.post(app.state,'2026-04-01','Cash receipts',pair('1000','4000',11200),metadata={'type':'Receipt','reference':'CASH-UI'})
+                st=bank.import_statement(app.state,b'date,narration,reference,debit,credit,balance\n2026-04-14,Cash deposit,D1,0,100,100\n','bank.csv','1010','ALL','2026-04-01','2026-04-30','0','100');app.brs_selected_statement=st['id'];app.show('Bank reconciliation');app.open_bank_workbench()
+                for key in list(app.wb_bank_rows):app.wb_toggle('bank',key)
+                for key in list(app.wb_source_rows):app.wb_toggle('source',key)
+                app.wb_partial_cash.set(True);app.wb_update_totals();self.assertIn('cash left undeposited ₹12.00',app.wb_totals.cget('text'));app.wb_confirm.set(True);app.wb_reconcile();preview=helper.form(app);self.assertEqual(len(app.state['vouchers']),1)
+                with patch('riju.bank_workbench_ui.messagebox.showinfo'):helper.press(preview,'Confirm reconcile')
+                self.assertEqual(core.balances(app.state,'2026-04-30')['1000'],1200);self.assertFalse(app.wb_bank_rows);self.assertEqual(sum(x['amount'] for x in app.wb_source_rows.values()),1200)
+            finally:app.destroy()
+
     def test_checkbox_keyboard_clear_templates_and_stale_preview_blocked(self):
         from unittest.mock import patch
         from riju.app import App

@@ -136,6 +136,14 @@ Open Bank reconciliation → Reconcile side by side. Load the bank/statement. Se
 4. Confirm the review checkbox and choose Automatically reconcile selected. Inspect every proposed journal. An existing-only match should show no new journal. Confirm reconcile only when correct.
 5. Refresh and inspect remaining items/Match history. The main Bank reconciliation screen's Book movements tab also lists posted JEs containing the selected bank ledger.
 
+### Cash collected over several days and deposited later
+
+In Reconcile side by side, choose Sales receipts and filter the source Channel to Cash. Select the actual cash deposit(s) and receipts collected on multiple earlier dates. Each deposit can use receipts dated on or before its bank date, across operating units when the statement scope permits; the receipt need not be on the deposit date. The tool allocates receipts oldest first and posts Dr Bank / Cr Cash on each actual deposit date, preserving unit allocations and original sales dates. It does not create sales revenue again.
+
+For a deposit smaller than the selected cash receipts, tick **Partial cash deposit** above the lists and keep Reviewed bank charges INR at zero. The preview shows **Cash left undeposited**; unapplied receipt amounts remain outstanding for the next deposit. Example: cash receipts of30,40 and42 on1,8 and20 April can fund70 deposited10 April and30 deposited27 April;12 remains cash. Do not turn retained cash into a bank-charge expense. This mode supports cash receipts only; UPI/card/invoice differences require their appropriate reviewed treatment.
+
+If a deposit has insufficient earlier receipts, the error identifies its date, required amount, selected eligible amount, shortfall and later receipts. Later receipts cannot fund an earlier deposit, including when the timing-difference checkbox is selected. Check missing earlier receipts, statement dates/unit or opening cash and other cash movements. An opening-cash deposit needs its reviewed cash-to-bank transfer rather than allocating later sales to it. A failed action saves no journals or matches. Real charges need separate supporting evidence.
+
 Do not expense a cash deposit or bank settlement. Do not increase sales because card/UPI money appears in the bank later. Do not label every difference as bank charges. If a posted payment has an incorrect date, correct/reverse it through its owning workflow; use the reviewed timing-difference option only for a genuine settlement/clearing delay.
 
 ## 10. Bank entries without a supplier invoice or voucher
