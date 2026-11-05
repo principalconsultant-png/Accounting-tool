@@ -46,6 +46,27 @@ class SalaryBulkTests(unittest.TestCase):
         self.post([record()]);core.post(self.s,'2026-05-05','Manual payment',pair(self.m['salary_payable'],'1010',100000),metadata={'reference':'OLD'});q=self.stage([self.payrow(reference='NEW')]);self.approve(q);before=copy.deepcopy(self.s)
         with self.assertRaises(ValueError):bulk.approve(self.s,q['id'])
         self.assertEqual(before,self.s)
+    def test_day_first_dates_and_calendar_errors(self):
+        self.assertEqual(salary.entry_date('05/04/26'),'2026-04-05')
+        self.assertEqual(salary.entry_date('18/04/2026'),'2026-04-18')
+        with self.assertRaises(ValueError):salary.entry_date('31/04/26')
+    def test_same_month_early_payments_apply_at_accrual_date(self):
+        raw=source([record(),self.payrow(date='05/04/26',amount='600'),self.payrow(date='30/04/26',amount='400',reference='P2')])
+        self.assertTrue(salary.has_early_payments(self.s,raw,'salary.csv'))
+        q=salary.stage(self.s,raw,'salary.csv',advance_mode=True);self.assertTrue(all(r['review']=='PENDING' for r in q['rows']));self.approve(q);ids=bulk.approve(self.s,q['id']);self.assertEqual(len(ids),4)
+        asset=self.s['settings']['salary_advance_ledger'];early=core.balances(self.s,'2026-04-05');self.assertEqual(early[asset],60000);self.assertEqual(early[self.m['salary_expense']],0)
+        closing=core.balances(self.s,'2026-04-30');self.assertEqual(closing[asset],0);self.assertEqual(closing[self.m['salary_payable']],0);self.assertEqual(closing[self.m['salary_expense']],100000)
+        from riju import business_pulse
+        policy=business_pulse.policy(self.s);policy.update(salary_accounts=[self.m['salary_expense']],reviewed=True,basis='Reviewed salary cash outflow mapping');business_pulse.save_policy(self.s,policy)
+        pulse=business_pulse.snapshot(self.s,2026,'2026-04-30');salary_row=next(r for r in pulse['rows'] if r['key']=='salary');self.assertEqual(salary_row['values'][0],100000)
+        before=copy.deepcopy(self.s)
+        with self.assertRaises(ValueError):core.reverse(self.s,bulk._queue(self.s,q['id'])['rows'][1]['voucher'],'2026-05-01')
+        self.assertEqual(before,self.s);salary.check(self.s)
+    def test_early_overpayment_rejected_atomically(self):
+        q=salary.stage(self.s,source([record(),self.payrow(date='05/04/26',amount='1001')]),'salary.csv',advance_mode=True);self.approve(q);before=copy.deepcopy(self.s)
+        with self.assertRaises(ValueError):bulk.approve(self.s,q['id'])
+        self.assertEqual(before,self.s)
+
     def test_templates_and_persistence(self):
         from riju.storage import Vault
         from openpyxl import load_workbook
@@ -63,14 +84,14 @@ class SalaryBulkDesktopTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             app=App(Vault(Path(root)/'book.json',demo=True))
             try:
-                payroll.setup(app.state,payroll.choices(app.state),'Reviewed',True);app.refresh_masters();app.show('Journal studio');app.narration.insert('1.0','Unsaved manual draft stays here');path=Path(root)/'salary.csv';path.write_bytes(source([record(),record(event='PAYMENT',date='2026-05-05',reference='GUI-PAY',bank='1010')]))
-                with patch('riju.journal_bulk_ui.filedialog.askopenfilename',return_value=str(path)):app.journal_bulk_upload(True)
+                payroll.setup(app.state,payroll.choices(app.state),'Reviewed',True);app.refresh_masters();app.show('Journal studio');app.narration.insert('1.0','Unsaved manual draft stays here');path=Path(root)/'salary.csv';path.write_bytes(source([record(),record(event='PAYMENT',date='05/04/26',reference='GUI-PAY',bank='1010')]))
+                with patch('riju.journal_bulk_ui.filedialog.askopenfilename',return_value=str(path)),patch('riju.journal_bulk_ui.messagebox.askyesnocancel',return_value=True):app.journal_bulk_upload(True)
                 form=helper.form(app);self.assertFalse(app.state['vouchers'])
                 for w in helper.walk(form):
                     if w.winfo_class()=='TCheckbutton':w.invoke()
                 helper.press(form,'Approve all valid rows');helper.press(form,'Preview reviewed journals');preview=helper.form(form);self.assertFalse(app.state['vouchers'])
                 with patch('riju.journal_bulk_ui.messagebox.showinfo'):helper.press(preview,'Confirm post reviewed JEs')
-                self.assertEqual(len(app.state['vouchers']),2);self.assertIn('Unsaved manual draft',app.narration.get('1.0','end'))
+                self.assertEqual(len(app.state['vouchers']),3);self.assertIn('Unsaved manual draft',app.narration.get('1.0','end'))
             finally:app.destroy()
 
 class GeneralJournalStudioTests(unittest.TestCase):

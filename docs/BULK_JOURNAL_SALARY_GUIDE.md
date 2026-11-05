@@ -32,7 +32,11 @@ Final approval posts:
 
 This produces four JEs, not one fictitious month-end bank payment. If only 25,000 is actually paid,5,000 remains payable. Accrual is an earned-period expense; payments do not expense the salary again. Use one ACCRUAL row for each additional month/unit; the same file can cover all seven historical months. All dates come from the source file, not today's Journal studio date.
 
-Salary payments before the recorded accrual date are blocked. Use the correct reviewed earned-period accrual date; a genuine salary advance needs its own approved advance/payroll treatment. Do not change actual bank dates merely to make a batch pass. A monthly total must not be turned into one aggregate bank withdrawal if the statement contains payments on different dates. A single payment row is appropriate only when it represents an actual single dated transfer/batch amount.
+For same-month salaries paid early, keep actual payment dates and the genuine month-end accrual. Choose **Yes** at the early salary payments prompt. The importer creates a separate collision-safe **Salary advances** asset ledger if needed, then proposes Dr Salary advances / Cr Bank on early payment dates, the normal month-end Dr Salaries and wages / Cr Salaries payable accrual, and Dr Salaries payable / Cr Salary advances on the accrual date. These extra application journals appear in the final preview. Choosing No retains normal payable settlement checks. Upload never posts financial journals. Do not move earned months or backdate accruals to bypass validation.
+
+Entry Date accepts real Excel dates, ISO YYYY-MM-DD, or day-first text DD/MM/YYYY and DD/MM/YY (two-digit years mean 20xx). For example, 05/04/26 means 5 April 2026. Invalid calendar dates remain flagged with a reason. Existing invalid unposted batches can be cancelled with a reason, then the original workbook uploaded again.
+
+For the early-payment example, three April payments plus one April accrual create five journals: three actual bank payments, one accrual and one advance application. Expense arises once at month end. Part-paid amounts stay payable; early transfers stay in advances until the accrual/application date. Reverse the application before reversing an early payment; reverse dependent payments/applications before reversing the accrual.
 
 ## Upload, review and post
 
@@ -43,7 +47,7 @@ Salary payments before the recorded accrual date are blocked. Use the correct re
 5. Preview reviewed journals. Posting order is chronological, with accruals before payments on the same date, regardless of the file's row order. All proposed journals and existing links must pass monthly and actual payable capacity checks. A failure saves none of the selected postings; the message identifies the issue/source row where applicable.
 6. Inspect the complete preview. Confirm post reviewed JEs to save the approved batch. The pending manual Journal studio draft is preserved rather than overwritten by the bulk workflow.
 7. Verify salary expense, salary payable and bank in Ledger A/c. For bank reconciliation select All book movements and match the dated salary payment JEs to actual bank withdrawals. Upload/posting does not import bank statements or automatically match them.
-8. Rebuild any stale Daily Business Register and review Business Pulse salary mappings. Opex recognises the accrual once; bank payments clear liabilities. Report dates and unit selections remain relevant.
+8. Rebuild any stale Daily Business Register and review Business Pulse salary mappings. Opex recognises the accrual once; early payments move through salary advances and normal payments clear liabilities. Known salary-import bank transfers count once in Business Pulse salary disbursed when salary mappings are configured. Report dates and unit selections remain relevant.
 
 ## Existing entries and duplicate safeguards
 
@@ -51,7 +55,7 @@ If an accrual or salary-payable payment already exists, supply its exact Existin
 
 An existing direct Dr Salary expense / Cr Bank payment is not an accrual-plus-payable settlement. Review/reclassify that original transaction appropriately before creating another salary accrual and payment; linking it as a salary-payable settlement would be incorrect. Legacy 4520 Employee benefits entries also need source-based review; the tool does not infer their salary content from narration.
 
-Only one active monthly total accrual per unit is allowed. Pending/posted source identities, changed-file reimports and active existing bank references are checked. Payments cannot exceed the earned month's dated accrual, even if another month has an unpaid balance; actual salary-payable capacity is also checked so unlinked manual payments do not get paid again. A repeated file does not append the same payroll twice.
+Only one active monthly total accrual per unit is allowed. Pending/posted source identities, changed-file reimports and active existing bank references are checked. Payments cannot exceed the earned month's reviewed accrual; ordinary payable settlements also require a dated accrual, even if another month has an unpaid balance; actual salary-payable capacity is also checked so unlinked manual payments do not get paid again. A repeated file does not append the same payroll twice.
 
 Do not change references, earned months or amounts to bypass validation. Correct the original source. Reverse dependent tagged payments before reversing their supporting salary accrual; original journals and audit history are retained. Opening salary liabilities and complex historical corrections require the reviewed opening/general journal workflow, not a new current-period salary expense.
 

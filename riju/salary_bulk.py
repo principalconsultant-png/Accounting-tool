@@ -1,13 +1,29 @@
 """Monthly salary accrual and dated payment import, without inferred deductions."""
-import copy,csv,hashlib,io
+import copy,csv,hashlib,io,re
 from collections import defaultdict
 from calendar import monthrange
-from datetime import date
+from datetime import date,datetime
 from pathlib import Path
 from . import core,foundation,ap,bulk_import as bulk,gst,payroll_accounts
 
 FIELDS=('event','month','branch','date','reference','bank','amount','existing','payee','basis')
 HEADERS=('Entry Type','Salary Month YYYY-MM','Operating Unit','Entry Date','Reference','Bank Ledger','Amount INR','Existing Voucher (optional)','Payee (optional)','Accounting Review Basis')
+
+def entry_date(value):
+    """Salary-file dates: native Excel, ISO or explicitly day-first Indian text."""
+    if value in (None,''):return ''
+    if isinstance(value,datetime):return value.date().isoformat()
+    if isinstance(value,date):return value.isoformat()
+    text=str(value).strip()
+    try:
+        if re.fullmatch(r'\d{4}-\d{2}-\d{2}',text):return date.fromisoformat(text).isoformat()
+        match=re.fullmatch(r'(\d{1,2})([/\-])(\d{1,2})\2(\d{4}|\d{2})',text)
+        if match:
+            day,month,year=int(match[1]),int(match[3]),int(match[4]);year=2000+year if len(match[4])==2 else year
+            return date(year,month,day).isoformat()
+    except ValueError:raise ValueError('Entry Date '+repr(text)+' is not a valid calendar date. Text dates use DD/MM/YYYY or DD/MM/YY (20xx).') from None
+    raise ValueError('Entry Date '+repr(text)+' is not recognised. Use YYYY-MM-DD, day-first DD/MM/YYYY or DD/MM/YY (20xx), or a real Excel date.')
+
 
 def mapping(s):
     m=s['settings'].get('payroll_ledgers',{})
@@ -20,11 +36,39 @@ def _totals(lines):
     for l in lines:result[l['account'],l['branch']]+=l['debit']-l['credit']
     return {k:v for k,v in result.items() if v}
 
-def facts(s):return [(q,r) for q in s['queue'] if q.get('salary_journal') for r in q['rows'] if r.get('voucher')]
+def facts(s):return [(q,r) for q in s['queue'] if q.get('salary_journal') for r in q['rows']+q.get('salary_applications',[]) if r.get('voucher')]
+
+def has_early_payments(s,raw,filename):
+    headers,rows,sheet=bulk._read(raw,filename,'Salary Journals')
+    dates={(r['month'],r['branch']):r['date'] for q,r in facts(s) if r['event']=='ACCRUAL'}
+    parsed=[dict(zip(FIELDS,row)) for row in rows]
+    for r in parsed:
+        if str(r.get('event','')).strip().upper()=='ACCRUAL':
+            try:
+                month=str(r.get('month','')).strip();dates[month,str(r.get('branch','')).strip()]=entry_date(r.get('date')) or date(int(month[:4]),int(month[5:]),monthrange(int(month[:4]),int(month[5:]))[1]).isoformat()
+            except (ValueError,TypeError):pass
+    for r in parsed:
+        if str(r.get('event','')).strip().upper()=='PAYMENT':
+            try:
+                if entry_date(r.get('date'))<dates.get((str(r.get('month','')).strip(),str(r.get('branch','')).strip()),''):return True
+            except ValueError:pass
+    return False
+
+def advance_plan(s):
+    code=s['settings'].get('salary_advance_ledger')
+    if code:
+        a=next((a for a in s['accounts'] if a['code']==code),None)
+        if not a or a['kind']!='Asset' or s['account_details'][code]['group']!='Other assets' or not s['account_details'][code].get('active',True):raise ValueError('Review the active salary advances asset ledger before importing.')
+        return code,False
+    used={a['code'] for a in s['accounts']}
+    code=next((str(n) for n in range(1160,1200) if str(n) not in used),None)
+    if not code:raise ValueError('No free salary advances code in 1160–1199. Configure a reviewed salary advances asset ledger first.')
+    return code,True
+
 
 def validate_row(s,r):
     m=mapping(s)
-    if r['debit_account']!=(m['salary_expense'] if r['event']=='ACCRUAL' else m['salary_payable']) or r['credit_account']!=(m['salary_payable'] if r['event']=='ACCRUAL' else r['bank']):raise ValueError('Salary ledger roles changed or source accounts differ. Restage with the reviewed salary roles.')
+    if r['debit_account']!=(m['salary_expense'] if r['event']=='ACCRUAL' else (s['settings'].get('salary_advance_ledger') if r.get('advance') else m['salary_payable'])) or r['credit_account']!=(m['salary_payable'] if r['event']=='ACCRUAL' else r['bank']):raise ValueError('Salary ledger roles changed or source accounts differ. Restage with the reviewed salary roles.')
     if r['event'] not in ('ACCRUAL','PAYMENT'):raise ValueError('Entry Type must be ACCRUAL or PAYMENT.')
     if r['branch'] not in foundation.branches(s,True):raise ValueError('Use a saved active operating-unit code.')
     ap.day(r['date'])
@@ -59,24 +103,41 @@ def check(s,reversal=None):
     if reversal:
         root,sign=roots[reversal[0]]
         if root in byroot:events[reversal[1]].append((byroot[root],-sign))
-    balance=defaultdict(int);accruals=defaultdict(int)
+    balance=defaultdict(int);accruals=defaultdict(int);advances=defaultdict(int);earned=defaultdict(int);paid=defaultdict(int)
     for day,changes in sorted(events.items()):
         for r,sign in changes:
-            key=r['month'],r['branch'];balance[key]+=r['amount']*sign*(1 if r['event']=='ACCRUAL' else -1)
-            if r['event']=='ACCRUAL':accruals[key]+=sign
+            key=r['month'],r['branch'];amount=r['amount']*sign
+            if r['event']=='ACCRUAL':balance[key]+=amount;earned[key]+=amount;accruals[key]+=sign
+            elif r['event']=='APPLICATION':balance[key]-=amount;advances[key]-=amount
+            elif r.get('advance'):advances[key]+=amount;paid[key]+=amount
+            else:balance[key]-=amount;paid[key]+=amount
         bad=next((key for key,n in balance.items() if n<0),None)
         if bad:raise ValueError('Salary '+bad[0]+' / '+bad[1]+' at '+day+': payments exceed the dated accrual. Include/link the accrual first; reverse dependent payments before reversing it.')
         bad=next((key for key,n in accruals.items() if n not in (0,1)),None)
         if bad:raise ValueError('Salary '+bad[0]+' / '+bad[1]+': only one active total accrual is allowed. Review the existing monthly accrual.')
+        if any(n<0 for n in advances.values()):raise ValueError('Salary advance application exceeds dated advances. Reverse applications before their payments.')
+    if any(n>earned[key] for key,n in paid.items()):raise ValueError('Salary payments exceed the reviewed earned month/unit accrual. Include its genuine accrual; do not reject it.')
     return True
 
 @ap.atomic
-def stage(s,raw,filename):
+def stage(s,raw,filename,advance_mode=False):
     m=mapping(s);headers,source,sheet=bulk._read(raw,filename,'Salary Journals')
     if headers!=list(HEADERS):raise ValueError('Use the exact standard salary template headings and Salary Journals sheet.')
+    accrual_dates={(r['month'],r['branch']):r['date'] for q,r in facts(s) if r['event']=='ACCRUAL'}
+    for values in source:
+        original=dict(zip(FIELDS,values))
+        if str(original.get('event','')).strip().upper()=='ACCRUAL':
+            try:
+                month=str(original.get('month','')).strip();accrual_dates[month,str(original.get('branch','')).strip()]=entry_date(original.get('date')) or date(int(month[:4]),int(month[5:]),monthrange(int(month[:4]),int(month[5:]))[1]).isoformat()
+            except (ValueError,TypeError):pass
+    if advance_mode:
+        code,create=advance_plan(s)
+        if create:foundation.save_account(s,code,'Salary advances','Asset','Other assets','Operating',True,'Reviewed same-month early salary transfers, applied against monthly payroll accrual.')
+        s['settings']['salary_advance_ledger']=code
+        core.add_audit(s,'SALARY_ADVANCE_TREATMENT_REVIEWED',dict(account=code,created=create,basis='User selected early salary advance treatment at upload; journals require separate review and posting.'))
     digest=hashlib.sha256(raw).hexdigest()
     if any(q.get('salary_journal') and q['digest']==digest and q['status']!='CANCELLED' for q in s['queue']):raise ValueError('This salary file is already staged or processed. Open its saved batch.')
-    q=dict(id=ap.uid(),kind='bulk',type='Journal',salary_journal=True,salary_mapping=m,digest=digest,filename=Path(filename).name,mapping={},sheet=sheet,headers=headers,rows=[],status='PENDING_REVIEW');seen=set();month_seen=set();linked=set()
+    q=dict(id=ap.uid(),kind='bulk',type='Journal',salary_journal=True,advance_mode=advance_mode,salary_mapping=m,digest=digest,filename=Path(filename).name,mapping={},sheet=sheet,headers=headers,rows=[],status='PENDING_REVIEW');seen=set();month_seen=set();linked=set()
     for number,values in enumerate(source,2):
         if not any(v not in (None,'') for v in values):continue
         original={f:values[i] if i<len(values) else '' for i,f in enumerate(FIELDS)}
@@ -86,10 +147,13 @@ def stage(s,raw,filename):
             if len(values)>len(FIELDS) and any(v not in (None,'') for v in values[len(FIELDS):]):raise ValueError('Extra values beyond template headings.')
             r.update({k:'' if v is None else str(v).strip() for k,v in original.items()});r['event']=r['event'].upper();month=r['month']
             if date.fromisoformat(month+'-01').strftime('%Y-%m')!=month:raise ValueError('Salary Month must be YYYY-MM.')
-            if hasattr(original['date'],'isoformat'):r['date']=original['date'].isoformat()[:10]
+            r['date']=entry_date(original['date'])
             if r['event']=='ACCRUAL':
                 r['date']=r['date'] or month+'-'+str(monthrange(int(month[:4]),int(month[5:]))[1]);r['reference']=r['reference'] or 'SAL-ACCR-'+month+'-'+r['branch'];r['debit_account']=m['salary_expense'];r['credit_account']=m['salary_payable'];r['bank']=''
-            else:r['debit_account']=m['salary_payable'];r['credit_account']=r['bank']
+            else:
+                r['advance']=bool(advance_mode and r['date']<accrual_dates.get((month,r['branch']),''))
+                r['debit_account']=s['settings']['salary_advance_ledger'] if r['advance'] else m['salary_payable'];r['credit_account']=r['bank']
+                if r['advance']:r['accrual_date']=accrual_dates[month,r['branch']]
             r['amount']=ap.positive(r['amount']);r['narration']='Salary '+r['event'].lower()+' for '+month+' | '+r['payee']+' | '+r['basis'];r['key']=bulk._identity(r)
             validate_row(s,r)
             if r['key'] in seen or (not r['existing'] and r['key'] in bulk._known(s)):raise ValueError('Salary date/unit/reference is already queued or repeated.')
@@ -121,12 +185,23 @@ def post(s,qid):
         if not r['existing'] and r['key'] in bulk._known(s,qid):raise ValueError('This source identity was registered in another batch after review.')
         if r['existing']:r['voucher']=r['existing']
         else:
-            if r['event']=='PAYMENT':
+            if r['event']=='PAYMENT' and not r.get('advance'):
                 dates={r['date'],*[v['date'] for v in s['vouchers'] if v['date']>=r['date']]}
                 if any(core.balances(s,on,r['branch'])[r['debit_account']]>-r['amount'] for on in dates):raise ValueError('Salary source row '+str(r['source_row'])+' ('+r['month']+' / '+r['branch']+'): salary payable does not support payment on '+r['date']+' or after later settlements. Link already-posted payments and review existing payroll before posting again.')
             v=core.post(s,r['date'],r['narration'],bulk._lines(r),metadata=dict(type='Payment' if r['event']=='PAYMENT' else 'Journal',reference=r['reference'],payee=r['payee'],**({'bank_account':r['bank']} if r['event']=='PAYMENT' else {})),source=dict(kind='bulk_import',document_id=qid,record_id=r['key'],row_count=1));r['voucher']=v['id']
-        check(s)
-    q['status']='PROCESSED';core.add_audit(s,'SALARY_JOURNAL_POSTED',dict(batch=qid,vouchers=[r['voucher'] for r in rows],new_journals=sum(not r['existing'] for r in rows),linked=sum(bool(r['existing']) for r in rows)));return [r['voucher'] for r in rows]
+    applications=defaultdict(int)
+    for r in rows:
+        if r.get('advance'):applications[r['month'],r['branch'],r['accrual_date']]+=r['amount']
+    q['salary_applications']=[]
+    for (month,branch,on),amount in sorted(applications.items()):
+        payable=mapping(s)['salary_payable'];asset=s['settings']['salary_advance_ledger']
+        dates={on,*[v['date'] for v in s['vouchers'] if v['date']>=on]}
+        if any(core.balances(s,d,branch)[payable]>-amount or core.balances(s,d,branch)[asset]<amount for d in dates):raise ValueError('Salary advance application lacks dated payable/advance capacity. Review existing payroll settlements; no journals were saved.')
+        lines=[dict(account=payable,branch=branch,debit=amount,credit=0),dict(account=asset,branch=branch,debit=0,credit=amount)]
+        v=core.post(s,on,'Apply early salary payments against '+month+' payroll',lines,metadata=dict(type='Journal',reference='SAL-APPLY-'+month+'-'+branch))
+        q['salary_applications'].append(dict(event='APPLICATION',month=month,branch=branch,date=on,amount=amount,voucher=v['id']))
+    check(s)
+    q['status']='PROCESSED';core.add_audit(s,'SALARY_JOURNAL_POSTED',dict(batch=qid,vouchers=[r['voucher'] for r in rows],new_journals=sum(not r['existing'] for r in rows),linked=sum(bool(r['existing']) for r in rows)));return [r['voucher'] for r in rows+q.get('salary_applications',[])]
 
 def template(path,s=None):
     path=Path(path)
@@ -142,7 +217,7 @@ def template(path,s=None):
     for row in ws.iter_rows(min_row=2,max_row=1001):
         for col in (1,2,4,5,7):row[col].number_format='@'
     help=w.create_sheet('Instructions')
-    for text in ['One ACCRUAL row per earned month/unit, Amount INR = reviewed monthly salary total. Multiple PAYMENT rows are allowed for actual bank transfers.', 'Entry Type ACCRUAL or PAYMENT. Salary Month YYYY-MM; exact active unit code. ACCRUAL date blank defaults to month end, or supply a reviewed earned-period date in that month.', 'PAYMENT: actual date, bank ledger code, full transfer reference and amount; payee optional. Preserve references as text. Do not merge different dates/withdrawals into a fictitious monthly bank payment.', 'This simple template assumes no PF/other deduction allocation. Complex gross/net payroll uses reviewed compound manual/general bulk JEs. PF is never inferred.', 'Salary and salary-payable accounts come from reviewed Chart of accounts salary/PF setup; no employee-level details are required for the monthly accrual.', 'One accrual does not imply it was fully paid. Payments must follow an existing dated accrual and cannot exceed the earned month/unit amount or actual payable capacity. Unpaid amounts stay payable.', 'If an accrual/payment is already posted, provide its exact Existing Voucher and actual date to link without another JE. Direct salary-expense/bank payments require review/reclassification before entering an accrual plus settlement.', 'Upload only stages rows. Review invalid/duplicate reasons, approve/reject, preview all proposed journals and confirm. Posting is atomic. Do not change references or monthly identifiers to bypass existing records.', 'Accrual reference blank gets SAL-ACCR-YYYY-MM-UNIT. Actual payment reference required. Accounting Review Basis required on every row. No formulas.', 'Use All book movements in bank reconciliation to match salary payment JEs; uploading does not import bank statements or automatically reconcile them.']:
+    for text in ['One ACCRUAL row per earned month/unit, Amount INR = reviewed monthly salary total. Multiple PAYMENT rows are allowed for actual bank transfers.', 'Entry Type ACCRUAL or PAYMENT. Salary Month YYYY-MM; exact active unit code. ACCRUAL date blank defaults to month end, or supply a reviewed earned-period date in that month.', 'PAYMENT dates: YYYY-MM-DD, real Excel dates, or day-first DD/MM/YYYY and DD/MM/YY (two-digit years mean 20xx). Review normalized ISO dates. Actual bank ledger and full transfer reference required; payee optional. Preserve references as text. Do not merge different dates/withdrawals into a fictitious monthly bank payment.', 'This simple template assumes no PF/other deduction allocation. Complex gross/net payroll uses reviewed compound manual/general bulk JEs. PF is never inferred.', 'Salary and salary-payable accounts come from reviewed Chart of accounts salary/PF setup; no employee-level details are required for the monthly accrual.', 'One accrual does not imply it was fully paid. Payments before the accrual require explicitly reviewed salary-advance treatment at upload: Dr Salary advances / Cr Bank on payment dates; Dr Salaries payable / Cr Salary advances on the accrual date. Other payments follow an existing dated accrual. Payments cannot exceed the earned month/unit amount or actual payable capacity. Unpaid amounts stay payable.', 'If an accrual/payment is already posted, provide its exact Existing Voucher and actual date to link without another JE. Direct salary-expense/bank payments require review/reclassification before entering an accrual plus settlement.', 'Upload only stages rows. Review invalid/duplicate reasons, approve/reject, preview all proposed journals and confirm. Posting is atomic. Do not change references or monthly identifiers to bypass existing records.', 'Accrual reference blank gets SAL-ACCR-YYYY-MM-UNIT. Actual payment reference required. Accounting Review Basis required on every row. No formulas.', 'Use All book movements in bank reconciliation to match salary payment JEs; uploading does not import bank statements or automatically reconcile them.']:
         help.append([text]);help.cell(help.max_row,1).alignment=Alignment(wrap_text=True);help.row_dimensions[help.max_row].height=40
     help.column_dimensions['A'].width=125
     if s:

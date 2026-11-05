@@ -450,6 +450,13 @@ def run(output):
             for i in range(2):bulk_import.review_row(payrollbook,salaryq['id'],i,True,'Reviewed source')
             bulk_import.approve(payrollbook,salaryq['id'])
             if core.balances(payrollbook,'2026-05-31')[payrollmap['salary_payable']]!=0 or core.balances(payrollbook,'2026-05-31')[payrollmap['salary_expense']]!=10000:raise ValueError('Packaged monthly salary import failed')
+            advancebook=core.empty_state();payroll_accounts.setup(advancebook,payroll_accounts.choices(advancebook),'Synthetic role setup',True)
+            early=io.StringIO();writer=csv.writer(early);writer.writerow(salary_bulk.HEADERS);writer.writerow(['ACCRUAL','2026-04','JP','','','','100','','','Synthetic early payroll']);writer.writerow(['PAYMENT','2026-04','JP','05/04/26','SYN-EARLY','1010','100','','','Synthetic evidence'])
+            earlyq=salary_bulk.stage(advancebook,early.getvalue().encode(),'synthetic-early.csv',advance_mode=True)
+            for i in range(2):bulk_import.review_row(advancebook,earlyq['id'],i,True,'Reviewed source')
+            if len(bulk_import.approve(advancebook,earlyq['id']))!=3:raise ValueError('Packaged salary advance application missing')
+            earlybalances=core.balances(advancebook,'2026-04-30')
+            if earlybalances[advancebook['settings']['salary_advance_ledger']] or earlybalances[advancebook['settings']['payroll_ledgers']['salary_payable']]:raise ValueError('Packaged salary advances failed to clear')
             salary_bulk.template(root/'salary-template.xlsx');result['salary_bulk_journals_passed']=True
 
 

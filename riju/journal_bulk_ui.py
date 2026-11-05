@@ -11,7 +11,10 @@ class JournalBulkUI:
         path=filedialog.askopenfilename(parent=self,title='Upload salary journals' if salary else 'Upload general journals',filetypes=[('Excel / CSV','*.xlsx *.csv')])
         if not path:return
         raw=Path(path).read_bytes()
-        if salary:q=self.commit(lambda s:salary_bulk.stage(s,raw,Path(path).name))
+        if salary:
+            advance_mode=messagebox.askyesnocancel('Early salary payments', 'Does this file contain salary paid before its accrual date?\n\nYes: use a dedicated Salary advances asset for early payments, then apply them against payable on the accrual date. The asset ledger is created if needed. All journals still require review and confirmation.\n\nNo: use the standard payable settlement workflow. Cancel: return without uploading.',parent=self) if salary_bulk.has_early_payments(self.state,raw,Path(path).name) else False
+            if advance_mode is None:return
+            q=self.commit(lambda s:salary_bulk.stage(s,raw,Path(path).name,advance_mode=advance_mode))
         else:q=self.commit(lambda s:bulk.stage(s,raw,Path(path).name,'Journal',sheet='Journals' if Path(path).suffix.lower()=='.xlsx' else ''))
         self.journal_bulk_review(q['id'])
     def journal_bulk_templates(self):
@@ -33,6 +36,7 @@ class JournalBulkUI:
         else:general_template(path)
     def journal_bulk_review(self,qid):
         q=bulk._queue(self.state,qid);win=tk.Toplevel(self);win.title('Review salary journals' if q.get('salary_journal') else 'Review general journals');win.geometry(f'{int(win.winfo_screenwidth()*.96)}x{int(win.winfo_screenheight()*.92)}');win.transient(self)
+        if q.get('salary_journal'):ttk.Label(win,text='Salary text dates are interpreted day-first (DD/MM/YY or DD/MM/YYYY); two-digit years mean 20xx. Review the ISO dates displayed below.',wraplength=1160,padding=5).pack(anchor='w')
         status=ttk.Label(win,text='',wraplength=1160,padding=8);status.pack(fill='x')
         ttk.Label(win,text='Approve valid rows and explicitly reject unwanted/flagged rows, then preview. No journal is posted by upload or row approval. Do not reject a genuine accrual and attempt to pay against it; monthly/date/payable capacity is checked at posting.',wraplength=1160,padding=8).pack(anchor='w')
         controls=ttk.Frame(win);controls.pack(side='bottom',fill='x')
@@ -43,7 +47,7 @@ class JournalBulkUI:
         def refresh():
             q=bulk._queue(self.state,qid);table.delete(*table.get_children());names={a['code']:a['name'] for a in self.state['accounts']}
             for i,r in enumerate(q['rows']):
-                table.insert('','end',iid=str(i),tags=('flagged',) if r['review'] in ('INVALID','DUPLICATE') else (),values=(r['source_row'],r.get('event','Journal'),r.get('month',''),r.get('date',''),r.get('branch',''),r.get('reference',''),r.get('debit_account','')+' '+names.get(r.get('debit_account',''),''),r.get('credit_account','')+' '+names.get(r.get('credit_account',''),''),core.rupees(r['amount']) if type(r.get('amount'))==int else str(r.get('amount','')),r.get('existing',''),r['review'],r['error'] or r['reason']))
+                table.insert('','end',iid=str(i),tags=('flagged',) if r['review'] in ('INVALID','DUPLICATE') else (),values=(r['source_row'],r.get('event','Journal')+(' (advance)' if r.get('advance') else ''),r.get('month',''),r.get('date',''),r.get('branch',''),r.get('reference',''),r.get('debit_account','')+' '+names.get(r.get('debit_account',''),''),r.get('credit_account','')+' '+names.get(r.get('credit_account',''),''),core.rupees(r['amount']) if type(r.get('amount'))==int else str(r.get('amount','')),r.get('existing',''),r['review'],r['error'] or r['reason']))
             counts={k:sum(r['review']==k for r in q['rows']) for k in ('PENDING','APPROVED','REJECTED','INVALID','DUPLICATE')};status.configure(text=q['filename']+' | '+q['status']+' | '+str(counts)+(' | Salary amounts not fully paid remain payable.' if q.get('salary_journal') else ' | General JE groups require final approval.'))
         def selected(event=None):
             q=bulk._queue(self.state,qid)

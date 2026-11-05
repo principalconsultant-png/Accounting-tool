@@ -870,7 +870,12 @@ Final approval posts:
 
 This produces four JEs, not one fictitious month-end bank payment. If only 25,000 is actually paid,5,000 remains payable. Accrual is an earned-period expense; payments do not expense the salary again. Use one ACCRUAL row for each additional month/unit; the same file can cover all seven historical months. All dates come from the source file, not today's Journal studio date.
 
-Salary payments before the recorded accrual date are blocked. Use the correct reviewed earned-period accrual date; a genuine salary advance needs its own approved advance/payroll treatment. Do not change actual bank dates merely to make a batch pass. A monthly total must not be turned into one aggregate bank withdrawal if the statement contains payments on different dates. A single payment row is appropriate only when it represents an actual single dated transfer/batch amount.
+For same-month salaries paid early, keep actual payment dates and the genuine month-end accrual. Choose **Yes** at the early salary payments prompt. The importer creates a separate collision-safe **Salary advances** asset ledger if needed, then proposes Dr Salary advances / Cr Bank on early payment dates, the normal month-end Dr Salaries and wages / Cr Salaries payable accrual, and Dr Salaries payable / Cr Salary advances on the accrual date. These extra application journals appear in the final preview. Choosing No retains normal payable settlement checks. Upload never posts financial journals. Do not move earned months or backdate accruals to bypass validation.
+
+Entry Date accepts real Excel dates, ISO YYYY-MM-DD, or day-first text DD/MM/YYYY and DD/MM/YY (two-digit years mean 20xx). For example, 05/04/26 means 5 April 2026. Invalid calendar dates remain flagged with a reason. Existing invalid unposted batches can be cancelled with a reason, then the original workbook uploaded again.
+
+For the early-payment example, three April payments plus one April accrual create five journals: three actual bank payments, one accrual and one advance application. Expense arises once at month end. Part-paid amounts stay payable; early transfers stay in advances until the accrual/application date. Reverse the application before reversing an early payment; reverse dependent payments/applications before reversing the accrual.
+
 
 ### Upload, review and post
 

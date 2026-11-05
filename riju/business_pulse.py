@@ -150,6 +150,8 @@ def snapshot(s,year,through,branch='ALL',scale='INR'):
         if q.get('petty_cash') or q.get('kind')=='bulk' and q.get('type')=='Petty cash':
             for r in q['rows']:
                 if r.get('voucher'):petty[r['voucher']]=r if r.get('petty_treatment') else dict(r,petty_treatment='Expense',petty_account=r.get('debit_account',''))
+    from . import salary_bulk
+    salary_sources={r['voucher'] for q,r in salary_bulk.facts(s) if r['event']=='PAYMENT'}
     payments={r['voucher']:r for r in ap.data(s)['payments']};invoices={r['id']:r for r in ap.data(s)['invoices']};paid=defaultdict(lambda:defaultdict(int))
     for v in s['vouchers']:
         if not start<=v['date']<=through:continue
@@ -168,7 +170,7 @@ def snapshot(s,year,through,branch='ALL',scale='INR'):
         for metric in ('salary','ot'):
             mapped=set(p[metric+'_accounts'])
             if mapped:
-                part,bad=_paid_component(original_lines,cash_accounts,mapped);data[month][metric]+=part*sign
+                part,bad=(sum(l['credit']-l['debit'] for l in original_lines if l['account'] in cash_accounts),False) if metric=='salary' and root in salary_sources else _paid_component(original_lines,cash_accounts,mapped);data[month][metric]+=part*sign
                 if bad:ambiguous.add((month,metric));warnings.append(v['id']+': '+metric+' cash/noncash split cannot be inferred; post reviewed separate allocations/ledgers.')
                 if part:trace[month][metric].append(v['id'])
         codes=set(p['compliance_accounts']);part=sum(l['debit']-l['credit'] for l in lines if l['account'] in codes);data[month]['compliance']+=part

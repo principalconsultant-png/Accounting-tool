@@ -164,6 +164,7 @@ def save_account(state,code,name,kind,group,cash_flow='Review',active=True,descr
     if not lo<=int(code)<=hi:raise ValueError(f'{kind} codes must be between {lo} and {hi}.')
     if code in state.get('foreign_accounts',{}) and group!='Cash and bank':raise ValueError('A designated foreign-currency bank/cash account must retain its Cash and bank group.')
     if not name.strip() or group not in GROUPS[kind] or cash_flow not in CASH_FLOW:raise ValueError('Enter ledger name and valid report/cash-flow groups.')
+    if code==state['settings'].get('salary_advance_ledger') and (kind!='Asset' or group!='Other assets' or not active):raise ValueError('Retain the active Salary advances / Other assets classification.')
     existing=next((a for a in state['accounts'] if a['code']==code),None)
     if code in state['settings'].get('payroll_ledgers',{}).values():
         from .payroll_accounts import ROLES
@@ -189,6 +190,7 @@ def save_account(state,code,name,kind,group,cash_flow='Review',active=True,descr
     add_audit(state,'LEDGER_UPDATED',{'old':old,'new':{'account':item,'details':details}})
 
 def delete_account(state,code):
+    if code==state['settings'].get('salary_advance_ledger'):raise ValueError('The configured salary advances ledger cannot be deleted.')
     """Only unused, inactive, non-control ledgers can be deleted."""
     from .core import add_audit
     details=state['account_details'].get(code,{})
