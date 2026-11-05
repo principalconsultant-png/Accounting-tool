@@ -114,6 +114,7 @@ class FoundationUI:
 
     def accounts(self):
         self.note('Create ledger masters here. Patient A/C is shared; individual patient ledgers are not required. Select a row to edit its name or mappings. Used ledgers remain in history.')
+        payrollbar=self.bar();self.button(payrollbar,'Set up salary & PF ledgers',self.payroll_ledger_setup,True)
         table=self.table(('Code','Ledger name','Classification','Report group','Active'),[(a['code'],a['name'],a['kind'],self.state['account_details'].get(a['code'],{}).get('group','Review'),'Yes' if self.state['account_details'].get(a['code'],{}).get('active',True) else 'No') for a in self.state['accounts']],height=8)
         row=self.bar();self.ledger_code=self.field(row,'4-digit code','',width=10);self.ledger_name=self.field(row,'Ledger name','',width=30)
         self.ledger_kind=self.field(row,'Classification','Expense',list(f.KINDS),width=14)
@@ -148,6 +149,28 @@ class FoundationUI:
             if messagebox.askyesno('Delete unused ledger','Delete this unused inactive ledger?',parent=self):
                 self.commit(lambda s:f.delete_account(s,self.editing_ledger));self.show('Chart of accounts')
         row=self.bar();self.button(row,'New ledger',new);self.button(row,'Save ledger',save,True);self.button(row,'Delete unused inactive ledger',delete)
+
+    def payroll_ledger_setup(self):
+        from . import payroll_accounts as payroll
+        win=tk.Toplevel(self);win.title('Salary and PF — ledger setup');win.geometry('1120x650');win.transient(self)
+        body=ttk.Frame(win,padding=12);body.pack(fill='both',expand=True)
+        ttk.Label(body,text='Create separate salary expense, employer PF expense, net salary payable and employee/employer PF payables. Employee PF is deducted from gross salary; it is not a second expense. Existing 4520 Employee benefits and historical entries are retained.',wraplength=1060,padding=8).pack(anchor='w')
+        current=payroll.choices(self.state);fields={}
+        for role,preferred,name,kind,group in payroll.ROLES:
+            bar=ttk.Frame(body);bar.pack(fill='x',pady=4);ttk.Label(bar,text=name+' ('+kind+')',width=40).pack(side='left');options={'Create new dedicated ledger':'NEW',**{a['code']+' · '+a['name']:a['code'] for a in payroll.eligible(self.state,role)}};value=tk.StringVar(value=next((label for label,code in options.items() if code==current[role]),'Create new dedicated ledger'));ttk.Combobox(bar,textvariable=value,values=list(options),state='readonly',width=64).pack(side='left');fields[role]=(value,options)
+        bar=ttk.Frame(body);bar.pack(fill='x',pady=10);basis=self.field(bar,'Setup review basis','Reviewed salary and PF account separation',width=108)
+        confirmed=tk.BooleanVar(value=False);ttk.Checkbutton(body,text='I reviewed the distinct ledger roles and existing custom accounts. This setup posts no journal.',variable=confirmed).pack(anchor='w')
+        ttk.Label(body,text='No PF rate, employee deduction or EPS/EDLI/tax split is guessed. Review approved payroll before posting. Daily Register includes booked salary/employer PF expenses. Review Business Pulse salary mappings and any existing cash-flow policy after setup.',wraplength=1060,padding=8).pack(anchor='w')
+        def preview():
+            selection={role:options[value.get()] for role,(value,options) in fields.items()};rows=payroll.plan(self.state,selection)
+            if not confirmed.get() or not basis.get().strip():raise ValueError('Confirm ledger review and enter its basis.')
+            before=copy.deepcopy(self.state);dialog=tk.Toplevel(win);dialog.title('Confirm salary/PF accounts — no journal');dialog.geometry('1040x480');dialog.transient(win);dialog.grab_set()
+            self.table(('Role','Code','Ledger name','Classification','Report group','Action'),[(next(role[2] for role in payroll.ROLES if role[0]==r['role']),r['code'],r['name'],r['kind'],r['group'],'Create' if r['create'] else 'Use existing unchanged') for r in rows],parent=dialog,height=8)
+            def save():
+                if self.state!=before:raise ValueError('Books changed after preview. Review the ledger setup again.')
+                self.commit(lambda s:payroll.setup(s,selection,basis.get(),True));dialog.destroy();win.destroy();self.show('Chart of accounts');messagebox.showinfo('Salary and PF ledgers ready','Separate ledgers are available in Journal studio, bank transactions and reports. No journal or historical reclassification was posted. Review Business Pulse mappings and any existing cash-flow policy.',parent=self)
+            self.button(dialog,'Confirm ledger setup',save,True)
+        self.button(body,'Preview ledger setup',preview,True)
 
     def journal_metadata(self):
         metadata={'type':self.jtype.get(),'reference':self.jreference.get(),'payee':self.jpayee.get()}

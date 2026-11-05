@@ -203,6 +203,7 @@ def balances(state, end, branch='ALL', start=None):
 def parse_transaction(text, branch, day, state):
     """Conservative, explainable templates. Never infer taxes or a missing payment method."""
     lower=text.lower()
+    if re.search(r'\b(pf|epf|epfo|eps|edli|esi|esic|provident\s+fund|payroll deductions?)\b',lower):raise ValueError('PF/ESI and payroll deductions require reviewed compound journal lines: employee deductions are liabilities; employer contributions are separate expenses. No payroll split was guessed.')
     if not text.strip(): raise ValueError('Describe the transaction first.')
     if re.search(r'\b(not|never|cancel|cancelled|reverse|reversed|reversal|unpaid|pending|will|tomorrow|yesterday|lakh|lakhs|crore|crores|thousand)\b',lower):
         raise ValueError('This description contains timing, negation, reversal or amount units needing manual review. Use an explicit date and numeric rupee amount.')
@@ -262,6 +263,9 @@ def parse_transaction(text, branch, day, state):
     if dates:
         date.fromisoformat(dates[0])
         if dates[0]!=day: raise ValueError('The date in your description differs from the selected date.')
+    if not received and choices[0]=='4520':
+        from .payroll_accounts import salary_ledger
+        choices[0]=salary_ledger(state,branch,day)
     debit,credit=(payment,choices[0]) if received else (choices[0],payment)
     return [dict(account=debit,branch=branch,debit=amount,credit=0),dict(account=credit,branch=branch,debit=0,credit=amount)]
 

@@ -436,6 +436,15 @@ def run(output):
             ap.correct_payment_date(correctionbook,cp['id'],'2026-06-25','Synthetic evidence corrects November to June',True)
             if ap.position(correctionbook,ci,'2026-11-05')['status']!='Paid' or core.balances(correctionbook,'2026-11-30')['1010']!=-10000 or core.balances(correctionbook,'2026-06-30')['1010']!=-10000:raise ValueError('Packaged AP date correction failed')
             result['ap_payment_date_correction_passed']=True
+            from . import payroll_accounts
+            payrollbook=core.empty_state();payroll_accounts.setup(payrollbook,payroll_accounts.choices(payrollbook),'Synthetic role setup',True);payrollmap=payrollbook['settings']['payroll_ledgers']
+            if len(set(payrollmap.values()))!=5 or payrollbook['vouchers']:raise ValueError('Packaged payroll ledger setup failed')
+            draft=core.parse_transaction('Paid salary INR100 by bank','JP','2026-04-02',payrollbook)
+            if draft[0]['account']!=payrollmap['salary_expense']:raise ValueError('Packaged salary ledger mapping failed')
+            payrollvault=Vault(root/'payroll-ledgers.riju');payrollvault.save(payrollbook)
+            if payrollvault.load()['settings']['payroll_ledgers']!=payrollmap:raise ValueError('Packaged payroll ledger persistence failed')
+            result['salary_pf_ledgers_passed']=True
+
 
 
 

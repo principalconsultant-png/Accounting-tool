@@ -17,7 +17,7 @@ Starter accounts verified against version 0.30.0-dev, 2 November 2026. This is a
 | 2300 | Patient/package advances | Unearned deposits pending delivery of services |
 | 4500 | Medical consumables | Medical supplies/stock consumed in treatment or operations |
 | 4510 | Doctor professional fees | Expense for doctors' professional services |
-| 4520 | Employee benefits | Salaries/wages and reviewed employee-benefit expense |
+| 4520 | Employee benefits | Legacy broad benefits expense; use separate salary/PF setup for detailed new posting |
 | 4530 | Rent | Hospital/office rental expense |
 | 4540 | Utilities | Electricity, water and related utility expense |
 | 4550 | Repairs and maintenance | Routine repair/maintenance expense, not a new capital asset |
@@ -51,7 +51,7 @@ The entries below show the core accounts before any separately applicable GST/TD
 | Receive electricity/water invoice | 4540 Utilities | 2000 Trade payables | AP, then settle payable on payment |
 | Receive routine repairs invoice | 4550 Repairs and maintenance | 2000 Trade payables | AP; distinguish repair from capital addition |
 | Receive doctor professional-service invoice | 4510 Doctor professional fees | 2000 Trade payables, with separate withholding control if applicable | TDS/source workflow where required; AP registers only net vendor payable |
-| Pay salary immediately, not previously accrued | 4520 Employee benefits | 1010 Bank | Journal; split actual deductions/liabilities where applicable. If accrued earlier, settle the salary-payable ledger instead, not expense again |
+| Pay salary immediately, not previously accrued | Configured Salaries and wages expense | 1010 Bank | Journal; split actual deductions/liabilities where applicable. If accrued earlier, settle the salary-payable ledger instead, not expense again |
 | Bank fee already debited by bank, not previously recorded | 4560 Bank and payment processing charges | 1010 Bank | Reviewed bank adjustment/journal; separately review fee tax |
 | Routine office/admin vendor bill | 4590 Administration | 2000 Trade payables | AP; use only for genuine administration |
 | Buy medical equipment on credit | 1030 Medical equipment | 2000 Trade payables | Reviewed accrual/AP; register/link asset once in Assets & depreciation |
@@ -112,3 +112,8 @@ Do not confuse 4080 Consumables REVENUE with 4500 Medical consumables EXPENSE. T
 Tax/control ledgers can be created or mapped by their modules, so use their configured accounts and source previews rather than overwriting an existing control. No GST/TDS rate, legal applicability or ITC entitlement is implied by this list. Salary accruals need a dedicated reviewed salary-payable liability if used; that is not supplied as a fixed starter code here, and employee payroll should not be disguised as a vendor invoice.
 
 Daily check before approving: correct unit; actual accounting date; invoice/reference; correct account NAME beside the code; balanced debit/credit; tax/source reviewed; no duplicate accrual/payment. Payments settle the balance already recorded; transfers are not income/expense; stock issues use cost. If the preview account name does not match this reference because your master was customised, stop and use the actual reviewed mapping.
+
+
+## Separate salary and PF ledgers
+
+Use Chart of accounts → Set up salary & PF ledgers. Preferred free codes:4521 Salaries and wages;4522 Employer PF contributions;2310 Salaries payable;2311 Employee PF deductions payable;2312 Employer PF contributions payable. Actual codes come from the reviewed setup preview; occupied client codes are never replaced. Employee PF is deducted from gross salary into a liability, not expensed again. Employer PF is a separate expense/liability. Salary/PF bank payments clear those liabilities after accrual. Use the dedicated Salary and PF Guide for compound examples, reporting mappings and historical4520 review. Setup creates no journal.

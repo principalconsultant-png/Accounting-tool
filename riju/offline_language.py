@@ -95,6 +95,9 @@ def interpret(state,text,selected_branch,selected_date):
     if account is None:
         if not predicted or len(set(model['evidence'])-{'fee','fees','service','services','charge','charges','monthly','office','new','patient'})<2:raise ValueError('Account interpretation is uncertain. Which ledger and transaction purpose apply? Select manual lines; no draft was guessed.')
         account=predicted
+    if paid and account=='4520':
+        from .payroll_accounts import salary_ledger
+        account=salary_ledger(state,branch,day)
     records={a['code']:a for a in state['accounts']}
     if account not in records or (received and records[account]['kind']!='Revenue') or (paid and records[account]['kind'] not in ('Expense','Asset')):raise ValueError('The payment direction and account interpretation disagree. Review the purpose and source.')
     if paid and payment in ('1110','1120'):raise ValueError('Outgoing UPI/card payments need selection of the actual bank/card liability; collection clearing cannot be used.')

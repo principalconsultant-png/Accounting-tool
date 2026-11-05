@@ -79,6 +79,7 @@ def main():
     for kind in ('xlsx','csv'):bank_workbench.payment_template(out/('Yathartha-Invoice-Payments-Template.'+kind))
     build_pdf(root/'docs/MONTHLY_BOOKKEEPING_SOP.md',out/'Yathartha-Monthly-Bookkeeping-SOP.pdf',compact=True)
     (out/'MONTHLY_BOOKKEEPING_SOP.md').write_text((root/'docs/MONTHLY_BOOKKEEPING_SOP.md').read_text(encoding='utf-8'),encoding='utf-8')
+    build_pdf(root/'docs/SALARY_PF_GUIDE.md',out/'Yathartha-Salary-PF-Guide.pdf',compact=True)
     build_pdf(root/'docs/BANK_TRANSACTION_GUIDE.md',out/'Yathartha-Bank-Transactions-Guide.pdf')
     build_pdf(root/'docs/DAILY_BUSINESS_REGISTER.md',out/'Yathartha-Daily-Business-Register-Guide.pdf')
     from scripts.build_daily_register_example import build as build_daily_example

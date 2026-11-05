@@ -165,6 +165,11 @@ def save_account(state,code,name,kind,group,cash_flow='Review',active=True,descr
     if code in state.get('foreign_accounts',{}) and group!='Cash and bank':raise ValueError('A designated foreign-currency bank/cash account must retain its Cash and bank group.')
     if not name.strip() or group not in GROUPS[kind] or cash_flow not in CASH_FLOW:raise ValueError('Enter ledger name and valid report/cash-flow groups.')
     existing=next((a for a in state['accounts'] if a['code']==code),None)
+    if code in state['settings'].get('payroll_ledgers',{}).values():
+        from .payroll_accounts import ROLES
+        roles={r[0]:r for r in ROLES}
+        for role,mapped in state['settings']['payroll_ledgers'].items():
+            if mapped==code and (kind!=roles[role][3] or group!=roles[role][4] or not active):raise ValueError('Retain the active salary/PF ledger classification/group, or remap its payroll role before changing it.')
     if existing and existing['kind']!=kind:raise ValueError('Existing ledger classification cannot change. Create a new ledger instead.')
     protected={'1000','1010','1020','1050','1100','1110','1120','1130','2300','3100',state['patient_control'],*state['revenue_mode_accounts'].values(),*state.get('foreign_accounts',{}),*state.get('gst_rcm_ledgers',{}).values(),*state.get('tds_ledgers',{}).values()}
     if not active and code in protected:raise ValueError('This control ledger is required. It may be renamed but not deactivated.')
@@ -187,6 +192,7 @@ def delete_account(state,code):
     """Only unused, inactive, non-control ledgers can be deleted."""
     from .core import add_audit
     details=state['account_details'].get(code,{})
+    if code in state['settings'].get('payroll_ledgers',{}).values():raise ValueError('A salary/PF role references this ledger. Remap the payroll role before deleting it.')
     if details.get('active',True):raise ValueError('Deactivate the ledger before deleting it.')
     if any(l['account']==code for v in state['vouchers'] for l in v['lines']):raise ValueError('A ledger used in posted history cannot be deleted.')
     if any(l['account']==code for d in state['drafts'] for l in d['lines']):raise ValueError('A draft references this ledger.')

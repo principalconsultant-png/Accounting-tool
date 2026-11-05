@@ -1,6 +1,6 @@
 # Monthly Bookkeeping SOP — Yathartha
 
-Applies to Yathartha 0.38.1-dev and the controls currently available. Inputs: Daily Sales Receipt report, vendor Invoice report and Bank statement. Obtain payroll, petty-cash, loan and other supporting information where the bank statement alone does not establish the accounting purpose. Process the earliest incomplete month first, then move forward chronologically.
+Applies to Yathartha 0.39.0-dev and the controls currently available. Inputs: Daily Sales Receipt report, vendor Invoice report and Bank statement. Obtain payroll, petty-cash, loan and other supporting information where the bank statement alone does not establish the accounting purpose. Process the earliest incomplete month first, then move forward chronologically.
 
 ## Monthly route at a glance
 
@@ -80,6 +80,8 @@ Outcome after final approval: a new simple accrual normally posts Dr Expense/Inv
 
 ## 6. Record salaries, petty cash and other period accruals
 
+Set up dedicated accounts through Chart of accounts → Set up salary & PF ledgers, reviewing any existing client accounts before confirmation. Use the actual proposed/mapped codes: salaries and employer PF are separate expenses; salary payable and employee/employer PF payables are separate liabilities. Employee PF withholding is not another expense. Existing4520 entries require source-based review before reclassification.
+
 Salary: obtain the approved payroll and identify whether the expense is already accrued. If not accrued, use Journal studio to post Dr Salary expense / Cr Salaries payable for the earned period, with statutory/other deduction liabilities separated where applicable. If expensing at the actual payment date is appropriate and no prior accrual exists, a reviewed Dr Salary expense / Cr Bank entry is possible; do not use payment timing to shift expenses out of the earned period. Gross payroll must not be inferred from a net bank transfer.
 
 Petty cash: open Petty cash → Record cash expense / top-up, or Upload bulk petty cash. Review treatment, unit, ledger, amount and source basis. For bulk imports, stage/review the rows, approve/reject them, preview and confirm the posting. An expense posts Dr Expense / Cr 1000 Cash. Stock, staff advance and salary-liability settlement use their respective asset/liability treatments instead of being expensed again. A cash top-up is a transfer, not an expense. Use a consistent report/reference when no supplier voucher number exists; the tool generates its own accounting voucher on posting. Do not manufacture an external invoice.
@@ -143,7 +145,7 @@ For a genuinely new entry: select an unmatched row in Bank reconciliation → Re
 | Bank item | Obtain/verify | Entry and correct tool action |
 | --- | --- | --- |
 | Salaries paid; expense already accrued | Payroll, approved net pay/deductions, payment reference and salary-payable balance | Dr Salaries payable / Cr Bank. Journal studio first then match All book movements, or Record bank transaction → Standing instruction / other payment against the saved salary liability. No second salary expense. |
-| Salaries paid; no earlier accrual | Approved payroll and earned period; gross/net and deduction details | Post the appropriate salary expense/payable/deduction entries. For a simple reviewed payment with no deductions/prior accrual, Dr 4520 or dedicated salary expense / Cr Bank. Record once, then match. A net bank amount alone is not a complete gross-payroll allocation. |
+| Salaries paid; no earlier accrual | Approved payroll and earned period; gross/net and deduction details | Post the appropriate salary expense/payable/deduction entries. For a simple reviewed payment with no deductions/prior accrual, Dr the dedicated Salaries and wages expense / Cr Bank. Record once, then match. A net bank amount alone is not a complete gross-payroll allocation. |
 | ATM/cash withdrawal for business use | Cash withdrawal evidence and cash-custody record | Dr 1000 Cash / Cr Bank. Use Cash withdrawal. Record later expenses separately from petty cash. Do not also post the same top-up in Petty cash. |
 | Cash deposited from recorded cash | Cash deposit slip/custody record; sufficient recorded cash; related receipts | Dr Bank / Cr 1000 Cash. Use receipt-linked cash settlement where applicable, otherwise Cash deposit. Never create sales again. |
 | Deposit from a customer | Receipt/invoice/advance details and whether already posted | Use Sales receipt/Service revenue and settlement or match the existing entry. Do not treat every bank deposit as new revenue. |
