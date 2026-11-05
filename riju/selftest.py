@@ -444,6 +444,14 @@ def run(output):
             payrollvault=Vault(root/'payroll-ledgers.riju');payrollvault.save(payrollbook)
             if payrollvault.load()['settings']['payroll_ledgers']!=payrollmap:raise ValueError('Packaged payroll ledger persistence failed')
             result['salary_pf_ledgers_passed']=True
+            from . import salary_bulk,bulk_import
+            salarycsv=io.StringIO();writer=csv.writer(salarycsv);writer.writerow(salary_bulk.HEADERS);writer.writerow(['ACCRUAL','2026-04','JP','','','','100','','','Synthetic payroll no deductions']);writer.writerow(['PAYMENT','2026-04','JP','2026-05-05','SYNTHETIC-SAL1','1010','100','','','Synthetic bank evidence'])
+            salaryq=salary_bulk.stage(payrollbook,salarycsv.getvalue().encode(),'synthetic-salary.csv')
+            for i in range(2):bulk_import.review_row(payrollbook,salaryq['id'],i,True,'Reviewed source')
+            bulk_import.approve(payrollbook,salaryq['id'])
+            if core.balances(payrollbook,'2026-05-31')[payrollmap['salary_payable']]!=0 or core.balances(payrollbook,'2026-05-31')[payrollmap['salary_expense']]!=10000:raise ValueError('Packaged monthly salary import failed')
+            salary_bulk.template(root/'salary-template.xlsx');result['salary_bulk_journals_passed']=True
+
 
 
 

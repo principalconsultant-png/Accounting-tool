@@ -79,6 +79,14 @@ def main():
     for kind in ('xlsx','csv'):bank_workbench.payment_template(out/('Yathartha-Invoice-Payments-Template.'+kind))
     build_pdf(root/'docs/MONTHLY_BOOKKEEPING_SOP.md',out/'Yathartha-Monthly-Bookkeeping-SOP.pdf',compact=True)
     (out/'MONTHLY_BOOKKEEPING_SOP.md').write_text((root/'docs/MONTHLY_BOOKKEEPING_SOP.md').read_text(encoding='utf-8'),encoding='utf-8')
+    from riju import salary_bulk
+    from riju.journal_bulk_ui import general_template
+    for kind in ('xlsx','csv'):
+        salary_bulk.template(out/('Yathartha-Salary-Journals-Template.'+kind))
+        general_template(out/('Yathartha-General-JE-Template.'+kind))
+    build_pdf(root/'docs/BULK_JOURNAL_SALARY_GUIDE.md',out/'Yathartha-Bulk-JE-Salary-Guide.pdf',compact=True)
+    from scripts.build_salary_bulk_example import build as build_salary_example
+    build_salary_example(out)
     build_pdf(root/'docs/SALARY_PF_GUIDE.md',out/'Yathartha-Salary-PF-Guide.pdf',compact=True)
     build_pdf(root/'docs/BANK_TRANSACTION_GUIDE.md',out/'Yathartha-Bank-Transactions-Guide.pdf')
     build_pdf(root/'docs/DAILY_BUSINESS_REGISTER.md',out/'Yathartha-Daily-Business-Register-Guide.pdf')

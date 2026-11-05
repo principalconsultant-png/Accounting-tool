@@ -1,6 +1,6 @@
 # Monthly Bookkeeping SOP — Yathartha
 
-Applies to Yathartha 0.39.0-dev and the controls currently available. Inputs: Daily Sales Receipt report, vendor Invoice report and Bank statement. Obtain payroll, petty-cash, loan and other supporting information where the bank statement alone does not establish the accounting purpose. Process the earliest incomplete month first, then move forward chronologically.
+Applies to Yathartha 0.40.0-dev and the controls currently available. Inputs: Daily Sales Receipt report, vendor Invoice report and Bank statement. Obtain payroll, petty-cash, loan and other supporting information where the bank statement alone does not establish the accounting purpose. Process the earliest incomplete month first, then move forward chronologically.
 
 ## Monthly route at a glance
 
@@ -81,6 +81,8 @@ Outcome after final approval: a new simple accrual normally posts Dr Expense/Inv
 ## 6. Record salaries, petty cash and other period accruals
 
 Set up dedicated accounts through Chart of accounts → Set up salary & PF ledgers, reviewing any existing client accounts before confirmation. Use the actual proposed/mapped codes: salaries and employer PF are separate expenses; salary payable and employee/employer PF payables are separate liabilities. Employee PF withholding is not another expense. Existing4520 entries require source-based review before reclassification.
+
+For several historical months, Journal studio → Upload monthly salary JEs can post one reviewed accrual per month/unit plus multiple dated bank-payment rows. Download Salary XLSX/CSV from JE templates / saved batches. Review and approve rows, preview, then Confirm post reviewed JEs; upload alone posts nothing. Link exact existing accrual/payment vouchers to avoid duplicates. This simple salary format assumes no PF/other deduction splits; use reviewed compound general JEs when deductions apply.
 
 Salary: obtain the approved payroll and identify whether the expense is already accrued. If not accrued, use Journal studio to post Dr Salary expense / Cr Salaries payable for the earned period, with statutory/other deduction liabilities separated where applicable. If expensing at the actual payment date is appropriate and no prior accrual exists, a reviewed Dr Salary expense / Cr Bank entry is possible; do not use payment timing to shift expenses out of the earned period. Gross payroll must not be inferred from a net bank transfer.
 

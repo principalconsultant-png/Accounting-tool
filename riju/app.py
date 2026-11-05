@@ -35,6 +35,7 @@ from .petty_cash_ui import PettyCashUI
 from .bank_workbench_ui import BankWorkbenchUI
 from .business_pulse_ui import BusinessPulseUI
 from .daily_consolidation_ui import DailyConsolidationUI
+from .journal_bulk_ui import JournalBulkUI
 from .ap_ui import ApUI
 from .checks_ui import ChecksUI
 from .statements_ui import StatementsUI
@@ -47,7 +48,7 @@ SAGE='#E8F0FC'; SAFFRON='#FFE3BF'; MUTED='#566B85'
 BRAND_SAFFRON='#D97716'; BRAND_BLUE='#154C8A'
 SAFFRON_HOVER='#F2D5B5'; SAGE_HOVER='#D4E3F8'; BLUE='#E7EDF7'; BORDER='#DCE2DC'
 
-class App(DailyConsolidationUI,BusinessPulseUI,BankWorkbenchUI,PettyCashUI,ApBulkUI,ReceiptImportUI,ApUI,ChecksUI,StatementsUI,GstCompletionUI,BulkImportUI,ServiceRevenueUI,CwipUI,TaxDepreciationUI,FixedAssetsUI,CashFlowUI,TdsUI,RcmUI,GstUI,TaxUI,HistoryUI,BankUI,OperationsUI,LedgerUI,FoundationUI,tk.Tk):
+class App(JournalBulkUI,DailyConsolidationUI,BusinessPulseUI,BankWorkbenchUI,PettyCashUI,ApBulkUI,ReceiptImportUI,ApUI,ChecksUI,StatementsUI,GstCompletionUI,BulkImportUI,ServiceRevenueUI,CwipUI,TaxDepreciationUI,FixedAssetsUI,CashFlowUI,TdsUI,RcmUI,GstUI,TaxUI,HistoryUI,BankUI,OperationsUI,LedgerUI,FoundationUI,tk.Tk):
     def __init__(self,vault):
         super().__init__()
         self.vault=vault
@@ -262,6 +263,7 @@ class App(DailyConsolidationUI,BusinessPulseUI,BankWorkbenchUI,PettyCashUI,ApBul
         self.narration.pack(fill='x',pady=10)
         ttk.Label(self.content,text='Example: Patient purchased medicines in cash INR1291  •  Paid ₹5,000 rent by bank',style='Sub.TLabel').pack(anchor='w')
         self.draft=[]
+        imports=self.bar();self.button(imports,'Upload bulk JEs',self.journal_bulk_upload,True);self.button(imports,'Upload monthly salary JEs',lambda:self.journal_bulk_upload(True),True);self.button(imports,'JE templates / saved batches',self.journal_bulk_templates)
         actions=self.bar(); self.button(actions,'Prepare offline draft',self.prepare,True); self.button(actions,'Add manual line',self.add_line)
         self.button(actions,'Edit selected line',self.edit_line)
         self.button(actions,'Remove selected line',self.remove_line)

@@ -1,5 +1,5 @@
 """यथार्थः (Yathartha) — offline bookkeeping; legacy package compatibility retained."""
 
-APP_VERSION = "0.39.0-dev"
+APP_VERSION = "0.40.0-dev"
 APP_NAME = "यथार्थः"
 APP_NAME_EN = "Yathartha"

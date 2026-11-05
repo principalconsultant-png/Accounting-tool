@@ -21,9 +21,13 @@ def _queue(s,qid):
     return q
 
 def _known(s,exclude=None):
-    return {a['payload']['key'] for a in s['audit'] if a['action']=='PETTY_CASH_RECORDED'} | {r['key'] for q in s['queue'] if q.get('kind')=='bulk' and q['id']!=exclude for r in q['rows'] if r.get('key') and r['review'] not in ('REJECTED','INVALID','DUPLICATE')}
+    return {a['payload']['key'] for a in s['audit'] if a['action']=='PETTY_CASH_RECORDED'} | {r['key'] for q in s['queue'] if q.get('kind')=='bulk' and q['id']!=exclude and q['status']!='CANCELLED' for r in q['rows'] if r.get('key') and r['review'] not in ('REJECTED','INVALID','DUPLICATE')}
 
 def _validate(s,kind,r):
+    if r.get('salary_source'):
+        from . import salary_bulk
+        salary_bulk.validate_row(s,r)
+        if r['existing']:return
     if r.get('petty_treatment') is not None:
         from . import petty_cash
         petty_cash.validate(s,r)
@@ -103,6 +107,9 @@ def review_row(s,qid,index,approved,reason):
 
 
 def approve(s,qid):
+    if _queue(s,qid).get('salary_journal'):
+        from . import salary_bulk
+        return salary_bulk.post(s,qid)
     c=copy.deepcopy(s);q=_queue(c,qid)
     if q['status']!='PENDING_REVIEW' or any(r['review'] not in ('APPROVED','REJECTED') for r in q['rows']):raise ValueError('Approve or explicitly reject every row first; unresolved errors cannot be posted.')
     selected=[r for r in q['rows'] if r['review']=='APPROVED']

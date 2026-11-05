@@ -141,6 +141,8 @@ def post(state, day, narration, lines, opening=False, reverses=None, metadata=No
         source=validate_source(source)
         if any(v.get('source',{}).get('kind')==source['kind'] and v['source'].get('document_id')==source['document_id'] and v['source'].get('record_id')==source['record_id'] for v in state['vouchers']):raise ValueError('This source record is already posted.')
     if reverses:
+        from .salary_bulk import check as validate_salary_sources
+        validate_salary_sources(state,(reverses,day))
         from .gst import validate_reversal as validate_gst_reversal
         validate_gst_reversal(state,reverses,day)
         from .gst_extensions import check_lines
