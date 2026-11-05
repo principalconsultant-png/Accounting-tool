@@ -412,6 +412,14 @@ def run(output):
             bank_workbench.reconcile(chargebook,'1010',chargest['id'],'Sales receipts',None,chargest['row_ids'],[x['id'] for x in chargechoices],'Synthetic charge evidence',100)
             if reconciliation.outstanding(chargebook,'1010')[0] or core.balances(chargebook,'2026-04-30')['4560']!=100:raise ValueError('Packaged bank-charge reconciliation failed')
             result['bank_charge_difference_passed']=True
+            from . import bank_entries
+            entrybook=core.empty_state()
+            core.post(entrybook,'2026-04-01','Synthetic loan opening',[dict(account='1010',branch='JP',debit=100000,credit=0),dict(account='2400',branch='JP',debit=0,credit=100000)],opening=True)
+            entryst=reconciliation.import_statement(entrybook,b'date,narration,reference,debit,credit,balance\n2026-04-05,EMI,EMI1,110,0,890\n','emi.csv','1010','ALL','2026-04-01','2026-04-30','1000','890')
+            bank_entries.record(entrybook,entryst['row_ids'][0],dict(category='Loan repayment / EMI',branch='JP',account='2400',bank_account='1010',principal='100',interest='9',fees='1',interest_account='4580',reviewed=True,basis='Synthetic lender breakup'))
+            if core.balances(entrybook,'2026-04-30')['2400']!=-90000 or reconciliation.outstanding(entrybook,'1010')[0]:raise ValueError('Packaged loan bank entry failed')
+            result['guided_bank_transaction_passed']=True
+
 
 
 

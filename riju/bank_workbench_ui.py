@@ -58,7 +58,7 @@ class BankWorkbenchUI:
         self.wb_bank_checks=set();self.wb_source_checks=set();self.wb_bank_rows={};self.wb_source_rows={};self.wb_filters={'bank':{},'source':{}};self.wb_channels={}
         bar=ttk.Frame(parent);bar.pack(fill='x')
         self.button(bar,'Upload bank statement',self.wb_import_bank,True);self.button(bar,'Upload sales report',lambda:self.wb_upload('Sales receipts'));self.button(bar,'Upload invoice payments',lambda:self.wb_upload('Invoice payments'))
-        self.button(bar,'Automatically reconcile selected',self.wb_reconcile,True);self.button(bar,'Options / templates',self.wb_options)
+        self.button(bar,'Automatically reconcile selected',self.wb_reconcile,True);self.button(bar,'Options / templates',self.wb_options);self.button(bar,'Record bank transaction',self.wb_record_entry)
         bar=ttk.Frame(parent);bar.pack(fill='x')
         prior=getattr(self,'wb_prior_kind','Sales receipts');self.wb_kind=self.field(bar,'Compare bank against',prior,['Sales receipts','Invoice payments','All book movements'],width=21)
         self.wb_report=self.field(bar,'Source report','All posted sources',['All posted sources'],width=33);self.wb_document_choices={};self.wb_report_combo=bar.winfo_children()[-1].winfo_children()[-1]
@@ -188,6 +188,9 @@ class BankWorkbenchUI:
         self.wb_fees.set(f'{fee//100}.{fee%100:02d}');self.wb_confirm.set(False)
         if not self.wb_advanced.winfo_manager():self.wb_advanced.pack(fill='x',pady=5)
         self.wb_detail.configure(text='Proposed bank charges '+core.rupees(fee)+' → Dr 4560 Bank charges / bank or settlement allocation. Review the evidence and basis, tick the review confirmation, then Automatically reconcile selected to inspect the full journal. Nothing posted yet.')
+    def wb_record_entry(self):
+        if len(self.wb_bank_checks)!=1:raise ValueError('Tick one bank transaction to record; existing entries should be matched instead.')
+        self.bank_entry(next(iter(self.wb_bank_checks)),self.wb_account(),self.wb_window,self.wb_after_change)
     def wb_upload(self,kind):
         path=filedialog.askopenfilename(parent=self.wb_window,title='Upload '+kind,filetypes=[('Source CSV / Excel','*.csv *.xlsx')])
         if not path:return

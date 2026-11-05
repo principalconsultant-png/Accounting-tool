@@ -77,6 +77,7 @@ def main():
     for kind in ('xlsx','csv'):petty_cash.template(out/('Yathartha-Petty-Cash-Template.'+kind))
     from riju import bank_workbench
     for kind in ('xlsx','csv'):bank_workbench.payment_template(out/('Yathartha-Invoice-Payments-Template.'+kind))
+    build_pdf(root/'docs/BANK_TRANSACTION_GUIDE.md',out/'Yathartha-Bank-Transactions-Guide.pdf')
     from scripts.build_business_pulse_example import build as build_pulse_example
     build_pulse_example(out)
     from riju import business_pulse

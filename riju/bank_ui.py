@@ -36,6 +36,7 @@ class BankUI:
         self.button(actions,'Suggest book matches',self.bank_suggestions,True);self.button(actions,'Match selected bank + book rows',self.match_bank_books)
         actions=ttk.Frame(self.brs_frames['bank']);actions.pack(fill='x',pady=5)
         self.button(actions,'Review UPI / card / cash settlement',self.bank_settlement)
+        self.button(actions,'Record bank transaction',self.bank_entry,True)
         self.button(actions,'Create reviewed adjustment',self.bank_adjustment)
         self.button(actions,'Classify reconciling item',self.bank_exception)
         self.button(actions,'Remove item classification',self.remove_bank_exception)
@@ -206,6 +207,45 @@ class BankUI:
             if messagebox.askyesno('Approve suggested match','Have you reviewed the amount, dates, reference and narration?',parent=dialog):
                 self.commit(lambda s:r.match_existing(s,[bank_id],[key]));dialog.destroy();self.refresh_bank_tables()
         self.button(dialog,'Review & approve selected match',approve,True)
+
+    def bank_entry(self,bank_id=None,account=None,parent=None,after=None):
+        import copy
+        from . import bank_entries as entries,core
+        account=account or self._bank_account();bank_id=bank_id or self._one_bank();parent=parent or self
+        row=next((b for b in r.outstanding(self.state,account)[0] if b['id']==bank_id),None)
+        if row is None:raise ValueError('The selected bank transaction is already matched. Refresh and select an unmatched row.')
+        win=tk.Toplevel(parent);win.title('Record bank transaction — reviewed accounting');win.geometry('1120x690');win.transient(parent)
+        body=ttk.Frame(win,padding=12);body.pack(fill='both',expand=True)
+        ttk.Label(body,text=row['date']+' | '+row['narration']+' | '+row['reference']+' | Remaining '+core.rupees(row['remaining']),wraplength=1050,padding=6).pack(anchor='w')
+        bar=ttk.Frame(body);bar.pack(fill='x');category=self.field(bar,'Accounting treatment',entries.CATEGORIES[0] if row['remaining']<0 else 'Cash deposit',entries.CATEGORIES,width=34);branch=self.field(bar,'Operating unit',row['branch'] if row['branch']!='ALL' else next(iter(foundation.branches(self.state,True))),list(foundation.branches(self.state,True)),width=12)
+        guidance=ttk.Label(body,wraplength=1040,padding=8);guidance.pack(fill='x')
+        bar=ttk.Frame(body);bar.pack(fill='x');ttk.Label(bar,text='Counterpart ledger').pack(side='left',padx=5);contra=tk.StringVar();picker=ttk.Combobox(bar,textvariable=contra,state='readonly',width=65);picker.pack(side='left',padx=5)
+        loan=ttk.Frame(body);principal=self.field(loan,'Principal INR','0',width=16);interest=self.field(loan,'Interest INR','0',width=16);fees=self.field(loan,'Bank/lender fees INR','0',width=16)
+        expense=[a['code']+' · '+a['name'] for a in self.state['accounts'] if a['kind']=='Expense' and self.state['account_details'][a['code']].get('active',True)];interest_ledger=self.field(loan,'Interest expense ledger',next((x for x in expense if x.startswith('4580 · ')),''),['',*expense],width=31)
+        def update(*args):
+            choices=['',*[a['code']+' · '+a['name'] for a in entries.accounts(self.state,category.get(),account)]];picker.configure(values=choices);default=entries.DEFAULTS.get(category.get());contra.set(next((x for x in choices if default and x.startswith(default+' · ')),''));guidance.configure(text=entries.GUIDANCE[category.get()])
+            if category.get()=='Loan repayment / EMI':loan.pack(fill='x',before=basisrow)
+            else:loan.pack_forget()
+            reviewed.set(False)
+        basisrow=ttk.Frame(body);basisrow.pack(fill='x',pady=8);basis=self.field(basisrow,'Source / accounting review basis','',width=105)
+        reviewed=tk.BooleanVar(value=False);ttk.Checkbutton(body,text='I verified the purpose, source breakup, unit and tax treatment, and checked that this transaction is not already in the books.',variable=reviewed).pack(anchor='w',pady=8)
+        ttk.Label(body,text='Vendor invoice payments: use AP → Mark selected invoices paid, then match. Sales/UPI/card receipts: use their receipt/settlement screens. GST/TDS and multi-line tax allocations use dedicated tax screens or reviewed Journal studio. This form creates and matches a new entry only after the preview is confirmed.',wraplength=1030,padding=8).pack(anchor='w')
+        category.trace_add('write',update);update()
+        def preview():
+            values=dict(category=category.get(),branch=branch.get(),account=contra.get().split(' · ')[0],bank_account=account,principal=principal.get(),interest=interest.get(),fees=fees.get(),interest_account=interest_ledger.get().split(' · ')[0],basis=basis.get(),reviewed=reviewed.get())
+            before=copy.deepcopy(self.state);candidate=copy.deepcopy(before);result=entries.record(candidate,bank_id,values);voucher=next(v for v in candidate['vouchers'] if v['id']==result['voucher']);names={a['code']:a['name'] for a in candidate['accounts']}
+            previewwin=tk.Toplevel(win);previewwin.title('Confirm bank transaction journal');previewwin.geometry('1050x500');previewwin.transient(win);previewwin.grab_set()
+            ttk.Label(previewwin,text=category.get()+' | '+voucher['date']+' | '+values['basis'],wraplength=1000,padding=10).pack(anchor='w')
+            self.table(('Unit','Account','Ledger','Debit INR','Credit INR'),[(l['branch'],l['account'],names[l['account']],core.rupees(l['debit']),core.rupees(l['credit'])) for l in voucher['lines']],parent=previewwin,height=8)
+            def approve():
+                if self.state!=before:raise ValueError('Books changed after preview. Review a fresh bank transaction preview.')
+                def save(s):s.clear();s.update(copy.deepcopy(candidate))
+                self.commit(save);previewwin.destroy();win.destroy()
+                if after:after()
+                else:self.refresh_bank_tables()
+                messagebox.showinfo('Bank transaction recorded','Posted '+result['voucher']+' and matched the selected bank row.',parent=parent)
+            self.button(previewwin,'Confirm post and match',approve,True)
+        self.button(body,'Preview journal',preview,True)
 
     def bank_adjustment(self):
         bank_id=self._one_bank();bank=next(b for b in r.bank_rows(self.state,self._bank_account()) if b['id']==bank_id)
