@@ -115,12 +115,17 @@ def extend(s,key,effective,payment_date,reason,confirmed=False):
     if payment_date<=schedule(s,r,effective) or payment_date<effective:raise ValueError('Choose a later scheduled payment date, on/after the extension effective date.')
     row=dict(id=uid(),invoice=key,effective=effective,old_date=schedule(s,r,effective),payment_date=payment_date,reason=reason.strip());data(s)['schedules'].append(row);core.add_audit(s,'AP_PAYMENT_DATE_EXTENDED',row);return row
 
+_DATE_CORRECTION=object()
+
 @atomic
-def pay(s,v):
+def pay(s,v,_correction=None):
     reviewed(v);on=day(v['date']);ref=str(v.get('reference','')).strip();bank=v['bank_account'];items=v.get('items',[])
     if not ref or not items or len({i['invoice'] for i in items})!=len(items):raise ValueError('Select unique invoice(s) and enter the actual bank/payment reference.')
     if s['account_details'].get(bank,{}).get('group')!='Cash and bank' or bank in s.get('foreign_accounts',{}) or not s['account_details'][bank]['active']:raise ValueError('Choose an active INR cash/bank ledger; collection clearing and foreign-currency accounts are not payment sources.')
-    if any(norm(p['reference'])==norm(ref) and p['bank_account']==bank and core.financial_year(p['date'])==core.financial_year(on) for p in data(s)['payments']):raise ValueError('This payment reference is already recorded for this bank/fiscal year. Review the existing payment or use a new correction reference.')
+    duplicates=[p for p in data(s)['payments'] if norm(p['reference'])==norm(ref) and p['bank_account']==bank and core.financial_year(p['date'])==core.financial_year(on)]
+    if duplicates and not (_correction is _DATE_CORRECTION and all(tds._net(s).get(p['voucher'])==0 for p in duplicates)):
+        details='; '.join(p['voucher']+' dated '+p['date']+' ('+('active' if tds._net(s).get(p['voucher'])==1 else 'reversed')+')' for p in duplicates)
+        raise ValueError('This payment reference is already recorded for this bank/fiscal year: '+details+'. Review its date/allocation. For a wrong date use Correct selected payment date; do not post another payment or change the bank reference.')
     lines=[];clean=[];units=set()
     for item in items:
         r=invoice(s,item['invoice']);n=positive(item['amount']);units.add(r['branch'])
@@ -143,6 +148,26 @@ def pay(s,v):
     else:
         row['voucher']=core.post(s,on,'AP payment '+ref,lines,metadata={'type':'Payment','reference':ref,'bank_account':bank,'payee':'; '.join(sorted({invoice(s,i['invoice'])['vendor_name'] for i in clean}))})['id'];row['mode']='New payment'
     data(s)['payments'].append(row);core.add_audit(s,'AP_INVOICES_PAID',row);return row
+
+
+@atomic
+def correct_payment_date(s,key,new_date,basis,confirmed=False):
+    """Cancel on the erroneous date and replace on the evidenced actual date atomically."""
+    if not confirmed or not str(basis).strip():raise ValueError('Confirm the actual bank date and enter correction evidence.')
+    p=next((p for p in data(s)['payments'] if p['id']==key),None)
+    if not p:raise ValueError('Select an existing AP payment.')
+    new_date=day(new_date)
+    if new_date==p['date']:raise ValueError('The payment already uses this date.')
+    if core.financial_year(new_date)!=core.financial_year(p['date']):raise ValueError('This correction must remain within the same financial year. Review cross-year opening/closing effects separately.')
+    if p.get('mode')!='New payment':raise ValueError('This payment links an independently posted voucher. Correct its original source workflow instead of reversing it here.')
+    if tds._net(s).get(p['voucher'])!=1:raise ValueError('Select an active payment; this payment is already reversed.')
+    original=copy.deepcopy(p)
+    reversal=core.reverse(s,p['voucher'],p['date'])
+    values=dict(date=new_date,bank_account=p['bank_account'],reference=p['reference'],items=[dict(invoice=i['invoice'],amount=str(i['amount']//100)+'.'+str(i['amount']%100).zfill(2)) for i in p['items']],reviewed=True,basis='Payment-date correction: '+str(basis).strip())
+    replacement=pay.__wrapped__(s,values,_DATE_CORRECTION)
+    actual=next(x for x in data(s)['payments'] if x['id']==replacement['id']);actual['corrects_payment']=key
+    result=dict(original_payment=key,old_date=original['date'],new_date=new_date,old_voucher=original['voucher'],cancellation_voucher=reversal['id'],new_payment=replacement['id'],new_voucher=replacement['voucher'],reference=original['reference'],amount=sum(i['amount'] for i in original['items']),basis=str(basis).strip())
+    core.add_audit(s,'AP_PAYMENT_DATE_CORRECTED',result);return result
 
 
 def check(s,reversal=None):

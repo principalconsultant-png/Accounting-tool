@@ -716,6 +716,16 @@ If a valid bank tax invoice supports eligible GST input, separate the net fee an
 
 For transfers outside the same legal entity, do not use Own-bank transfer merely because the same person controls both businesses. Use the actual inter-entity loan, receivable/payable, capital or expense treatment supported by documents.
 
+
+
+### Correct an AP payment entered with the wrong date
+
+A future-dated payment is excluded from AP paid/outstanding status until that date. Its reference still exists, so creating another payment is correctly blocked. Changing the As at filter only changes the view; it does not fix the entry.
+
+Set AP As at to include the wrong recorded date and Refresh AP. Select that payment in the lower payment-history table, then Correct selected payment date. Enter the actual bank date and evidence/reason, tick review, Preview payment-date correction and Approve AP action. The action cancels the erroneous posting on its recorded date and creates the replacement on the evidenced date, atomically preserving amount, bank, unit, transfer reference and invoice allocation. It creates no additional purchase expense. Original/cancellation/replacement vouchers remain auditable; there is one net bank payment. Reset As at to the intended report date and refresh. Refresh bank source tables and any stale daily database before reporting.
+
+Only active AP-created payments within the same financial year are supported. Linked independent source vouchers require their owning correction workflow. Undo active bank matches first and reopen locked periods only after review; no match or period is silently changed. New dates before invoice accrual/initial openings, duplicate active references, changed books after preview and invalid allocations are blocked. Do not manually reverse/repost or alter the genuine bank UTR to get around the duplicate warning.
+
 ## 34. Daily Business Register — consolidated database
 
 Financial reports → Daily Business Register — consolidated database creates a persistent SQLite database from the book's posted transactions and saved report sources. It uses underlying records shared by all modules rather than parsing generated PDF/Excel reports, which would count the same entry multiple times. It creates no accounting journals. The report follows the requested seven-column layout, one row per calendar date for the selected entity/unit.

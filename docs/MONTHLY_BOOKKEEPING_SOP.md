@@ -1,6 +1,6 @@
 # Monthly Bookkeeping SOP — Yathartha
 
-Applies to Yathartha 0.38.0-dev and the controls currently available. Inputs: Daily Sales Receipt report, vendor Invoice report and Bank statement. Obtain payroll, petty-cash, loan and other supporting information where the bank statement alone does not establish the accounting purpose. Process the earliest incomplete month first, then move forward chronologically.
+Applies to Yathartha 0.38.1-dev and the controls currently available. Inputs: Daily Sales Receipt report, vendor Invoice report and Bank statement. Obtain payroll, petty-cash, loan and other supporting information where the bank statement alone does not establish the accounting purpose. Process the earliest incomplete month first, then move forward chronologically.
 
 ## Monthly route at a glance
 
@@ -18,6 +18,8 @@ Applies to Yathartha 0.38.0-dev and the controls currently available. Inputs: Da
 | Handover | Refresh daily register; export reviewed reports; create dated backup | Derived database and files; no new transaction JE. |
 
 ## 1. Operating rules and responsibilities
+
+Books continue month on month within the same financial year. Starting the next month does not require a backup, new books, a restore, reset or fresh opening balances. Backups are for recovery and are recommended regularly, particularly after significant posting/month-end review; they are not an application gate to the next month. A completed bank period can be locked while the following month remains available.
 
 The preparer checks source completeness, uploads, reviews, posts and reconciles. The owner/client confirms the business purpose, missing evidence and payment details. The reviewer verifies accounting, tax, bank reconciliation and month-end reports before completion. If one person performs several roles, retain the review basis and sign-off record.
 
@@ -103,6 +105,16 @@ Route B, source-assisted reconciliation: upload the standard Invoice Payment Rep
 Do not use both routes to create a new payment for the same transfer. A due/scheduled payment date is not an actual payment. Never mark every invoice paid using today's date when historical payments occurred in April/May. Use bank evidence and the true invoice allocation. For one transfer paying several invoices, select all corresponding invoice amounts. For a partial payment, record only the portion actually paid.
 
 Outcome when a new AP payment is approved: Dr Trade payables / Cr Actual bank, using the actual payment date. An invoice accrued in April and paid in May creates expense/asset in April and bank outflow in May; not another May expense. Extending a scheduled payment date affects the payment plan/forecast, not the journal or bank.
+
+
+
+### Correct an AP payment entered with the wrong date
+
+A future-dated payment is excluded from AP paid/outstanding status until that date. Its reference still exists, so creating another payment is correctly blocked. Changing the As at filter only changes the view; it does not fix the entry.
+
+Set AP As at to include the wrong recorded date and Refresh AP. Select that payment in the lower payment-history table, then Correct selected payment date. Enter the actual bank date and evidence/reason, tick review, Preview payment-date correction and Approve AP action. The action cancels the erroneous posting on its recorded date and creates the replacement on the evidenced date, atomically preserving amount, bank, unit, transfer reference and invoice allocation. It creates no additional purchase expense. Original/cancellation/replacement vouchers remain auditable; there is one net bank payment. Reset As at to the intended report date and refresh. Refresh bank source tables and any stale daily database before reporting.
+
+Only active AP-created payments within the same financial year are supported. Linked independent source vouchers require their owning correction workflow. Undo active bank matches first and reopen locked periods only after review; no match or period is silently changed. New dates before invoice accrual/initial openings, duplicate active references, changed books after preview and invalid allocations are blocked. Do not manually reverse/repost or alter the genuine bank UTR to get around the duplicate warning.
 
 ## 9. Reconcile existing entries and customer settlements
 
@@ -198,7 +210,7 @@ Use a monthly checklist with status Complete / Pending / Not applicable and evid
 - BRS completion approved where its conditions are met; outstanding permitted timing items documented. Do not perform annual year-close just to finish a monthly reconciliation.
 - Dated .riju backup created after final approved postings, stored externally and visible with the expected filename/time; retain prior checkpoints. Exported reports are additional handover files, not replacements for the protected book.
 
-Record month/unit/bank scope, preparer/date, reviewer/date, pending items and output filenames. Proceed to the next month only with the reviewed carry-forward position, or label unresolved earlier-period issues explicitly. Never assume that uploading all files has completed the accounting.
+Record month/unit/bank scope, preparer/date, reviewer/date, pending items and output filenames. Continue the next month in the same books, reviewing carry-forward balances and explicitly tracking unresolved earlier-period issues. Never assume that uploading all files has completed the accounting.
 
 ## 14. Quick action-to-result reference
 

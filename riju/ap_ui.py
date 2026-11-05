@@ -11,7 +11,7 @@ class ApUI:
         bar=self.bar();self.ap_on=self.field(bar,'As at',datetime.now(history.INDIA).date().isoformat(),width=12)
         self.button(bar,'Refresh AP',self.refresh_ap,True);self.button(bar,'Add vendor',self.ap_vendor);self.button(bar,'Vendor master',lambda:self.show('Vendor master'));self.button(bar,'Enter invoice',self.ap_enter);self.button(bar,'Upload bulk invoices',self.upload_bulk_invoices,True)
         bar=self.bar();self.button(bar,'Bulk invoice Excel template',lambda:self.ap_bulk_template('xlsx'));self.button(bar,'Bulk invoice CSV template',lambda:self.ap_bulk_template('csv'));self.button(bar,'Review bulk invoice batches',self.ap_bulk_batches)
-        bar=self.bar();self.button(bar,'Mark selected invoices paid',self.ap_payment,True);self.button(bar,'Extend payment date',self.ap_extend);self.button(bar,'Reverse selected payment',self.ap_reverse_payment);self.button(bar,'Cancel selected invoice',self.ap_cancel_invoice)
+        bar=self.bar();self.button(bar,'Mark selected invoices paid',self.ap_payment,True);self.button(bar,'Extend payment date',self.ap_extend);self.button(bar,'Correct selected payment date',self.ap_correct_payment_date,True);self.button(bar,'Reverse selected payment',self.ap_reverse_payment);self.button(bar,'Cancel selected invoice',self.ap_cancel_invoice)
         self.ap_summary=ttk.Label(self.content,text='',wraplength=1050);self.ap_summary.pack(anchor='w')
         self.ap_table=self.table(('Vendor','Invoice','Unit','Received','Contractual due','Scheduled payment','Outstanding INR','Status','Accrual voucher'),[],height=9);self.ap_table.configure(selectmode='extended')
         bar=self.bar();self.ap_forecast_end=self.field(bar,'Forecast through',(datetime.now(history.INDIA).date()+timedelta(days=90)).isoformat(),width=12)
@@ -107,6 +107,15 @@ class ApUI:
         confirmed=tk.BooleanVar(value=False);ttk.Checkbutton(body,text='I reviewed the agreed payment extension; this does not change contractual due date or post a journal',variable=confirmed).pack(anchor='w')
         def preview():self._service_preview('Review AP payment extension',lambda s:ap.extend(s,key,fields['effective'].get(),fields['payment_date'].get(),fields['reason'].get(),confirmed.get()),win,page='AP Vendor Invoices')
         self.button(body,'Preview payment extension',preview,True)
+    def ap_correct_payment_date(self):
+        if not self.ap_payments.selection():raise ValueError('Select the payment in the lower payment-history table. Set As at to include its recorded date, then Refresh AP.')
+        key=self.ap_payments.selection()[0];p=next(p for p in ap.data(self.state)['payments'] if p['id']==key)
+        win,body,fields=self._tax_form('Correct AP payment date',[('date','Correct actual bank payment date',p['date'],None),('basis','Bank evidence / correction reason','',None)])
+        ttk.Label(body,text=p['voucher']+' | Recorded '+p['date']+' | '+p['reference']+' | '+core.rupees(sum(i['amount'] for i in p['items']))+'\nThe bank/reference, amount, unit and invoice allocation stay the same. The wrong posting is cancelled on its recorded date and replaced on the actual bank date. No expense is posted again. Active bank matches must be undone first; closed periods require review/reopening.',wraplength=1020,padding=8).pack(anchor='w')
+        confirmed=tk.BooleanVar(value=False);ttk.Checkbutton(body,text='I verified the actual payment date against bank evidence and reviewed the correction.',variable=confirmed).pack(anchor='w')
+        def preview():self._service_preview('Review AP payment-date correction',lambda s:ap.correct_payment_date(s,key,fields['date'].get().strip(),fields['basis'].get().strip(),confirmed.get()),win,page='AP Vendor Invoices')
+        self.button(body,'Preview payment-date correction',preview,True)
+
     def ap_reverse_payment(self):
         if not self.ap_payments.selection():raise ValueError('Select a payment in the payment-history table.')
         p=next(p for p in ap.data(self.state)['payments'] if p['id']==self.ap_payments.selection()[0]);on=ask_date('Reverse AP payment','Actual correction/reversal date YYYY-MM-DD:',initialvalue=self.ap_on.get(),parent=self)

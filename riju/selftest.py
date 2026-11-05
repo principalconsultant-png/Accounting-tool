@@ -430,6 +430,13 @@ def run(output):
                 if dailystale or dailydb.execute('SELECT COUNT(*) FROM daily_metrics').fetchone()[0]!=120:raise ValueError('Packaged daily database persistence failed')
             finally:dailydb.close()
             result['daily_consolidation_database_passed']=True
+            correctionbook=core.empty_state();cv=ap.save_vendor(correctionbook,dict(name='Synthetic date vendor',credit_days='30'))
+            ci=ap.enter_invoice(correctionbook,dict(vendor=cv['id'],reference='DATE-INV',invoice_date='2026-05-22',received_date='2026-05-22',accounting_date='2026-05-22',credit_days='30',due_basis='Receipt date',branch='JP',amount='100',payable='2000',allocations=[dict(account='4590',amount='100')],reviewed=True,basis='Synthetic invoice',tax_treatment='No separate GST/TDS; reviewed'))
+            cp=ap.pay(correctionbook,dict(date='2026-11-25',reference='SYNTHETIC-DATE-UTR',bank_account='1010',items=[dict(invoice=ci['id'],amount='100')],reviewed=True,basis='Synthetic wrong date'))
+            ap.correct_payment_date(correctionbook,cp['id'],'2026-06-25','Synthetic evidence corrects November to June',True)
+            if ap.position(correctionbook,ci,'2026-11-05')['status']!='Paid' or core.balances(correctionbook,'2026-11-30')['1010']!=-10000 or core.balances(correctionbook,'2026-06-30')['1010']!=-10000:raise ValueError('Packaged AP date correction failed')
+            result['ap_payment_date_correction_passed']=True
+
 
 
 
